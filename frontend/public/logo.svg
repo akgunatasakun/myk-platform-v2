@@ -1,0 +1,23 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 200 200" width="200" height="200">
+  <!-- Circle background -->
+  <circle cx="100" cy="100" r="96" fill="#003580" stroke="#0052cc" stroke-width="3"/>
+
+  <!-- Sea wave at bottom -->
+  <path d="M 20 140 Q 50 128 80 140 Q 110 152 140 140 Q 170 128 180 140 L 180 170 Q 150 160 120 170 Q 90 180 60 170 Q 35 162 20 170 Z"
+        fill="#0e6ea8" opacity="0.6"/>
+
+  <!-- Main sail (large triangle) -->
+  <path d="M 100 30 L 100 130 L 55 130 Z" fill="white" opacity="0.95"/>
+
+  <!-- Jib sail (small triangle) -->
+  <path d="M 100 55 L 100 130 L 140 130 Z" fill="#cce0ff" opacity="0.85"/>
+
+  <!-- Mast -->
+  <line x1="100" y1="28" x2="100" y2="135" stroke="white" stroke-width="3" stroke-linecap="round"/>
+
+  <!-- Hull -->
+  <path d="M 50 133 Q 100 148 150 133 L 145 140 Q 100 156 55 140 Z" fill="white"/>
+
+  <!-- Waterline reflection -->
+  <ellipse cx="100" cy="142" rx="48" ry="4" fill="#1a90d4" opacity="0.4"/>
+</svg>

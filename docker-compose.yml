@@ -1,0 +1,158 @@
+services:
+
+  # ── PostgreSQL ────────────────────────────────────────────────────────────
+  db:
+    image: postgres:16-alpine
+    restart: unless-stopped
+    environment:
+      POSTGRES_DB: ${POSTGRES_DB:-myk_platform}
+      POSTGRES_USER: ${POSTGRES_USER:-myk_user}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+      - ./infra/postgres/init.sql:/docker-entrypoint-initdb.d/init.sql:ro
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER:-myk_user} -d ${POSTGRES_DB:-myk_platform}"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+    networks:
+      - myk_network
+
+  # ── Redis ─────────────────────────────────────────────────────────────────
+  redis:
+    image: redis:7-alpine
+    restart: unless-stopped
+    command: redis-server --save 60 1 --loglevel warning
+    volumes:
+      - redis_data:/data
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 5s
+      timeout: 3s
+      retries: 5
+    networks:
+      - myk_network
+
+  # ── MinIO (Object Storage) ────────────────────────────────────────────────
+  minio:
+    image: minio/minio:latest
+    restart: unless-stopped
+    command: server /data --console-address ":9001"
+    environment:
+      MINIO_ROOT_USER: ${STORAGE_ACCESS_KEY:-minioadmin}
+      MINIO_ROOT_PASSWORD: ${STORAGE_SECRET_KEY:-minioadmin}
+    volumes:
+      - minio_data:/data
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:9000/minio/health/live"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    networks:
+      - myk_network
+    # Port publish sadece dev ortamında: 9000 API, 9001 console
+    # Staging override bu portları kaldırır
+
+  # ── PDF Service (WeasyPrint) ───────────────────────────────────────────────
+  pdf-service:
+    build:
+      context: ./pdf-service
+      dockerfile: Dockerfile
+    environment:
+      STORAGE_ENDPOINT: ${STORAGE_ENDPOINT}
+      STORAGE_ACCESS_KEY: ${STORAGE_ACCESS_KEY}
+      STORAGE_SECRET_KEY: ${STORAGE_SECRET_KEY}
+      STORAGE_BUCKET: ${STORAGE_BUCKET}
+      STORAGE_SECURE: ${STORAGE_SECURE:-false}
+    healthcheck:
+      test:
+        [
+          "CMD",
+          "python",
+          "-c",
+          "import urllib.request; urllib.request.urlopen('http://127.0.0.1:8001/health', timeout=3)"
+        ]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 20s
+    restart: unless-stopped
+    networks:
+      - myk_network
+    # port publish YOK — yalnızca dahili ağ (api → pdf-service:8001)
+
+  # ── Backend (FastAPI) ─────────────────────────────────────────────────────
+  api:
+    build:
+      context: ./backend
+      dockerfile: Dockerfile
+    restart: unless-stopped
+    env_file: .env
+    environment:
+      POSTGRES_HOST: db
+      REDIS_URL: redis://redis:6379/0
+      # DATABASE_URL açıkça oluşturuluyor — .env içi interpolation'a güvenilmez
+      DATABASE_URL: postgresql+asyncpg://${POSTGRES_USER:-myk_user}:${POSTGRES_PASSWORD}@db:5432/${POSTGRES_DB:-myk_platform}
+      STORAGE_ENDPOINT: http://minio:9000
+      PDF_SERVICE_URL: http://pdf-service:8001
+    volumes:
+      - ./backend:/app
+      - storage_data:/app/storage
+    depends_on:
+      db:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+      minio:
+        condition: service_healthy
+      pdf-service:
+        condition: service_healthy
+    networks:
+      - myk_network
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8000/api/v1/health"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  # ── Frontend (React + Vite dev server) ────────────────────────────────────
+  frontend:
+    build:
+      context: ./frontend
+      dockerfile: Dockerfile
+      target: dev          # Dockerfile içindeki dev stage (5173 portu)
+    restart: unless-stopped
+    volumes:
+      - ./frontend:/app
+      - /app/node_modules  # Bağlı kaynak üzerine node_modules'u koru
+    expose:
+      - "5173"
+    networks:
+      - myk_network
+
+  # ── Nginx ─────────────────────────────────────────────────────────────────
+  nginx:
+    image: nginx:alpine
+    restart: unless-stopped
+    ports:
+      - "80:80"
+      - "443:443"
+    volumes:
+      # Tam nginx.conf olarak mount et (ana konfigürasyon — conf.d değil)
+      - ./infra/nginx/nginx.conf:/etc/nginx/nginx.conf:ro
+    depends_on:
+      - api
+      - frontend
+    networks:
+      - myk_network
+
+volumes:
+  postgres_data:
+  redis_data:
+  storage_data:
+  minio_data:
+
+networks:
+  myk_network:
+    driver: bridge

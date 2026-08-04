@@ -1,0 +1,17 @@
+Redis ping: 
+ℹ️  INFO    Tekrarlı başarısız giriş ile rate-limit testi (ratetest_51157@test.local)...
+Deneme 1: HTTP 000
+Deneme 2: HTTP 000
+Deneme 3: HTTP 000
+Deneme 4: HTTP 000
+Deneme 5: HTTP 000
+Deneme 6: HTTP 000
+Deneme 7: HTTP 000
+Deneme 8: HTTP 000
+Deneme 9: HTTP 000
+Deneme 10: HTTP 000
+Deneme 11: HTTP 000
+Deneme 12: HTTP 000
+Deneme 13: HTTP 000
+Deneme 14: HTTP 000
+Deneme 15: HTTP 000

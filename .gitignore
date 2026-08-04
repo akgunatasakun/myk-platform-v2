@@ -1,0 +1,90 @@
+# Python
+__pycache__/
+*.py[cod]
+*.pyo
+*.pyd
+.Python
+*.egg-info/
+dist/
+build/
+*.egg
+.eggs/
+pip-wheel-metadata/
+*.whl
+
+# Virtual environments
+.venv/
+venv/
+ENV/
+env/
+
+# Test & coverage
+.pytest_cache/
+.coverage
+.coverage.*
+htmlcov/
+coverage_html/
+coverage.xml
+*.coveragerc
+
+# Environment / secrets
+.env
+.env.local
+.env.*.local
+# Keep examples in repo:
+!.env.example
+!.env.production.example
+
+# Node / Frontend
+node_modules/
+frontend/dist/
+frontend/.vite/
+
+# macOS
+.DS_Store
+.AppleDouble
+.LSOverride
+._*
+.Spotlight-V100
+.Trashes
+Thumbs.db
+
+# IDEs
+.idea/
+.vscode/
+*.swp
+*.swo
+*~
+
+# Docker
+*.pid
+
+# Alembic
+# Keep migrations in repo — do NOT ignore migrations/
+
+# ZIP deliverables (kept in repo root for now)
+# *.zip
+
+# Local secrets
+.env
+.env.*
+!.env.example
+!.env.production.example
+
+# macOS
+.DS_Store
+
+# Python
+__pycache__/
+*.pyc
+.pytest_cache/
+
+# Test and coverage output
+coverage_html/
+coverage.xml
+pytest-output.txt
+*.log
+
+# Frontend
+node_modules/
+dist/

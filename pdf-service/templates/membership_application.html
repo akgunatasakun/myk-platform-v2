@@ -1,0 +1,162 @@
+<!DOCTYPE html>
+<html lang="tr">
+<head>
+<meta charset="UTF-8">
+<style>
+  @page {
+    size: A4;
+    margin: 2cm;
+  }
+  body {
+    font-family: Liberation Sans, Arial, sans-serif;
+    font-size: 11pt;
+    color: #111;
+    line-height: 1.5;
+  }
+  .header {
+    text-align: center;
+    border-bottom: 2px solid #0056b3;
+    padding-bottom: 12px;
+    margin-bottom: 24px;
+  }
+  .header h1 {
+    font-size: 16pt;
+    color: #0056b3;
+    margin: 0 0 4px;
+  }
+  .header p {
+    margin: 0;
+    font-size: 10pt;
+    color: #555;
+  }
+  table {
+    width: 100%;
+    border-collapse: collapse;
+    margin-bottom: 16px;
+  }
+  th {
+    background: #e8f0fe;
+    text-align: left;
+    padding: 6px 10px;
+    font-size: 10pt;
+    color: #333;
+    width: 35%;
+    border: 1px solid #ccc;
+  }
+  td {
+    padding: 6px 10px;
+    border: 1px solid #ccc;
+    font-size: 10pt;
+  }
+  .section-title {
+    background: #0056b3;
+    color: white;
+    padding: 6px 10px;
+    font-weight: bold;
+    font-size: 11pt;
+    margin-top: 20px;
+    margin-bottom: 0;
+  }
+  .app-number {
+    font-size: 13pt;
+    font-weight: bold;
+    color: #0056b3;
+    margin-bottom: 4px;
+  }
+  .footer {
+    margin-top: 32px;
+    font-size: 9pt;
+    color: #888;
+    border-top: 1px solid #ccc;
+    padding-top: 8px;
+    text-align: center;
+  }
+  .field-empty {
+    color: #aaa;
+    font-style: italic;
+  }
+</style>
+</head>
+<body>
+
+<div class="header">
+  <h1>Mersin Yelken Yat ve Su Sporları Kulübü</h1>
+  <p>Üyelik Başvuru Formu</p>
+</div>
+
+{% if app.application_number %}
+<p class="app-number">Başvuru No: {{ app.application_number }}</p>
+{% endif %}
+
+<p class="section-title">Kişisel Bilgiler</p>
+<table>
+  <tr>
+    <th>Ad</th>
+    <td>{{ app.first_name or '<span class="field-empty">—</span>' }}</td>
+  </tr>
+  <tr>
+    <th>Soyad</th>
+    <td>{{ app.last_name or '<span class="field-empty">—</span>' }}</td>
+  </tr>
+  <tr>
+    <th>T.C. Kimlik No</th>
+    <td>{{ app.national_id or '<span class="field-empty">—</span>' }}</td>
+  </tr>
+  <tr>
+    <th>Doğum Tarihi</th>
+    <td>{{ app.birth_date or '<span class="field-empty">—</span>' }}</td>
+  </tr>
+  <tr>
+    <th>Cinsiyet</th>
+    <td>{{ app.gender or '<span class="field-empty">—</span>' }}</td>
+  </tr>
+</table>
+
+<p class="section-title">İletişim Bilgileri</p>
+<table>
+  <tr>
+    <th>Telefon</th>
+    <td>{{ app.phone or '<span class="field-empty">—</span>' }}</td>
+  </tr>
+  <tr>
+    <th>E-posta</th>
+    <td>{{ app.email or '<span class="field-empty">—</span>' }}</td>
+  </tr>
+  <tr>
+    <th>Adres</th>
+    <td>{{ app.address or '<span class="field-empty">—</span>' }}</td>
+  </tr>
+</table>
+
+{% if app.guardian_name %}
+<p class="section-title">Veli Bilgileri</p>
+<table>
+  <tr>
+    <th>Veli Adı Soyadı</th>
+    <td>{{ app.guardian_name }}</td>
+  </tr>
+  <tr>
+    <th>Veli Telefonu</th>
+    <td>{{ app.guardian_phone or '<span class="field-empty">—</span>' }}</td>
+  </tr>
+</table>
+{% endif %}
+
+<p class="section-title">Başvuru Durumu</p>
+<table>
+  <tr>
+    <th>Durum</th>
+    <td>{{ app.status or '<span class="field-empty">—</span>' }}</td>
+  </tr>
+  <tr>
+    <th>Gönderim Tarihi</th>
+    <td>{{ app.submitted_at or '<span class="field-empty">—</span>' }}</td>
+  </tr>
+</table>
+
+<div class="footer">
+  Bu belge Mersin Yelken Yat ve Su Sporları Kulübü MYK Platform V2 tarafından otomatik olarak üretilmiştir.
+</div>
+
+</body>
+</html>

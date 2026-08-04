@@ -1,0 +1,3 @@
+scripts/sprint3/s3_0a_verify.sh: line 164: docker: command not found
+scripts/sprint3/s3_0a_verify.sh: line 170: docker: command not found
+scripts/sprint3/s3_0a_verify.sh: line 171: docker: command not found

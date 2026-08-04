@@ -1,0 +1,41 @@
+# docker-compose.staging.yml — Staging ortamı override
+# Kullanım: COMPOSE_FILE="docker-compose.yml:docker-compose.staging.yml"
+#
+# Bu dosya apply_staging.sh tarafından güncellenir:
+#   ADIM 5: frontend build.target=production + volumes: !reset []
+#            api volumes: !override (storage_data:/app/storage)
+#   ADIM 13: nginx port 0.0.0.0:18080 → 127.0.0.1:18080 (Ubuntu proxy hazır olunca)
+#
+# Güvenlik kuralları (test fazı):
+#   - Nginx: yalnızca 18080 portu (base 80+443 kaldırıldı)
+#   - PostgreSQL ve Redis: host'a publish edilmez
+#   - COOKIE_SECURE=false (.env) — HTTPS kurulana kadar
+#   - enable_staging_https.sh sonrası: 127.0.0.1:18080 + COOKIE_SECURE=true
+
+services:
+
+  nginx:
+    ports: !override
+      - "0.0.0.0:18080:80"
+    # 443 kapalı — enable_staging_https.sh ile Certbot+HTTPS aktif edilir
+
+  frontend:
+    ports: !reset []
+    # build.target=production ve volumes: !reset [] → apply_staging.sh ADIM 5 ekler
+
+  api:
+    ports: !reset []
+    environment:
+      DATABASE_URL: postgresql+asyncpg://myk_app:${APP_DB_PASSWORD}@db:5432/${POSTGRES_DB:-myk_v2}
+      STORAGE_ENDPOINT: http://minio:9000
+    # volumes: !override (storage_data:/app/storage) → apply_staging.sh ADIM 5 ekler
+
+  # MinIO staging'de dahili ağda — console debug için 9001 açık
+  minio:
+    ports:
+      - "127.0.0.1:9001:9001"
+    # 9000 (API) host'a publish edilmez; yalnızca internal ağ
+
+  # pdf-service staging'de port publish yok
+  pdf-service:
+    ports: !reset []

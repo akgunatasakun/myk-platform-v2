@@ -1,0 +1,103 @@
+"""MYK Platform V2 — FastAPI uygulama giriş noktası."""
+import logging
+from contextlib import asynccontextmanager
+from typing import AsyncIterator
+
+from fastapi import Depends, FastAPI, HTTPException, Request, status
+from fastapi.middleware.cors import CORSMiddleware
+from fastapi.responses import JSONResponse
+
+from app.api.v1.routers import health, auth, persons, dashboard, avatar, memberships
+from app.config import get_settings
+from app.core.security import get_current_user
+from app.core.tenant import get_club_id
+from app.database import get_db
+from app.schemas.auth import TokenPayload, UserResponse
+
+logger = logging.getLogger(__name__)
+settings = get_settings()
+
+
+@asynccontextmanager
+async def lifespan(app: FastAPI) -> AsyncIterator[None]:
+    logger.info("MYK Platform V2 başlatılıyor (env=%s)", settings.myk_env)
+    yield
+    logger.info("MYK Platform V2 kapatılıyor")
+
+
+app = FastAPI(
+    title="MYK Platform V2",
+    version="2.0.0",
+    description="Mersin Yelken Kulübü Dijital Yönetim Sistemi",
+    docs_url="/api/docs" if settings.myk_env != "production" else None,
+    redoc_url="/api/redoc" if settings.myk_env != "production" else None,
+    openapi_url="/api/openapi.json" if settings.myk_env != "production" else None,
+    lifespan=lifespan,
+)
+
+# ─── CORS ─────────────────────────────────────────────────────────────────────
+_origins = (
+    ["*"]
+    if settings.myk_env == "development"
+    else [f"https://{settings.allowed_host}"] if hasattr(settings, "allowed_host") else []
+)
+
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=_origins,
+    allow_credentials=True,
+    allow_methods=["*"],
+    allow_headers=["*"],
+)
+
+
+# ─── Global exception handler ─────────────────────────────────────────────────
+@app.exception_handler(Exception)
+async def unhandled_exception_handler(request: Request, exc: Exception) -> JSONResponse:
+    logger.exception("İşlenmemiş hata: %s %s", request.method, request.url)
+    return JSONResponse(
+        status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+        content={"detail": "Sunucu hatası. Lütfen tekrar deneyin."},
+    )
+
+
+# ─── Routers ──────────────────────────────────────────────────────────────────
+API_PREFIX = "/api/v1"
+
+app.include_router(health.router, prefix=API_PREFIX)
+app.include_router(auth.router, prefix=API_PREFIX)
+app.include_router(persons.router, prefix=API_PREFIX)
+app.include_router(avatar.router, prefix=API_PREFIX)
+app.include_router(memberships.router, prefix=API_PREFIX)
+app.include_router(dashboard.router, prefix=API_PREFIX)
+
+
+# ─── /me endpoint — inject correct dependency ─────────────────────────────────
+@app.get(f"{API_PREFIX}/auth/me", response_model=UserResponse, tags=["auth"])
+async def get_me(
+    current_user: TokenPayload = Depends(get_current_user),
+    db=Depends(get_db),
+) -> UserResponse:
+    from sqlalchemy import select
+    from app.core.tenant import assert_same_club
+    from app.models.user import User
+    import uuid
+
+    result = await db.execute(
+        select(User).where(
+            User.id == uuid.UUID(current_user.sub),
+            User.is_deleted.is_(False),
+            User.is_active.is_(True),
+        )
+    )
+    user = result.scalar_one_or_none()
+    if user is None:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Kullanıcı bulunamadı.")
+    assert_same_club(user.club_id, uuid.UUID(current_user.club_id))
+    return UserResponse.model_validate(user)
+
+
+# ─── Root ─────────────────────────────────────────────────────────────────────
+@app.get("/")
+async def root() -> dict:
+    return {"service": "myk-platform-v2", "status": "running"}

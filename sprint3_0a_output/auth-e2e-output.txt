@@ -1,0 +1,4 @@
+
+HTTP_STATUS:000
+İkinci setup → HTTP 000
+scripts/sprint3/s3_0a_verify.sh: line 302: docker: command not found
