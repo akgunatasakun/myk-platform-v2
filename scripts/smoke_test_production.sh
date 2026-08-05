@@ -57,10 +57,15 @@ _curl() {
   local extra_args=("$@")
 
   if [[ "${REMOTE_MODE}" == "true" ]]; then
-    # Sunucu üzerinde çalıştır
-    ssh "${SERVER}" "curl -sf -X ${method} '${BASE_URL}${path}' ${extra_args[*]:-} 2>/dev/null" 2>/dev/null || echo "CONNECTION_ERROR"
+    ssh "${SERVER}" \
+      "curl -sS -X '${method}' '${BASE_URL}${path}' 2>/dev/null" \
+      2>/dev/null || echo "CONNECTION_ERROR"
   else
-    curl -sf -X "${method}" "${BASE_URL}${path}" "${extra_args[@]:-}" 2>/dev/null || echo "CONNECTION_ERROR"
+    curl -sS \
+      -X "${method}" \
+      "${BASE_URL}${path}" \
+      "${extra_args[@]}" \
+      2>/dev/null || echo "CONNECTION_ERROR"
   fi
 }
 
@@ -70,9 +75,17 @@ _curl_code() {
   local extra_args=("$@")
 
   if [[ "${REMOTE_MODE}" == "true" ]]; then
-    ssh "${SERVER}" "curl -s -o /dev/null -w '%{http_code}' -X ${method} '${BASE_URL}${path}' ${extra_args[*]:-} 2>/dev/null" 2>/dev/null || echo "000"
+    ssh "${SERVER}" \
+      "curl -sS -L -o /dev/null -w '%{http_code}' -X '${method}' '${BASE_URL}${path}' 2>/dev/null" \
+      2>/dev/null || echo "000"
   else
-    curl -s -o /dev/null -w '%{http_code}' -X "${method}" "${BASE_URL}${path}" "${extra_args[@]:-}" 2>/dev/null || echo "000"
+    curl -sS -L \
+      -o /dev/null \
+      -w '%{http_code}' \
+      -X "${method}" \
+      "${BASE_URL}${path}" \
+      "${extra_args[@]}" \
+      2>/dev/null || echo "000"
   fi
 }
 
@@ -81,10 +94,10 @@ _header "T01 API Health"
 result=$(_curl GET "/api/v1/health")
 _check "GET /api/v1/health → status OK" "${result}" '"status"'
 
-# ── T02: OpenAPI şeması erişilebilir ──────────────────────────────────────────
-_header "T02 OpenAPI"
-result=$(_curl GET "/api/openapi.json")
-_check "GET /api/openapi.json → openapi alanı var" "${result}" '"openapi"'
+# ── T02: OpenAPI production ortamında kapalı olmalı ───────────────────────────
+_header "T02 OpenAPI production güvenliği"
+code=$(_curl_code GET "/api/openapi.json")
+_check "GET /api/openapi.json production'da kapalı → 404" "${code}" "^404$"
 
 # ── T03: HTTPS yönlendirmesi (eğer TLS aktifse) ───────────────────────────────
 _header "T03 Güvenlik başlıkları"
@@ -101,12 +114,12 @@ _header "T04 Auth"
 code=$(_curl_code POST "/api/v1/auth/login" \
   "-H 'Content-Type: application/json'" \
   "-d '{\"email\":\"nonexistent@test.invalid\",\"password\":\"wrongpass\"}'")
-_check "POST /auth/login geçersiz credential → 401 veya 422" "${code}" "^[14]"
+_check "POST /api/v1/auth/login geçersiz credential → 401 veya 422" "${code}" "^[14]"
 
 # ── T05: Korumalı endpoint — token olmadan 401 dönmeli ────────────────────────
 _header "T05 Korumalı endpoint"
-code=$(_curl_code GET "/api/v1/persons/")
-_check "GET /persons/ token yok → 401" "${code}" "401"
+code=$(_curl_code GET "/api/v1/persons")
+_check "GET /api/v1/persons token yok → 401" "${code}" "401"
 
 # ── T06: Olmayan endpoint 404 dönmeli ─────────────────────────────────────────
 _header "T06 404 yönlendirme"
