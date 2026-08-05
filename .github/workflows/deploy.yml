@@ -68,6 +68,8 @@ jobs:
           sudo mkdir -p /etc/myk
           sudo cp .env.production.example /etc/myk/production.env
           sudo chmod 644 /etc/myk/production.env
+          # docker-compose.yml'deki env_file: .env için stub (CI'da gerçek .env yok)
+          cp .env.production.example .env
           docker compose \
             -f docker-compose.yml \
             -f docker-compose.prod.yml \
