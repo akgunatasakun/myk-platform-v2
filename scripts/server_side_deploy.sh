@@ -283,8 +283,9 @@ if [[ "${SKIP_SMOKE}" == "true" ]]; then
 else
   SMOKE_SCRIPT="${REMOTE_DIR}/scripts/smoke_test_production.sh"
   if [[ -f "${SMOKE_SCRIPT}" ]]; then
-    # Smoke test sunucuda çalışır — REMOTE_MODE=true, BASE_URL=http://127.0.0.1:18081
-    if bash "${SMOKE_SCRIPT}"; then
+    # Smoke test sunucuda çalışır — BASE_URL geçilerek REMOTE_MODE=false yapılır.
+    # REMOTE_MODE=true olsaydı "myk-server" alias'ına SSH atardı (Mac'te tanımlı, sunucuda yok).
+    if bash "${SMOKE_SCRIPT}" "http://127.0.0.1:${PROD_PORT}"; then
       _ok "Smoke test PASS ✅"
     else
       _fail "Smoke test FAIL ❌ — yukarıdaki başarısız testleri inceleyin. Deploy başarılı sayılmıyor."
