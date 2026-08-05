@@ -1,4 +1,5 @@
-FROM python:3.12-slim
+# production stage — docker-compose.prod.yml target: production ile eşleşir
+FROM python:3.12-slim AS production
 
 # Sistem bağımlılıkları
 RUN apt-get update && apt-get install -y --no-install-recommends \

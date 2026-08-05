@@ -9,38 +9,44 @@ services:
     build:
       context: ./backend
       dockerfile: Dockerfile
-      target: production
+      target: production        # Dockerfile'daki "AS production" stage'i hedefler
     restart: always
     environment:
       MYK_ENV: production
       POSTGRES_HOST: db
       REDIS_URL: redis://redis:6379/0
       DATABASE_URL: postgresql+asyncpg://${POSTGRES_USER}:${POSTGRES_PASSWORD}@db:5432/${POSTGRES_DB}
-      # Aşağıdakiler .env dosyasından okunur (env_file: .env)
-      # JWT_SECRET_KEY, SECRET_KEY, ALLOW_PUBLIC_SETUP=false vb.
+      # Object storage (.env'den okunur; production'da harici S3/Hetzner olabilir)
+      STORAGE_ENDPOINT: ${STORAGE_ENDPOINT:-http://minio:9000}
+      STORAGE_ACCESS_KEY: ${STORAGE_ACCESS_KEY}
+      STORAGE_SECRET_KEY: ${STORAGE_SECRET_KEY}
+      STORAGE_BUCKET: ${STORAGE_BUCKET:-myk-person-media}
+      STORAGE_REGION: ${STORAGE_REGION:-us-east-1}
+      STORAGE_SECURE: ${STORAGE_SECURE:-false}
+      PDF_SERVICE_URL: http://pdf-service:8001
+      LOG_LEVEL: ${LOG_LEVEL:-WARNING}
+      # JWT_SECRET_KEY, SECRET_KEY, ALLOW_PUBLIC_SETUP vb. → env_file: .env
     volumes:
       # Production'da kaynak kod mount edilmez — sadece storage kalıcı
       - storage_data:/app/storage
-    # Development'taki ./backend:/app volume kaldırıldı
+    # Development'taki ./backend:/app volume kaldırıldı (base override)
 
   # ── Frontend — production build (Nginx) ─────────────────────────────────────
   frontend:
     build:
       context: ./frontend
       dockerfile: Dockerfile
-      target: production    # Vite build → Nginx static serving (port 80)
+      target: production        # Vite build → Nginx static serving
     restart: always
-    # Production'da Vite dev server yok; frontend container Nginx üzerinde 80'de çalışır
-    # Ana nginx reverse proxy backend API'yi proxy'ler, frontend statik dosyaları serve eder
-    volumes: []  # Development volume'ları kaldır
+    volumes: []                 # Development volume'larını kaldır
 
   # ── Nginx ───────────────────────────────────────────────────────────────────
   nginx:
     restart: always
-    environment:
-      - NGINX_ENVSUBST_OUTPUT_DIR=/etc/nginx
-    # Production SSL: volumes bölümüne Let's Encrypt sertifikaları eklenecek
-    # - /etc/letsencrypt:/etc/letsencrypt:ro
+    # Production SSL: Let's Encrypt sertifikaları kurulduktan sonra ekle:
+    # volumes:
+    #   - ./infra/nginx/nginx.conf:/etc/nginx/nginx.conf:ro
+    #   - /etc/letsencrypt:/etc/letsencrypt:ro
     # Aşama 3 altyapı sprint'inde HTTPS ve certbot entegrasyonu yapılacak.
 
   # ── PostgreSQL ────────────────────────────────────────────────────────────
@@ -54,18 +60,40 @@ services:
   # ── Redis ─────────────────────────────────────────────────────────────────
   redis:
     restart: always
-    # Production'da redis auth eklenebilir: command: redis-server --requirepass ${REDIS_PASSWORD}
+    # Production'da auth eklenebilir:
+    # command: redis-server --requirepass ${REDIS_PASSWORD}
+
+  # ── MinIO (Object Storage) ────────────────────────────────────────────────
+  # Production'da MinIO yerine harici S3-uyumlu depolama tercih edilebilir.
+  # MinIO kullanılıyorsa: port'lar host'a publish edilmez, sadece iç ağ.
+  minio:
+    restart: always
+    ports: !override []         # Host'a port publish yok — tüm erişim iç ağ üzerinden
+
+  # ── PDF Service ──────────────────────────────────────────────────────────
+  pdf-service:
+    restart: always
+    # Port publish yok — yalnızca api → pdf-service:8001 iç ağ erişimi
 
 volumes:
   postgres_data:
   redis_data:
   storage_data:
+  minio_data:                   # Base compose'dan eksikti; production'da kalıcı
 
-# Kullanım notları:
+# ── Kullanım ──────────────────────────────────────────────────────────────────
 # 1. cp .env.production.example .env
 # 2. .env içindeki tüm REPLACE_WITH_* değerlerini gerçek değerlerle doldur
-# 3. docker compose -f docker-compose.yml -f docker-compose.prod.yml config  # syntax doğrula
-# 4. docker compose -f docker-compose.yml -f docker-compose.prod.yml build --no-cache
-# 5. docker compose -f docker-compose.yml -f docker-compose.prod.yml up -d
-# 6. docker compose exec api alembic upgrade head
-# 7. docker compose exec api python -c "from app.config import get_settings; print(get_settings().myk_env)"
+# 3. Syntax doğrula:
+#    docker compose -f docker-compose.yml -f docker-compose.prod.yml config
+# 4. Build:
+#    docker compose -f docker-compose.yml -f docker-compose.prod.yml build --no-cache
+# 5. Başlat:
+#    docker compose -f docker-compose.yml -f docker-compose.prod.yml up -d
+# 6. Migration (--entrypoint /bin/sh yöntemi — myk_user DDL yetkisi gerektirir):
+#    docker compose -f docker-compose.yml -f docker-compose.prod.yml \
+#      run --rm -T --entrypoint /bin/sh api -c \
+#      'export DATABASE_URL="postgresql+asyncpg://${POSTGRES_USER}:${POSTGRES_PASSWORD}@db:5432/${POSTGRES_DB}"
+#       exec alembic -c migrations/alembic.ini upgrade head'
+# 7. Doğrula:
+#    docker compose exec api python -c "from app.config import get_settings; print(get_settings().myk_env)"
