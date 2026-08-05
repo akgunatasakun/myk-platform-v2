@@ -2,319 +2,373 @@
 # deploy_production.sh — MYK Platform V2 Production Deploy
 #
 # Kullanım (Mac'ten):
-#   bash scripts/deploy_production.sh [--tag v0.4.0] [--skip-backup]
+#   bash scripts/deploy_production.sh [--tag v0.4.1] [--skip-backup] [--skip-smoke]
 #
-# Bu script Mac'ten SSH ile çalışır. Sunucuda docker ve git gereklidir.
-# .env dosyasına hiçbir zaman dokunmaz ve çıktıda secret göstermez.
+# Ne yapar:
+#   1. Mac ön koşul kontrolü (SSH, git temiz ağaç, tag)
+#   2. Sunucu ortam doğrulama (.env, MYK_ENV, ALLOW_PUBLIC_SETUP, secret placeholder yok)
+#   3. Fresh install (repo yoksa clone eder, varsa günceller)
+#   4. PostgreSQL yedeği (pg_dump) + MinIO volume yedeği
+#   5. git checkout <tag>
+#   6. docker compose build --no-cache
+#   7. db / redis / minio / pdf-service başlat, healthy bekle
+#   8. Alembic upgrade head (--entrypoint /bin/sh yöntemi, myk_user DDL yetkisi)
+#   9. api / frontend / nginx başlat, API healthy bekle
+#  10. Smoke test (smoke_test_production.sh)
 #
-# Güvenlik kuralları (deploy boyunca geçerli):
-#   - Production veritabanına doğrudan SQL çalıştırma
-#   - .env dosyasını source etme veya üzerine yazma
-#   - docker compose down -v çalıştırma
-#   - ufw değiştirme
-#   - certbot çalıştırma (DNS hazır değilse)
-#   - apply_staging.sh çalıştırma (staging-only script)
-#   - Secret değerlerini hiçbir çıktıda gösterme
+# Güvenlik kuralları (bu script boyunca):
+#   ✗  .env'e hiçbir zaman dokunma, üzerine yazma, source etme
+#   ✗  Secret değerlerini çıktıda gösterme
+#   ✗  docker compose down -v çalıştırma
+#   ✗  Production DB'ye doğrudan SQL çalıştırma
+#   ✗  ufw değiştirme
+#   ✗  certbot çalıştırma (DNS hazır değilse)
 
 set -Eeuo pipefail
 
-# ── Parametreler ──────────────────────────────────────────────────────────────
-DEPLOY_TAG="v0.4.0"
+# ── Parametreler ───────────────────────────────────────────────────────────────
+DEPLOY_TAG="v0.4.1"
 SKIP_BACKUP=false
+SKIP_SMOKE=false
 
 while [[ $# -gt 0 ]]; do
   case "$1" in
-    --tag)       DEPLOY_TAG="$2"; shift 2 ;;
-    --skip-backup) SKIP_BACKUP=true; shift ;;
+    --tag)          DEPLOY_TAG="$2"; shift 2 ;;
+    --skip-backup)  SKIP_BACKUP=true;  shift ;;
+    --skip-smoke)   SKIP_SMOKE=true;   shift ;;
     *) echo "Bilinmeyen parametre: $1" >&2; exit 1 ;;
   esac
 done
 
-# ── Sabitler ──────────────────────────────────────────────────────────────────
-SERVER="myk-server"                          # ~/.ssh/config'deki alias
-REMOTE_DIR="/opt/myk/production/myk-platform-v2"
-BACKUP_BASE="/opt/myk/backups"
-BACKUP_DIR="${BACKUP_BASE}/production-$(date +%Y%m%d_%H%M%S)"
-COMPOSE_FILES="-f docker-compose.yml -f docker-compose.prod.yml"
-COMPOSE_CMD="docker compose ${COMPOSE_FILES}"
+# ── Mac taraflı sabitler ────────────────────────────────────────────────────────
+SERVER="myk-server"                          # ~/.ssh/config Host alias
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+BACKUP_STAMP="$(date +%Y%m%d_%H%M%S)"       # Mac zamanı — tutarlı olsun diye burada üret
 
-_header() { echo ""; echo "══════ $* ══════"; }
-_ok()     { echo "  ✓  $*"; }
-_fail()   { echo "  ✗  HATA: $*" >&2; exit 1; }
-_warn()   { echo "  ⚠  $*"; }
-_info()   { echo "  ·  $*"; }
+_header() { printf '\n══════ %s ══════\n' "$*"; }
+_ok()     { printf '  ✓  %s\n' "$*"; }
+_fail()   { printf '  ✗  HATA: %s\n' "$*" >&2; exit 1; }
+_warn()   { printf '  ⚠  %s\n' "$*"; }
 
-# ── Güvenlik: secret çıktısını engelle ────────────────────────────────────────
-# Bu fonksiyon SSH komutlarından gelen çıktıyı filtreleyerek
-# olası secret leak'leri logdan gizler.
-_ssh() {
-  ssh "${SERVER}" "$@" 2>&1 | grep -vE \
-    "(PASSWORD|SECRET|JWT_SECRET|SECRET_KEY|ACCESS_KEY)=[^[:space:]]" \
-    || true
-}
-
-# ── Adım 1: MAC — Ön koşul kontrolü ──────────────────────────────────────────
-_header "1. Ön koşul kontrolü (Mac)"
+# ════════════════════════════════════════════════════════════════════════════════
+# BÖLÜM 1 — MAC ÖN KOŞUL KONTROLÜ
+# ════════════════════════════════════════════════════════════════════════════════
+_header "1. Mac ön koşul kontrolü"
 
 # SSH bağlantısı
-ssh -q -o BatchMode=yes -o ConnectTimeout=5 "${SERVER}" exit \
-  || _fail "SSH bağlantısı kurulamadı: ${SERVER}"
-_ok "SSH erişimi OK"
+ssh -q -o BatchMode=yes -o ConnectTimeout=8 "${SERVER}" exit \
+  || _fail "SSH bağlantısı kurulamadı. ~/.ssh/config içindeki '${SERVER}' alias'ını kontrol edin."
+_ok "SSH → ${SERVER} OK"
 
-# Temiz çalışma ağacı kontrolü
-if ! git diff-index --quiet HEAD -- 2>/dev/null; then
-  _fail "Commit edilmemiş değişiklikler var. Deploy öncesinde 'git status' ile kontrol edin."
+# Git temiz çalışma ağacı
+if ! git -C "${SCRIPT_DIR}/.." diff-index --quiet HEAD -- 2>/dev/null; then
+  _fail "Commit edilmemiş değişiklikler var. 'git status' ile kontrol edin."
 fi
 _ok "Git çalışma ağacı temiz"
 
 # Tag kontrolü
-CURRENT_TAG=$(git describe --tags --exact-match HEAD 2>/dev/null || echo "")
+CURRENT_TAG="$(git -C "${SCRIPT_DIR}/.." describe --tags --exact-match HEAD 2>/dev/null || true)"
 if [[ -z "${CURRENT_TAG}" ]]; then
-  _warn "HEAD bir tag'e işaret etmiyor. --tag ${DEPLOY_TAG} parametresi kullanılacak."
-  _warn "Devam etmek için onaylayın (Ctrl+C ile iptal):"
-  read -rp "  Tag doğrulandı mı? [y/N] " confirm
-  [[ "${confirm,,}" == "y" ]] || exit 1
+  _warn "HEAD bir tag'e işaret etmiyor. --tag ${DEPLOY_TAG} ile devam edilecek."
+  read -rp "  Onaylıyor musunuz? [y/N] " _confirm
+  [[ "${_confirm,,}" == "y" ]] || { echo "İptal edildi."; exit 0; }
 else
-  _ok "Mevcut tag: ${CURRENT_TAG}"
+  _ok "Tag: ${CURRENT_TAG}"
   [[ "${CURRENT_TAG}" == "${DEPLOY_TAG}" ]] \
-    || _warn "HEAD tag (${CURRENT_TAG}) ile --tag parametresi (${DEPLOY_TAG}) farklı."
+    || _warn "HEAD tag (${CURRENT_TAG}) ≠ --tag (${DEPLOY_TAG}). Deploy TAG ile devam ediyor."
 fi
 
-# ── Adım 2: SUNUCU — Ortam doğrulama ─────────────────────────────────────────
-_header "2. Sunucu ortam doğrulama"
+# ════════════════════════════════════════════════════════════════════════════════
+# BÖLÜM 2–9 — SUNUCU OPERASYONLARI
+# Tüm sunucu kodu <<'SERVERSCRIPT' (quoted heredoc) içinde — Mac bash genişletmesi yok.
+# Mac'ten gelen dinamik değerler bash -s argümanlarıyla geçirilir.
+# ════════════════════════════════════════════════════════════════════════════════
+ssh "${SERVER}" bash -s \
+    "${DEPLOY_TAG}" \
+    "${BACKUP_STAMP}" \
+    "${SKIP_BACKUP}" \
+    <<'SERVERSCRIPT'
+set -Eeuo pipefail
 
-_ssh bash -s <<'REMOTE'
-set -e
-echo "  · Docker: $(docker version --format '{{.Server.Version}}' 2>/dev/null || echo 'BULUNAMADI')"
-echo "  · Compose: $(docker compose version --short 2>/dev/null || echo 'BULUNAMADI')"
-echo "  · Git: $(git --version 2>/dev/null || echo 'BULUNAMADI')"
+# Argümanlar (Mac'ten geçirildi)
+DEPLOY_TAG="$1"
+BACKUP_STAMP="$2"
+SKIP_BACKUP="$3"
 
-# .env varlığı (içeriği göstermeden)
-if [[ -f /opt/myk/production/myk-platform-v2/.env ]]; then
-  echo "  ✓  .env mevcut"
-  # Kritik değişkenlerin tanımlı olduğunu kontrol et (değerleri göstermeden)
+# Sunucu sabitleri
+REMOTE_DIR="/opt/myk/production/myk-platform-v2"
+BACKUP_DIR="/opt/myk/backups/production-${BACKUP_STAMP}"
+GITHUB_REPO="git@github.com:akgunatasakun/myk-platform-v2.git"
+CF="-f docker-compose.yml -f docker-compose.prod.yml"   # compose files flag
+PROD_PORT=18081                                          # nginx dış portu
+
+_h()  { printf '\n══════ %s ══════\n' "$*"; }
+_ok() { printf '  ✓  %s\n' "$*"; }
+_w()  { printf '  ⚠  %s\n' "$*"; }
+_e()  { printf '  ✗  %s\n' "$*" >&2; exit 1; }
+_i()  { printf '  ·  %s\n' "$*"; }
+
+# Secret içerebilecek satırları filtrele
+_hide() { grep -vE '(PASSWORD|SECRET_KEY|JWT_SECRET|ACCESS_KEY)=[^[:space:]]' || true; }
+
+# ── Adım 2: Ortam doğrulama ───────────────────────────────────────────────────
+_h "2. Sunucu ortam doğrulama"
+
+_i "Docker: $(docker version --format '{{.Server.Version}}' 2>/dev/null || echo 'bulunamadı')"
+_i "Compose: $(docker compose version --short 2>/dev/null || echo 'bulunamadı')"
+_i "Git: $(git --version 2>/dev/null | head -1 || echo 'bulunamadı')"
+
+# docker ve git zorunlu
+docker version > /dev/null 2>&1 || _e "Docker yüklü değil veya daemon çalışmıyor."
+docker compose version > /dev/null 2>&1 || _e "docker compose eklentisi bulunamadı."
+git --version > /dev/null 2>&1 || _e "git bulunamadı."
+_ok "Bağımlılıklar mevcut"
+
+# .env varlık ve placeholder kontrolü (değerleri göstermeden)
+ENV_FILE="${REMOTE_DIR}/.env"
+if [[ -f "${ENV_FILE}" ]]; then
+  _ok ".env mevcut"
   for var in MYK_ENV JWT_SECRET_KEY SECRET_KEY POSTGRES_PASSWORD ALLOW_PUBLIC_SETUP \
              STORAGE_ACCESS_KEY STORAGE_SECRET_KEY; do
-    val=$(grep "^${var}=" /opt/myk/production/myk-platform-v2/.env 2>/dev/null | cut -d= -f2- || echo "")
+    val="$(grep "^${var}=" "${ENV_FILE}" 2>/dev/null | cut -d= -f2- || true)"
     if [[ -z "${val}" ]]; then
-      echo "  ✗  .env içinde ${var} tanımlı değil!" >&2
-      exit 1
+      _e ".env içinde ${var} tanımlı değil."
     elif echo "${val}" | grep -qiE "REPLACE_WITH|CHANGE_ME"; then
-      echo "  ✗  .env içinde ${var} placeholder değer içeriyor!" >&2
-      exit 1
-    else
-      echo "  ✓  ${var} tanımlı"
+      _e ".env içinde ${var} hâlâ placeholder değer içeriyor."
     fi
+    _ok "${var} tanımlı"
   done
+
+  MYK_ENV_VAL="$(grep "^MYK_ENV=" "${ENV_FILE}" | cut -d= -f2- || true)"
+  [[ "${MYK_ENV_VAL}" == "production" ]] || _e "MYK_ENV=production değil: ${MYK_ENV_VAL}"
+  _ok "MYK_ENV=production"
+
+  SETUP_VAL="$(grep "^ALLOW_PUBLIC_SETUP=" "${ENV_FILE}" | cut -d= -f2- || true)"
+  [[ "${SETUP_VAL,,}" == "false" ]] || _e "ALLOW_PUBLIC_SETUP=false değil: ${SETUP_VAL}"
+  _ok "ALLOW_PUBLIC_SETUP=false"
 else
-  echo "  ✗  .env bulunamadı: /opt/myk/production/myk-platform-v2/.env" >&2
-  exit 1
+  _e ".env bulunamadı: ${ENV_FILE}
+  Önce: ssh ${SERVER}
+        mkdir -p $(dirname ${ENV_FILE})
+        # .env dosyasını oluştur — cp .env.production.example .env, değerleri doldur"
 fi
 
-# MYK_ENV=production kontrolü
-MYK_ENV_VAL=$(grep "^MYK_ENV=" /opt/myk/production/myk-platform-v2/.env | cut -d= -f2-)
-[[ "${MYK_ENV_VAL}" == "production" ]] || { echo "  ✗  MYK_ENV=production değil: ${MYK_ENV_VAL}" >&2; exit 1; }
-echo "  ✓  MYK_ENV=production"
+# ── Adım 3: Fresh install veya güncelleme ─────────────────────────────────────
+_h "3. Kaynak kodu güncelle"
 
-# ALLOW_PUBLIC_SETUP=false kontrolü
-SETUP_VAL=$(grep "^ALLOW_PUBLIC_SETUP=" /opt/myk/production/myk-platform-v2/.env | cut -d= -f2-)
-[[ "${SETUP_VAL,,}" == "false" ]] || { echo "  ✗  ALLOW_PUBLIC_SETUP=false değil: ${SETUP_VAL}" >&2; exit 1; }
-echo "  ✓  ALLOW_PUBLIC_SETUP=false"
-REMOTE
+if [[ ! -d "${REMOTE_DIR}/.git" ]]; then
+  _w "Repo mevcut değil — ilk kurulum yapılıyor..."
+  mkdir -p "$(dirname "${REMOTE_DIR}")"
+  git clone "${GITHUB_REPO}" "${REMOTE_DIR}" 2>&1 \
+    || _e "git clone başarısız. Sunucuda GitHub SSH erişimi var mı? (ssh -T git@github.com)"
+  _ok "Repo klonlandı: ${REMOTE_DIR}"
+fi
 
-_ok "Sunucu ortam doğrulaması geçti"
+cd "${REMOTE_DIR}"
 
-# ── Adım 3: SUNUCU — PostgreSQL yedeği ───────────────────────────────────────
-_header "3. PostgreSQL yedeği"
+git fetch origin --tags --prune 2>&1 | _hide
+git checkout "${DEPLOY_TAG}" 2>&1 | grep -v "^M " | _hide
+COMMIT="$(git rev-parse --short HEAD)"
+_ok "Checkout: ${DEPLOY_TAG} (${COMMIT})"
+
+# Checkout .env'i silmemeli (gitignore'da)
+[[ -f .env ]] || _e "git checkout sonrası .env kayboldu! .gitignore kontrolü gerekiyor."
+_ok ".env korundu"
+
+# ── Adım 4: Yedek ─────────────────────────────────────────────────────────────
+_h "4. Yedek"
 
 if [[ "${SKIP_BACKUP}" == "true" ]]; then
-  _warn "--skip-backup geçildi. Yedek atlanıyor."
+  _w "--skip-backup aktif. Yedek atlandı."
 else
-  _ssh bash -s <<REMOTE
-set -e
-BACKUP_DIR="${BACKUP_DIR}"
-mkdir -p "\${BACKUP_DIR}"
+  mkdir -p "${BACKUP_DIR}"
 
-# DB adını ve kullanıcıyı .env'den oku (değerleri loglamadan)
-DB=\$(grep "^POSTGRES_DB=" /opt/myk/production/myk-platform-v2/.env | cut -d= -f2-)
-USER=\$(grep "^POSTGRES_USER=" /opt/myk/production/myk-platform-v2/.env | cut -d= -f2-)
+  # DB adı ve kullanıcı adını .env'den oku (değerleri loga yazmadan)
+  _PG_DB="$(grep "^POSTGRES_DB=" .env | cut -d= -f2-)"
+  _PG_USER="$(grep "^POSTGRES_USER=" .env | cut -d= -f2-)"
 
-# pg_dump — docker compose exec üzerinden (parola terminale düşmez)
-echo "  · pg_dump başlıyor..."
-docker compose ${COMPOSE_FILES} -f /opt/myk/production/myk-platform-v2 exec -T db \
-  pg_dump -U "\${USER}" "\${DB}" --no-password \
-  > "\${BACKUP_DIR}/production-db-\$(date +%Y%m%d_%H%M%S).sql" 2>/dev/null \
-  && echo "  ✓  DB yedeği alındı: \${BACKUP_DIR}/" \
-  || { echo "  ✗  pg_dump başarısız!" >&2; exit 1; }
+  # pg_dump — docker compose exec üzerinden (PGPASSWORD terminale düşmez)
+  _i "pg_dump başlıyor (${_PG_DB})..."
+  DUMP_FILE="${BACKUP_DIR}/db-${BACKUP_STAMP}.sql"
+  docker compose ${CF} exec -T db \
+    pg_dump -U "${_PG_USER}" "${_PG_DB}" --no-password \
+    > "${DUMP_FILE}" 2>/dev/null \
+    && _ok "DB yedeği: ${DUMP_FILE}" \
+    || _w "pg_dump başarısız (DB henüz yoksa normaldir — ilk kurulum)"
+  unset _PG_DB _PG_USER
 
-# MinIO volume yedeğini arşivle
-echo "  · MinIO data arşivleniyor..."
-docker run --rm \
-  -v "myk-platform-v2_minio_data:/minio_src:ro" \
-  -v "\${BACKUP_DIR}:/backup" \
-  alpine tar -czf /backup/minio-data-\$(date +%Y%m%d_%H%M%S).tar.gz -C /minio_src . 2>/dev/null \
-  && echo "  ✓  MinIO yedeği alındı" \
-  || echo "  ⚠  MinIO yedeği alınamadı (volume boş olabilir)"
+  # MinIO volume yedeği (volume yoksa uyarı ver, dur)
+  MINIO_VOL="$(basename "${REMOTE_DIR}" | tr '[:upper:]' '[:lower:]' | tr -cd 'a-z0-9-')_minio_data"
+  _i "MinIO volume: ${MINIO_VOL}"
+  if docker volume inspect "${MINIO_VOL}" > /dev/null 2>&1; then
+    docker run --rm \
+      -v "${MINIO_VOL}:/minio_src:ro" \
+      -v "${BACKUP_DIR}:/backup" \
+      alpine tar -czf "/backup/minio-${BACKUP_STAMP}.tar.gz" -C /minio_src . 2>/dev/null \
+      && _ok "MinIO yedeği: ${BACKUP_DIR}/minio-${BACKUP_STAMP}.tar.gz" \
+      || _w "MinIO arşivi oluşturulamadı."
+  else
+    _w "MinIO volume bulunamadı (${MINIO_VOL}) — ilk kurulum veya farklı compose project adı."
+  fi
 
-echo "  ✓  Yedekler: \${BACKUP_DIR}/"
-REMOTE
-
-  _ok "Yedekler alındı: ${BACKUP_DIR}"
+  _ok "Yedekler: ${BACKUP_DIR}/"
 fi
 
-# ── Adım 4: SUNUCU — Kaynak kodu güncelle ────────────────────────────────────
-_header "4. Kaynak kodu güncelle (git pull + tag checkout)"
+# ── Adım 5: Image build ────────────────────────────────────────────────────────
+_h "5. Docker image build"
 
-_ssh bash -s <<REMOTE
-set -e
-cd "${REMOTE_DIR}"
+docker compose ${CF} build --no-cache --pull 2>&1 | _hide | tail -8
+_ok "Build tamamlandı"
 
-git fetch origin --tags
-git checkout "${DEPLOY_TAG}" 2>&1 | grep -v "HEAD is now"
-COMMIT=\$(git rev-parse --short HEAD)
-echo "  ✓  Checkout: ${DEPLOY_TAG} (\${COMMIT})"
+# ── Adım 6: Altyapı servisleri ────────────────────────────────────────────────
+_h "6. Altyapı servisleri başlat (db, redis, minio, pdf-service)"
 
-# .env kontrolü: checkout .env'i silmemeli
-[[ -f .env ]] || { echo "  ✗  Checkout sonrası .env kayboldu!" >&2; exit 1; }
-echo "  ✓  .env korundu"
-REMOTE
+docker compose ${CF} up -d db redis minio pdf-service
 
-_ok "Kaynak kod: ${DEPLOY_TAG}"
-
-# ── Adım 5: SUNUCU — Image build ─────────────────────────────────────────────
-_header "5. Docker image build"
-
-_ssh bash -s <<REMOTE
-set -e
-cd "${REMOTE_DIR}"
-${COMPOSE_CMD} build --no-cache --pull 2>&1 | tail -5
-echo "  ✓  Build tamamlandı"
-REMOTE
-
-_ok "Image build tamamlandı"
-
-# ── Adım 6: SUNUCU — Altyapı servisleri başlat (db, redis, minio) ─────────────
-_header "6. Altyapı servisleri başlat"
-
-_ssh bash -s <<REMOTE
-set -e
-cd "${REMOTE_DIR}"
-${COMPOSE_CMD} up -d db redis minio pdf-service
-echo "  · Servisler healthy olana kadar bekleniyor (max 60s)..."
-timeout 60 bash -c '
-  until docker compose ${COMPOSE_FILES} ps db | grep -q "healthy"; do sleep 3; done
-' 2>/dev/null && echo "  ✓  db healthy" || echo "  ⚠  db healthy olmadı, devam ediliyor"
-REMOTE
-
-_ok "Altyapı servisleri çalışıyor"
-
-# ── Adım 7: SUNUCU — Alembic migration ───────────────────────────────────────
-_header "7. Alembic migration (upgrade head)"
-
-_ssh bash -s <<REMOTE
-set -e
-cd "${REMOTE_DIR}"
-
-# --entrypoint /bin/sh yöntemi: myk_user (DDL sahibi) olarak çalışır
-# .env'i source etmez — compose container environment'ını kullanır
-echo "  · Migration başlıyor..."
-${COMPOSE_CMD} run --rm -T --entrypoint /bin/sh api -c '
-  export DATABASE_URL="postgresql+asyncpg://${POSTGRES_USER}:${POSTGRES_PASSWORD}@db:5432/${POSTGRES_DB}"
-  exec alembic -c migrations/alembic.ini upgrade head
-' 2>&1 | grep -vE "(PASSWORD|SECRET)" | tail -10
-echo "  ✓  Migration tamamlandı"
-
-# Doğrula
-HEAD_VERSION=\$(${COMPOSE_CMD} run --rm -T --entrypoint /bin/sh api -c '
-  export DATABASE_URL="postgresql+asyncpg://${POSTGRES_USER}:${POSTGRES_PASSWORD}@db:5432/${POSTGRES_DB}"
-  alembic -c migrations/alembic.ini current 2>/dev/null
-' 2>/dev/null | tail -1)
-echo "  · Alembic current: \${HEAD_VERSION}"
-echo "\${HEAD_VERSION}" | grep -q "(head)" \
-  || { echo "  ✗  Migration head'e ulaşamadı!" >&2; exit 1; }
-echo "  ✓  Alembic head doğrulandı"
-REMOTE
-
-_ok "Migration tamamlandı"
-
-# ── Adım 8: SUNUCU — API ve Frontend başlat ──────────────────────────────────
-_header "8. API ve Frontend başlat"
-
-_ssh bash -s <<REMOTE
-set -e
-cd "${REMOTE_DIR}"
-${COMPOSE_CMD} up -d api frontend nginx
-echo "  · API ve Frontend healthy olana kadar bekleniyor (max 90s)..."
+_i "db healthy olana kadar bekleniyor (max 90s)..."
 timeout 90 bash -c '
-  until docker compose ${COMPOSE_FILES} exec -T api \
-    curl -sf http://localhost:8000/api/v1/health > /dev/null 2>&1; do
+  until docker compose '"${CF}"' exec -T db pg_isready -q 2>/dev/null; do
+    sleep 3
+  done
+' && _ok "db healthy" || _e "db 90 saniyede healthy olmadı. Loglar: docker compose logs db"
+
+_i "pdf-service healthy olana kadar bekleniyor (max 60s)..."
+timeout 60 bash -c '
+  until docker compose '"${CF}"' exec -T pdf-service \
+    python -c "import urllib.request; urllib.request.urlopen('"'"'http://127.0.0.1:8001/health'"'"', timeout=2)" \
+    > /dev/null 2>&1; do
+    sleep 3
+  done
+' && _ok "pdf-service healthy" || _w "pdf-service 60s içinde healthy olmadı, devam ediliyor."
+
+# ── Adım 7: Alembic migration ─────────────────────────────────────────────────
+_h "7. Alembic migration (upgrade head)"
+
+_i "Migration başlıyor..."
+# --entrypoint /bin/sh yöntemi: compose .env'den ${POSTGRES_USER} vb. container env'e geçer.
+# Container shell içinde bu değişkenler hazır olduğu için DATABASE_URL doğru kurulur.
+# .env'i source etmiyoruz — compose environment: bloğu hallediyor.
+docker compose ${CF} run --rm -T --entrypoint /bin/sh api -c '
+  exec alembic -c migrations/alembic.ini upgrade head
+' 2>&1 | _hide | tail -6
+_ok "Migration komutu tamamlandı"
+
+# Alembic head doğrulama
+ALEMBIC_CUR="$(
+  docker compose ${CF} run --rm -T --entrypoint /bin/sh api -c \
+    'alembic -c migrations/alembic.ini current 2>/dev/null' \
+  2>/dev/null | tail -1 || true
+)"
+_i "Alembic current: ${ALEMBIC_CUR}"
+echo "${ALEMBIC_CUR}" | grep -q "(head)" \
+  || _e "Migration head'e ulaşamadı! Loglar: docker compose logs api"
+_ok "Alembic (head) doğrulandı"
+
+# ── Adım 8: API + Frontend + Nginx ────────────────────────────────────────────
+_h "8. API, Frontend, Nginx başlat"
+
+docker compose ${CF} up -d api frontend nginx
+
+_i "API healthy olana kadar bekleniyor (max 120s)..."
+timeout 120 bash -c '
+  until docker compose '"${CF}"' exec -T api \
+    curl -sf http://127.0.0.1:8000/api/v1/health > /dev/null 2>&1; do
     sleep 5
   done
-' && echo "  ✓  API healthy" || { echo "  ✗  API healthy olmadı!" >&2; exit 1; }
-REMOTE
+' && _ok "API healthy (container iç ağ)" || _e "API 120s içinde healthy olmadı. Loglar: docker compose logs api"
 
-_ok "Servisler çalışıyor"
+_i "Nginx üzerinden test (port ${PROD_PORT})..."
+timeout 30 bash -c "
+  until curl -sf http://127.0.0.1:${PROD_PORT}/api/v1/health > /dev/null 2>&1; do
+    sleep 3
+  done
+" && _ok "Nginx proxy çalışıyor (localhost:${PROD_PORT})" \
+  || _w "Nginx proxy testi başarısız (port ${PROD_PORT}). Nginx log: docker compose logs nginx"
 
-# ── Adım 9: SUNUCU — Temel health check ──────────────────────────────────────
-_header "9. Temel health check"
+# ── Adım 9: Temel üretim doğrulaması ──────────────────────────────────────────
+_h "9. Üretim doğrulama"
 
-_ssh bash -s <<REMOTE
-set -e
-cd "${REMOTE_DIR}"
+# MYK_ENV=production
+ENV_CHECK="$(
+  docker compose ${CF} exec -T api \
+    python -c "from app.config import get_settings; print(get_settings().myk_env)" \
+  2>/dev/null || echo "ERROR"
+)"
+_i "MYK_ENV: ${ENV_CHECK}"
+[[ "${ENV_CHECK}" == "production" ]] \
+  || _e "API production modunda değil: ${ENV_CHECK}"
+_ok "MYK_ENV=production"
 
-# API health
-API_STATUS=\$(${COMPOSE_CMD} exec -T api \
-  curl -sf http://localhost:8000/api/v1/health 2>/dev/null || echo "FAIL")
-echo "  · API /health: \${API_STATUS}"
-echo "\${API_STATUS}" | grep -q '"status"' \
-  || { echo "  ✗  API health başarısız!" >&2; exit 1; }
-echo "  ✓  API /health OK"
+# OpenAPI production'da kapalı olmalı (404)
+OPENAPI_CODE="$(curl -s -o /dev/null -w '%{http_code}' \
+  http://127.0.0.1:${PROD_PORT}/api/openapi.json 2>/dev/null || echo "000")"
+_i "OpenAPI HTTP kodu: ${OPENAPI_CODE}"
+[[ "${OPENAPI_CODE}" == "404" ]] \
+  && _ok "OpenAPI production'da kapalı (404)" \
+  || _w "OpenAPI ${OPENAPI_CODE} döndü (beklenen 404). FastAPI OPENAPI_URL ayarını kontrol edin."
 
-# MYK_ENV=production doğrulama
-ENV_CHECK=\$(${COMPOSE_CMD} exec -T api \
-  python -c "from app.config import get_settings; s=get_settings(); print(s.myk_env)" \
-  2>/dev/null || echo "ERROR")
-echo "  · MYK_ENV: \${ENV_CHECK}"
-[[ "\${ENV_CHECK}" == "production" ]] \
-  || { echo "  ✗  MYK_ENV production değil: \${ENV_CHECK}" >&2; exit 1; }
-echo "  ✓  MYK_ENV=production"
+# Korumalı endpoint token olmadan 401
+PROTECTED_CODE="$(curl -s -o /dev/null -w '%{http_code}' \
+  http://127.0.0.1:${PROD_PORT}/api/v1/persons 2>/dev/null || echo "000")"
+_i "Korumalı endpoint kodu: ${PROTECTED_CODE}"
+[[ "${PROTECTED_CODE}" == "401" ]] \
+  && _ok "Korumalı endpoint → 401 (doğru)" \
+  || _w "Korumalı endpoint ${PROTECTED_CODE} döndü (beklenen 401)."
 
-# 7 servis running + healthy kontrolü
-UNHEALTHY=\$(${COMPOSE_CMD} ps --format json 2>/dev/null \
-  | python3 -c "
-import sys, json
-data = sys.stdin.read().strip()
-lines = [l for l in data.splitlines() if l.strip().startswith('{')]
-bad = []
-for l in lines:
-    try:
-        s = json.loads(l)
-        state = s.get('State','').lower()
-        health = s.get('Health','').lower()
-        name = s.get('Name','?')
-        if state != 'running' or (health and health not in ('healthy','')):
-            bad.append(f'{name}: state={state} health={health}')
-    except:
-        pass
-print('\n'.join(bad) if bad else 'OK')
-" 2>/dev/null || echo "kontrol atlandı")
-echo "  · Servis durumu: \${UNHEALTHY}"
-echo "  ✓  Health check tamamlandı"
-REMOTE
+# Alembic son kez doğrula
+ALEMBIC_FINAL="$(
+  docker compose ${CF} run --rm -T --entrypoint /bin/sh api -c \
+    'alembic -c migrations/alembic.ini current 2>/dev/null' \
+  2>/dev/null | tail -1 || true
+)"
+echo "${ALEMBIC_FINAL}" | grep -q "(head)" \
+  && _ok "Alembic (head) doğrulandı" \
+  || _w "Alembic current: ${ALEMBIC_FINAL}"
 
-_ok "Temel health check geçti"
+# Tüm servisler running?
+SVC_TABLE="$(docker compose ${CF} ps --format 'table {{.Name}}\t{{.State}}\t{{.Health}}' 2>/dev/null || true)"
+echo ""
+echo "${SVC_TABLE}"
+echo ""
 
-# ── Adım 10: Özet ─────────────────────────────────────────────────────────────
-_header "Deploy Tamamlandı"
+UNHEALTHY_COUNT="$(echo "${SVC_TABLE}" | grep -c "unhealthy" || true)"
+[[ "${UNHEALTHY_COUNT}" -eq 0 ]] \
+  && _ok "Unhealthy servis yok" \
+  || _w "${UNHEALTHY_COUNT} unhealthy servis var — logları inceleyin."
+
+_h "Sunucu tarafı tamamlandı ✓"
+echo "  Tag:    ${DEPLOY_TAG}"
+echo "  Commit: ${COMMIT}"
+echo "  Port:   ${PROD_PORT}"
+[[ "${SKIP_BACKUP}" == "false" ]] && echo "  Yedek:  ${BACKUP_DIR}"
+SERVERSCRIPT
+
+# ════════════════════════════════════════════════════════════════════════════════
+# BÖLÜM 3 — SMOKE TEST (Mac taraflı — sunucuya SSH eder)
+# ════════════════════════════════════════════════════════════════════════════════
+if [[ "${SKIP_SMOKE}" == "true" ]]; then
+  _warn "Smoke test --skip-smoke ile atlandı."
+else
+  _header "10. Smoke test"
+  SMOKE_SCRIPT="${SCRIPT_DIR}/smoke_test_production.sh"
+  if [[ -f "${SMOKE_SCRIPT}" ]]; then
+    bash "${SMOKE_SCRIPT}" && _ok "Smoke test PASS ✅" \
+      || { _warn "Smoke test FAIL ❌ — yukarıdaki başarısız testleri inceleyin."; }
+  else
+    _warn "smoke_test_production.sh bulunamadı: ${SMOKE_SCRIPT}"
+    _warn "Manuel olarak çalıştırın: bash scripts/smoke_test_production.sh"
+  fi
+fi
+
+# ════════════════════════════════════════════════════════════════════════════════
+# ÖZET
+# ════════════════════════════════════════════════════════════════════════════════
+_header "Deploy Tamamlandı 🚀"
 echo ""
 echo "  Tag:    ${DEPLOY_TAG}"
 echo "  Sunucu: ${SERVER}"
-echo "  Dizin:  ${REMOTE_DIR}"
-[[ "${SKIP_BACKUP}" == "false" ]] && echo "  Yedek:  ${BACKUP_DIR}"
-echo ""
-echo "  Sonraki adım:"
-echo "    bash scripts/smoke_test_production.sh"
+echo "  URL:    http://$(ssh "${SERVER}" 'curl -s ifconfig.me 2>/dev/null || hostname -I | awk "{print \$1}"'):18081"
 echo ""
 echo "  Sorun çıkarsa rollback:"
-echo "    Bkz. docs/RUNBOOK.md — Uygulama Rollback ve DB Rollback bölümleri"
+echo "    Bkz. docs/RUNBOOK.md"
 echo ""
