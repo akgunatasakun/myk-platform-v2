@@ -275,23 +275,54 @@ UNHEALTHY_COUNT="${UNHEALTHY_COUNT:-0}"
   && _ok "Unhealthy servis yok" \
   || _warn "${UNHEALTHY_COUNT} unhealthy servis var — logları inceleyin."
 
-# ── Adım 9: Smoke test ────────────────────────────────────────────────────────
-_h "9. Smoke test"
+# ── Adım 9: Son doğrulama (inline, SSH'sız) ───────────────────────────────────
+# smoke_test_production.sh Mac'ten REMOTE_MODE=true çalışmak üzere tasarlandı.
+# Sunucuda doğrudan çalıştırıldığında "myk-server" alias'ına SSH atmaya çalışır —
+# bu alias yalnızca Mac'te tanımlı. Bu nedenle sunucu taraflı deploy'da
+# doğrulama inline olarak yapılır.
+_h "9. Son doğrulama"
 
 if [[ "${SKIP_SMOKE}" == "true" ]]; then
   _warn "--skip-smoke ile atlandı."
 else
-  SMOKE_SCRIPT="${REMOTE_DIR}/scripts/smoke_test_production.sh"
-  if [[ -f "${SMOKE_SCRIPT}" ]]; then
-    # Smoke test sunucuda çalışır — BASE_URL geçilerek REMOTE_MODE=false yapılır.
-    # REMOTE_MODE=true olsaydı "myk-server" alias'ına SSH atardı (Mac'te tanımlı, sunucuda yok).
-    if bash "${SMOKE_SCRIPT}" "http://127.0.0.1:${PROD_PORT}"; then
-      _ok "Smoke test PASS ✅"
-    else
-      _fail "Smoke test FAIL ❌ — yukarıdaki başarısız testleri inceleyin. Deploy başarılı sayılmıyor."
-    fi
+  _VERIFY_FAIL=0
+  BASE="http://127.0.0.1:${PROD_PORT}"
+
+  # T1: API health
+  _H=$(curl -sf "${BASE}/api/v1/health" 2>/dev/null || echo "FAIL")
+  echo "${_H}" | grep -q '"status"' \
+    && _ok "GET /api/v1/health → OK" \
+    || { _warn "GET /api/v1/health başarısız: ${_H:0:80}"; (( _VERIFY_FAIL++ )) || true; }
+
+  # T2: OpenAPI production'da kapalı
+  _OA=$(curl -s -o /dev/null -w '%{http_code}' "${BASE}/api/openapi.json" 2>/dev/null || echo "000")
+  [[ "${_OA}" == "404" ]] \
+    && _ok "OpenAPI production'da kapalı → 404" \
+    || { _warn "OpenAPI ${_OA} döndü (beklenen 404)"; (( _VERIFY_FAIL++ )) || true; }
+
+  # T3: Frontend erişilebilir
+  _FE=$(curl -sf "${BASE}/" 2>/dev/null || echo "FAIL")
+  echo "${_FE}" | grep -qiE "<html|<!DOCTYPE" \
+    && _ok "GET / → Frontend HTML" \
+    || { _warn "Frontend erişilemiyor: ${_FE:0:80}"; (( _VERIFY_FAIL++ )) || true; }
+
+  # T4: Korumalı endpoint — token olmadan 401
+  _PR=$(curl -s -o /dev/null -w '%{http_code}' "${BASE}/api/v1/persons" 2>/dev/null || echo "000")
+  [[ "${_PR}" == "401" ]] \
+    && _ok "GET /api/v1/persons (token yok) → 401" \
+    || { _warn "Korumalı endpoint ${_PR} döndü (beklenen 401)"; (( _VERIFY_FAIL++ )) || true; }
+
+  # T5: Güvenlik başlıkları
+  _HDR=$(curl -sI "${BASE}/api/v1/health" 2>/dev/null || echo "")
+  echo "${_HDR}" | grep -qi "X-Frame-Options" \
+    && _ok "X-Frame-Options başlığı mevcut" \
+    || { _warn "X-Frame-Options başlığı eksik"; (( _VERIFY_FAIL++ )) || true; }
+
+  echo ""
+  if [[ "${_VERIFY_FAIL}" -eq 0 ]]; then
+    _ok "Son doğrulama PASS ✅ (5/5)"
   else
-    _warn "smoke_test_production.sh bulunamadı: ${SMOKE_SCRIPT}"
+    _fail "Son doğrulama FAIL ❌ (${_VERIFY_FAIL} hata) — deploy başarılı sayılmıyor."
   fi
 fi
 
