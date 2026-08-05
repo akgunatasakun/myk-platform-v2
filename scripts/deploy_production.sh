@@ -101,6 +101,8 @@ BACKUP_DIR="/opt/myk/backups/production-${BACKUP_STAMP}"
 GITHUB_REPO="git@github.com:akgunatasakun/myk-platform-v2.git"
 CF="-f docker-compose.yml -f docker-compose.prod.yml"   # compose files flag
 PROD_PORT=18081                                          # nginx dış portu
+COMPOSE_PROJECT_NAME="myk-production"                   # docker compose project adı
+export COMPOSE_PROJECT_NAME
 
 _h()  { printf '\n══════ %s ══════\n' "$*"; }
 _ok() { printf '  ✓  %s\n' "$*"; }
@@ -198,7 +200,7 @@ else
   unset _PG_DB _PG_USER
 
   # MinIO volume yedeği (volume yoksa uyarı ver, dur)
-  MINIO_VOL="$(basename "${REMOTE_DIR}" | tr '[:upper:]' '[:lower:]' | tr -cd 'a-z0-9-')_minio_data"
+  MINIO_VOL="${COMPOSE_PROJECT_NAME}_minio_data"
   _i "MinIO volume: ${MINIO_VOL}"
   if docker volume inspect "${MINIO_VOL}" > /dev/null 2>&1; then
     docker run --rm \
@@ -352,8 +354,11 @@ else
   _header "10. Smoke test"
   SMOKE_SCRIPT="${SCRIPT_DIR}/smoke_test_production.sh"
   if [[ -f "${SMOKE_SCRIPT}" ]]; then
-    bash "${SMOKE_SCRIPT}" && _ok "Smoke test PASS ✅" \
-      || { _warn "Smoke test FAIL ❌ — yukarıdaki başarısız testleri inceleyin."; }
+    if bash "${SMOKE_SCRIPT}"; then
+      _ok "Smoke test PASS ✅"
+    else
+      _fail "Smoke test FAIL ❌ — yukarıdaki başarısız testleri inceleyin. Deploy başarılı sayılmıyor."
+    fi
   else
     _warn "smoke_test_production.sh bulunamadı: ${SMOKE_SCRIPT}"
     _warn "Manuel olarak çalıştırın: bash scripts/smoke_test_production.sh"
@@ -367,7 +372,7 @@ _header "Deploy Tamamlandı 🚀"
 echo ""
 echo "  Tag:    ${DEPLOY_TAG}"
 echo "  Sunucu: ${SERVER}"
-echo "  URL:    http://$(ssh "${SERVER}" 'curl -s ifconfig.me 2>/dev/null || hostname -I | awk "{print \$1}"'):18081"
+echo "  URL:    http://$(ssh "${SERVER}" 'curl -4 -fsS ifconfig.me 2>/dev/null || hostname -I | awk "{print \$1}"'):18081"
 echo ""
 echo "  Sorun çıkarsa rollback:"
 echo "    Bkz. docs/RUNBOOK.md"

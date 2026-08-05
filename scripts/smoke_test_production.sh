@@ -19,8 +19,8 @@ COMPOSE_FILES="-f docker-compose.yml -f docker-compose.prod.yml"
 COMPOSE_CMD="docker compose ${COMPOSE_FILES}"
 
 if [[ -z "${BASE_URL}" ]]; then
-  # Sunucu üzerindeki nginx'e localhost üzerinden test et
-  BASE_URL="http://localhost"
+  # Sunucu üzerindeki nginx'e 127.0.0.1:18081 üzerinden test et
+  BASE_URL="http://127.0.0.1:18081"
   REMOTE_MODE=true
 else
   REMOTE_MODE=false
@@ -138,14 +138,20 @@ if [[ "${REMOTE_MODE}" == "true" ]]; then
   echo "${svc_status}"
 
   # 7 servisin running olduğunu kontrol et
-  running_count=$(echo "${svc_status}" | grep -c "running" || echo "0")
+  running_count="$(grep -c 'running' <<<"${svc_status}" || true)"
+  running_count="${running_count:-0}"
   _check "7 servis running (api db redis minio pdf-service frontend nginx)" "${running_count}" "^[789]"
 
   # Unhealthy servis var mı?
-  unhealthy=$(echo "${svc_status}" | grep "unhealthy" | wc -l || echo "0")
-  [[ "${unhealthy}" -eq 0 ]] \
-    && RESULTS+=("  [OK]   Unhealthy servis yok") && (( PASS++ )) || true \
-    || RESULTS+=("  [FAIL] Unhealthy servis var: $(echo "${svc_status}" | grep "unhealthy")") && (( FAIL++ )) || true
+  unhealthy_count="$(grep -c 'unhealthy' <<<"${svc_status}" || true)"
+  unhealthy_count="${unhealthy_count:-0}"
+  if [[ "${unhealthy_count}" -eq 0 ]]; then
+    RESULTS+=("  [OK]   Unhealthy servis yok")
+    (( PASS++ )) || true
+  else
+    RESULTS+=("  [FAIL] Unhealthy servis var: $(grep 'unhealthy' <<<"${svc_status}" || true)")
+    (( FAIL++ )) || true
+  fi
 else
   _check "Docker servis kontrolü (remote mode gerekir)" "SKIP" "SKIP"
 fi
@@ -184,11 +190,15 @@ fi
 # ── T12: applicant_name nullable kontrolü ─────────────────────────────────────
 _header "T12 Schema doğrulama"
 if [[ "${REMOTE_MODE}" == "true" ]]; then
-  nullable_check=$(ssh "${SERVER}" "cd /opt/myk/production/myk-platform-v2 && \
-    ${COMPOSE_CMD} exec -T db psql -U \"\${POSTGRES_USER}\" -d \"\${POSTGRES_DB}\" -tAc \
-    \"SELECT is_nullable FROM information_schema.columns \
-     WHERE table_schema='public' AND table_name='membership_applications' \
-     AND column_name='applicant_name';\" 2>/dev/null" 2>/dev/null || echo "ERROR")
+  nullable_check=$(ssh "${SERVER}" "
+    cd /opt/myk/production/myk-platform-v2
+    _PG_USER=\$(grep '^POSTGRES_USER=' .env | cut -d= -f2-)
+    _PG_DB=\$(grep '^POSTGRES_DB=' .env | cut -d= -f2-)
+    ${COMPOSE_CMD} exec -T db psql -U \"\${_PG_USER}\" -d \"\${_PG_DB}\" -tAc \
+      \"SELECT is_nullable FROM information_schema.columns \
+       WHERE table_schema='public' AND table_name='membership_applications' \
+       AND column_name='applicant_name';\" 2>/dev/null
+  " 2>/dev/null || echo "ERROR")
   nullable_check=$(echo "${nullable_check}" | tr -d '[:space:]')
   _check "membership_applications.applicant_name nullable=YES" "${nullable_check}" "YES"
 fi
