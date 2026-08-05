@@ -42,7 +42,13 @@ services:
 
   # ── Nginx ───────────────────────────────────────────────────────────────────
   nginx:
+
     restart: always
+
+    ports: !override
+
+      - "18081:80"
+
     # Production SSL: Let's Encrypt sertifikaları kurulduktan sonra ekle:
     # volumes:
     #   - ./infra/nginx/nginx.conf:/etc/nginx/nginx.conf:ro
