@@ -65,6 +65,19 @@ class Settings(BaseSettings):
     initial_club_name: str = "Yelken Kulübü"
     initial_club_slug: str = "kulup"
 
+    # E-posta / SMTP
+    # Boş bırakılırsa e-postalar gönderilmez, sadece loglanır (dev/test modu).
+    smtp_host: str = ""
+    smtp_port: int = 587
+    smtp_username: str = ""
+    smtp_password: str = ""
+    smtp_from_address: str = "noreply@mersinyelken.org.tr"
+    smtp_use_tls: bool = False
+    smtp_start_tls: bool = True
+
+    # Frontend base URL (şifre sıfırlama linkleri için)
+    frontend_base_url: str = "http://localhost:5173"
+
     # Loglama
     log_level: str = "INFO"
 

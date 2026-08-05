@@ -9,6 +9,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.core.security import get_current_user
 from app.core.tenant import get_club_id
 from app.database import get_db
+from app.models.membership_application import MembershipApplication
 from app.models.person import Person, PersonRole
 from app.schemas.auth import TokenPayload
 
@@ -20,6 +21,7 @@ class DashboardStats(BaseModel):
     aktif_sporcu: int
     aktif_uye: int
     antrenor_sayisi: int
+    bekleyen_basvuru: int
     vadesi_gecen_odeme: int
     yaklasan_egitim: int
     bakim_bekleyen_ekipman: int
@@ -80,11 +82,22 @@ async def get_dashboard_stats(
     )
     antrenor_sayisi = antrenor_result.scalar_one()
 
+    # Bekleyen başvuru sayısı
+    basvuru_result = await db.execute(
+        select(func.count(MembershipApplication.id)).where(
+            MembershipApplication.club_id == club_id,
+            MembershipApplication.status == "submitted",
+            MembershipApplication.is_deleted.is_(False),
+        )
+    )
+    bekleyen_basvuru = basvuru_result.scalar_one()
+
     return DashboardStats(
         toplam_kisi=toplam_kisi,
         aktif_sporcu=aktif_sporcu,
         aktif_uye=aktif_uye,
         antrenor_sayisi=antrenor_sayisi,
+        bekleyen_basvuru=bekleyen_basvuru,
         vadesi_gecen_odeme=0,
         yaklasan_egitim=0,
         bakim_bekleyen_ekipman=0,

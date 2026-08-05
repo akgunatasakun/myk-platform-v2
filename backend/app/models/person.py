@@ -31,6 +31,8 @@ class Person(Base):
     emergency_contact_phone: Mapped[Optional[str]] = mapped_column(String(20), nullable=True)
     blood_type: Mapped[Optional[str]] = mapped_column(String(5), nullable=True)
     notes: Mapped[Optional[str]] = mapped_column(Text(), nullable=True)
+    member_number: Mapped[Optional[str]] = mapped_column(String(20), nullable=True)
+    must_change_password: Mapped[bool] = mapped_column(Boolean, default=False, nullable=False)
     avatar_object_key: Mapped[Optional[str]] = mapped_column(String(500), nullable=True)
     is_active: Mapped[bool] = mapped_column(Boolean, default=True, nullable=False)
     is_deleted: Mapped[bool] = mapped_column(Boolean, default=False, nullable=False)
