@@ -99,7 +99,8 @@ SKIP_BACKUP="$3"
 REMOTE_DIR="/opt/myk/production/myk-platform-v2"
 BACKUP_DIR="/opt/myk/backups/production-${BACKUP_STAMP}"
 GITHUB_REPO="git@github.com:akgunatasakun/myk-platform-v2.git"
-CF="-f docker-compose.yml -f docker-compose.prod.yml"   # compose files flag
+ENV_FILE="/etc/myk/production.env"                       # secrets repo dışında
+CF="--env-file ${ENV_FILE} -f docker-compose.yml -f docker-compose.prod.yml"
 PROD_PORT=18081                                          # nginx dış portu
 COMPOSE_PROJECT_NAME="myk-production"                   # docker compose project adı
 export COMPOSE_PROJECT_NAME
@@ -126,8 +127,8 @@ docker compose version > /dev/null 2>&1 || _e "docker compose eklentisi bulunama
 git --version > /dev/null 2>&1 || _e "git bulunamadı."
 _ok "Bağımlılıklar mevcut"
 
-# .env varlık ve placeholder kontrolü (değerleri göstermeden)
-ENV_FILE="${REMOTE_DIR}/.env"
+# Secrets dosyası kontrolü (değerleri göstermeden)
+ENV_FILE="/etc/myk/production.env"
 if [[ -f "${ENV_FILE}" ]]; then
   _ok ".env mevcut"
   for var in MYK_ENV JWT_SECRET_KEY SECRET_KEY POSTGRES_PASSWORD ALLOW_PUBLIC_SETUP \
@@ -149,10 +150,12 @@ if [[ -f "${ENV_FILE}" ]]; then
   [[ "${SETUP_VAL,,}" == "false" ]] || _e "ALLOW_PUBLIC_SETUP=false değil: ${SETUP_VAL}"
   _ok "ALLOW_PUBLIC_SETUP=false"
 else
-  _e ".env bulunamadı: ${ENV_FILE}
-  Önce: ssh ${SERVER}
-        mkdir -p $(dirname ${ENV_FILE})
-        # .env dosyasını oluştur — cp .env.production.example .env, değerleri doldur"
+  _e "Secrets dosyası bulunamadı: ${ENV_FILE}
+  Önce sunucuda root olarak:
+    sudo mkdir -p /etc/myk
+    sudo cp /opt/myk/production/myk-platform-v2/.env /etc/myk/production.env
+    sudo chown root:myk-deploy /etc/myk/production.env
+    sudo chmod 640 /etc/myk/production.env"
 fi
 
 # ── Adım 3: Fresh install veya güncelleme ─────────────────────────────────────
@@ -172,10 +175,7 @@ git fetch origin --tags --prune 2>&1 | _hide
 git checkout "${DEPLOY_TAG}" 2>&1 | grep -v "^M " | _hide
 COMMIT="$(git rev-parse --short HEAD)"
 _ok "Checkout: ${DEPLOY_TAG} (${COMMIT})"
-
-# Checkout .env'i silmemeli (gitignore'da)
-[[ -f .env ]] || _e "git checkout sonrası .env kayboldu! .gitignore kontrolü gerekiyor."
-_ok ".env korundu"
+# Secrets /etc/myk/production.env'de — git checkout buna dokunamaz.
 
 # ── Adım 4: Yedek ─────────────────────────────────────────────────────────────
 _h "4. Yedek"

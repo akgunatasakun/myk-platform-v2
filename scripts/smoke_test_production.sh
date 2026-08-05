@@ -15,8 +15,10 @@ set -Eeuo pipefail
 # ── Parametreler ──────────────────────────────────────────────────────────────
 BASE_URL="${1:-}"
 SERVER="myk-server"
-COMPOSE_FILES="-f docker-compose.yml -f docker-compose.prod.yml"
+PROD_ENV_FILE="/etc/myk/production.env"
+COMPOSE_FILES="--env-file ${PROD_ENV_FILE} -f docker-compose.yml -f docker-compose.prod.yml"
 COMPOSE_CMD="docker compose ${COMPOSE_FILES}"
+export COMPOSE_PROJECT_NAME="${COMPOSE_PROJECT_NAME:-myk-production}"
 
 if [[ -z "${BASE_URL}" ]]; then
   # Sunucu üzerindeki nginx'e 127.0.0.1:18081 üzerinden test et
@@ -191,9 +193,9 @@ fi
 _header "T12 Schema doğrulama"
 if [[ "${REMOTE_MODE}" == "true" ]]; then
   nullable_check=$(ssh "${SERVER}" "
+    _PG_USER=\$(grep '^POSTGRES_USER=' /etc/myk/production.env | cut -d= -f2-)
+    _PG_DB=\$(grep '^POSTGRES_DB=' /etc/myk/production.env | cut -d= -f2-)
     cd /opt/myk/production/myk-platform-v2
-    _PG_USER=\$(grep '^POSTGRES_USER=' .env | cut -d= -f2-)
-    _PG_DB=\$(grep '^POSTGRES_DB=' .env | cut -d= -f2-)
     ${COMPOSE_CMD} exec -T db psql -U \"\${_PG_USER}\" -d \"\${_PG_DB}\" -tAc \
       \"SELECT is_nullable FROM information_schema.columns \
        WHERE table_schema='public' AND table_name='membership_applications' \

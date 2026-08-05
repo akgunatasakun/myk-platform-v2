@@ -1,0 +1,248 @@
+# MYK Platform V2 — CI/CD Pipeline
+#
+# CI  (her push/PR): shell syntax + docker config + backend tests + frontend build
+# CD  (v* tag + production environment approval): SSH → server_side_deploy.sh
+#
+# Gerekli GitHub Secrets (Repo → Settings → Secrets → Actions):
+#   PROD_HOST            — sunucu IP
+#   PROD_PORT            — SSH port (22)
+#   PROD_USER            — deploy kullanıcısı (myk-deploy)
+#   PROD_SSH_PRIVATE_KEY — Actions'a özel private key (BEGIN OPENSSH dahil)
+#   PROD_SSH_KNOWN_HOSTS — ssh-keyscan -H <PROD_HOST> çıktısı
+#
+# Gerekli GitHub Environment (Repo → Settings → Environments):
+#   production — Required reviewers: onay gerektiren kişiler
+#              — Deployment branches: tag pattern v*
+#
+# Güvenlik notları:
+#   - Secrets run: bloğunda ${{ secrets.X }} yerine env: üzerinden erişilir.
+#     Bu şekilde Action runner logs'larında secret değerleri maskelenir.
+#   - Tag adı regex ile doğrulanır (shell injection önlemi).
+#   - Eşzamanlı deployment'lar concurrency: group ile engellenir.
+#   - myk-deploy kullanıcısı docker grubundadır; bu pratikte root erişimi sağlar.
+#     Actions SSH key'i yalnızca bu kullanıcı için yetkilidir.
+
+name: CI/CD
+
+on:
+  push:
+    branches: [main]
+    tags:     ['v*']
+  pull_request:
+    branches: [main]
+
+# Aynı anda yalnızca bir production deployment — ikincisi ilki tamamlanana kadar bekler.
+concurrency:
+  group: ${{ github.workflow }}-${{ startsWith(github.ref, 'refs/tags/v') && 'production' || github.ref }}
+  cancel-in-progress: false   # deploy iptal edilmez — tamamlanır ya da başarısız olur
+
+jobs:
+
+  # ════════════════════════════════════════════════════════════════════════════
+  # CI — Her push ve PR'da çalışır
+  # ════════════════════════════════════════════════════════════════════════════
+  ci:
+    name: CI — Lint, Syntax, Build Check
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      # ── Shell script syntax kontrolü ───────────────────────────────────────
+      - name: Shell script syntax (bash -n)
+        run: |
+          echo "=== Shell syntax kontrolü ==="
+          bash -n scripts/deploy_production.sh    && echo "  OK: deploy_production.sh"
+          bash -n scripts/server_side_deploy.sh   && echo "  OK: server_side_deploy.sh"
+          bash -n scripts/smoke_test_production.sh && echo "  OK: smoke_test_production.sh"
+
+      # ── Docker Compose config doğrulama ────────────────────────────────────
+      # docker-compose.prod.yml içinde env_file: /etc/myk/production.env kullanılıyor.
+      # CI ortamında bu dosya yoktur; YAML geçerliliğini test etmek için
+      # örnek dosyadan stub oluşturulur. Gerçek secret değerleri kullanılmaz.
+      - name: Docker Compose config validation
+        run: |
+          echo "=== docker compose config ==="
+          # Stub env dosyası oluştur (CI: gerçek secrets yok, YAML yapısını test ediyoruz)
+          sudo mkdir -p /etc/myk
+          sudo cp .env.production.example /etc/myk/production.env
+          sudo chmod 644 /etc/myk/production.env
+          docker compose \
+            -f docker-compose.yml \
+            -f docker-compose.prod.yml \
+            --env-file /etc/myk/production.env \
+            config --quiet
+          sudo rm -f /etc/myk/production.env
+          echo "  OK: docker compose config geçerli"
+
+      # ── Backend: Python bağımlılıkları ve testler ──────────────────────────
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+          cache: 'pip'
+
+      - name: Install backend dependencies
+        working-directory: backend
+        run: pip install --quiet -r requirements.txt
+
+      - name: Install test dependencies
+        working-directory: backend
+        run: pip install --quiet pytest pytest-asyncio httpx ruff
+
+      - name: Backend lint (ruff)
+        working-directory: backend
+        run: |
+          ruff check app/ --output-format=github \
+            || echo "::warning file=backend::Ruff lint uyarıları var — yukarıdaki satırları inceleyin."
+
+      - name: Backend tests
+        working-directory: backend
+        env:
+          MYK_ENV: test
+          DATABASE_URL: sqlite+aiosqlite:///./test.db
+          JWT_SECRET_KEY: ci-only-test-secret-key-not-used-in-production
+          SECRET_KEY: ci-only-test-app-secret-not-used-in-production
+          ALLOW_PUBLIC_SETUP: "true"
+          LOG_LEVEL: ERROR
+        run: |
+          if [[ -d tests ]]; then
+            python -m pytest tests/ -x -q --tb=short
+          else
+            echo "::notice::tests/ dizini bulunamadı — test adımı atlanıyor."
+          fi
+
+      # ── Frontend: bağımlılıklar ve build ──────────────────────────────────
+      - name: Set up Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+          cache: 'npm'
+          cache-dependency-path: frontend/package-lock.json
+
+      - name: Install frontend dependencies
+        working-directory: frontend
+        run: npm ci --prefer-offline
+
+      - name: Frontend lint
+        working-directory: frontend
+        run: |
+          if npm run | grep -q "^ *lint"; then
+            npm run lint
+          else
+            echo "::notice::Frontend lint scripti bulunamadı."
+          fi
+
+      - name: Frontend build
+        working-directory: frontend
+        env:
+          NODE_ENV: production
+          VITE_API_BASE_URL: /api/v1
+        run: npm run build
+
+  # ════════════════════════════════════════════════════════════════════════════
+  # CD — Yalnızca v* tag push'larında, CI başarılı + environment approval sonrası
+  # ════════════════════════════════════════════════════════════════════════════
+  deploy:
+    name: CD — Production Deploy
+    needs: ci
+    if: startsWith(github.ref, 'refs/tags/v')
+    runs-on: ubuntu-latest
+    environment: production      # GitHub Environment approval burada devreye girer
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      # ── Tag format doğrulama — shell injection önlemi ─────────────────────
+      # ref_name sunucuya geçmeden önce geçerli format kontrolü yapılır.
+      # Geçerli: v1.2.3 veya v1.2.3-beta1 (nokta, tire, harf, rakam)
+      - name: Tag format doğrulama
+        env:
+          DEPLOY_TAG: ${{ github.ref_name }}
+        run: |
+          if [[ ! "${DEPLOY_TAG}" =~ ^v[0-9]+\.[0-9]+\.[0-9]+(-[a-zA-Z0-9._-]+)?$ ]]; then
+            echo "::error::Geçersiz tag formatı: '${DEPLOY_TAG}'"
+            echo "Beklenen format: v<major>.<minor>.<patch> veya v<major>.<minor>.<patch>-<pre>"
+            exit 1
+          fi
+          echo "Tag geçerli: ${DEPLOY_TAG}"
+
+      - name: Deploy bilgisi
+        run: |
+          echo "Tag:        ${{ github.ref_name }}"
+          echo "Commit:     ${{ github.sha }}"
+          echo "Tetikleyen: ${{ github.actor }}"
+
+      # ── SSH kurulumu ───────────────────────────────────────────────────────
+      - name: SSH agent kur
+        uses: webfactory/ssh-agent@v0.9.0
+        with:
+          ssh-private-key: ${{ secrets.PROD_SSH_PRIVATE_KEY }}
+
+      - name: Known hosts ekle
+        env:
+          KNOWN_HOSTS: ${{ secrets.PROD_SSH_KNOWN_HOSTS }}
+        run: |
+          mkdir -p ~/.ssh
+          echo "${KNOWN_HOSTS}" >> ~/.ssh/known_hosts
+          chmod 600 ~/.ssh/known_hosts
+
+      - name: SSH bağlantı testi
+        env:
+          PROD_HOST: ${{ secrets.PROD_HOST }}
+          PROD_PORT: ${{ secrets.PROD_PORT }}
+          PROD_USER: ${{ secrets.PROD_USER }}
+        run: |
+          ssh -p "${PROD_PORT}" "${PROD_USER}@${PROD_HOST}" "id && echo SSH_OK"
+
+      # ── Sunucu taraflı deploy ──────────────────────────────────────────────
+      # DEPLOY_TAG env var üzerinden geçirilir — doğrudan ${{ }} shell'e eklenmez.
+      # Tag formatı yukarıda doğrulandı; single quote ile güvenli geçiş sağlanır.
+      # server_side_deploy.sh exit 1 → SSH exit 1 → step fail → job fail → workflow fail.
+      - name: Deploy → ${{ github.ref_name }}
+        env:
+          PROD_HOST: ${{ secrets.PROD_HOST }}
+          PROD_PORT: ${{ secrets.PROD_PORT }}
+          PROD_USER: ${{ secrets.PROD_USER }}
+          DEPLOY_TAG: ${{ github.ref_name }}
+          REMOTE_SCRIPT: /opt/myk/production/myk-platform-v2/scripts/server_side_deploy.sh
+        run: |
+          ssh -p "${PROD_PORT}" "${PROD_USER}@${PROD_HOST}" \
+            "bash '${REMOTE_SCRIPT}' --tag '${DEPLOY_TAG}'"
+
+      # ── Özet ──────────────────────────────────────────────────────────────
+      - name: Deploy özeti (başarılı)
+        if: success()
+        env:
+          PROD_HOST: ${{ secrets.PROD_HOST }}
+        run: |
+          {
+            echo "## Deploy Başarılı ✅"
+            echo ""
+            echo "| Alan | Değer |"
+            echo "|------|-------|"
+            echo "| Tag | \`${{ github.ref_name }}\` |"
+            echo "| Commit | \`${{ github.sha }}\` |"
+            echo "| Sunucu | \`${PROD_HOST}\` |"
+            echo "| URL | http://${PROD_HOST}:18081 |"
+            echo "| Onaylayan | ${{ github.actor }} |"
+          } >> "${GITHUB_STEP_SUMMARY}"
+
+      - name: Deploy özeti (başarısız)
+        if: failure()
+        run: |
+          {
+            echo "## Deploy BAŞARISIZ ❌"
+            echo ""
+            echo "Tag \`${{ github.ref_name }}\` deploy edilemedi."
+            echo ""
+            echo "Hata ayıklama için sunucu logları:"
+            echo "\`\`\`bash"
+            echo "ssh myk-server 'cd /opt/myk/production/myk-platform-v2 && \\"
+            echo "  docker compose --env-file /etc/myk/production.env \\"
+            echo "  -f docker-compose.yml -f docker-compose.prod.yml \\"
+            echo "  logs --tail=50 api'"
+            echo "\`\`\`"
+          } >> "${GITHUB_STEP_SUMMARY}"
