@@ -200,6 +200,20 @@ jobs:
           ssh -p "${PROD_PORT}" "${PROD_USER}@${PROD_HOST}" "id && echo SSH_OK"
 
       # ── Sunucu taraflı deploy ──────────────────────────────────────────────
+      # Bootstrapping sorunu önlemi:
+      # server_side_deploy.sh sunucudaki MEVCUT sürümden çalışır. Script kendisi
+      # güncellenmişse (bug fix vb.) sunucu eski sürümü çalıştırır ve asla
+      # yeni sürüme ulaşamaz. Bu nedenle scripti önce SCP ile gönderiyoruz.
+      - name: Deploy script'i güncelle (SCP)
+        env:
+          PROD_HOST: ${{ secrets.PROD_HOST }}
+          PROD_PORT: ${{ secrets.PROD_PORT }}
+          PROD_USER: ${{ secrets.PROD_USER }}
+        run: |
+          scp -P "${PROD_PORT}" \
+            scripts/server_side_deploy.sh \
+            "${PROD_USER}@${PROD_HOST}:/opt/myk/production/myk-platform-v2/scripts/server_side_deploy.sh"
+
       # DEPLOY_TAG env var üzerinden geçirilir — doğrudan ${{ }} shell'e eklenmez.
       # Tag formatı yukarıda doğrulandı; single quote ile güvenli geçiş sağlanır.
       # server_side_deploy.sh exit 1 → SSH exit 1 → step fail → job fail → workflow fail.
