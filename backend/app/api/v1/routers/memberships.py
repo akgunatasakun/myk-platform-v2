@@ -51,6 +51,8 @@ from app.schemas.membership import (
 )
 from app.services.storage import ObjectStorageService
 from app.config import get_settings
+from app.services.membership_approval import process_approval
+from app.services.email_service import send_approval_email, send_rejection_email
 
 logger = logging.getLogger(__name__)
 
@@ -357,6 +359,10 @@ async def transition_status(
     elif to_status == "approved":
         app.approved_at = now
         app.approved_by_user_id = uuid.UUID(current_user.sub)
+        # ── Üye oluşturma: Person, PersonRole("uye"), member_number, User ──
+        approval_result = await process_approval(
+            app, db, approved_by_user_id=uuid.UUID(current_user.sub)
+        )
     elif to_status == "rejected":
         app.rejected_at = now
         if body.reason:
@@ -370,6 +376,12 @@ async def transition_status(
         app.rejected_at = None
         app.rejection_reason = None
 
+    audit_after: dict = {"status": to_status, "application_number": app.application_number}
+    if to_status == "approved" and "approval_result" in dir():
+        audit_after["person_id"] = str(approval_result.person.id)
+        audit_after["member_number"] = approval_result.member_number
+        audit_after["person_created"] = approval_result.person_created
+
     await log_action(
         db,
         action="membership_application_status_changed",
@@ -378,11 +390,32 @@ async def transition_status(
         user_id=uuid.UUID(current_user.sub),
         resource_id=str(app.id),
         before={"status": from_status},
-        after={"status": to_status, "application_number": app.application_number},
+        after=audit_after,
         request=request,
     )
     await db.commit()
     await db.refresh(app)
+
+    # ── E-posta bildirimleri (transaction dışında — hata deployment'ı bozmasın) ──
+    if to_status == "approved" and "approval_result" in dir() and app.email:
+        try:
+            await send_approval_email(
+                to_email=app.email,
+                applicant_name=f"{app.first_name or ''} {app.last_name or ''}".strip(),
+                member_number=approval_result.member_number,
+                temp_password=approval_result.temp_password,
+            )
+        except Exception as exc:
+            logger.error("Onay e-postası gönderilemedi: %s", exc)
+    elif to_status == "rejected" and app.email:
+        try:
+            await send_rejection_email(
+                to_email=app.email,
+                applicant_name=f"{app.first_name or ''} {app.last_name or ''}".strip(),
+                reason=app.rejection_reason,
+            )
+        except Exception as exc:
+            logger.error("Red e-postası gönderilemedi: %s", exc)
 
     pdf_url = None
     sig_url = None
