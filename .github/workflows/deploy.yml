@@ -200,19 +200,21 @@ jobs:
           ssh -p "${PROD_PORT}" "${PROD_USER}@${PROD_HOST}" "id && echo SSH_OK"
 
       # ── Sunucu taraflı deploy ──────────────────────────────────────────────
-      # Bootstrapping sorunu önlemi:
-      # server_side_deploy.sh sunucudaki MEVCUT sürümden çalışır. Script kendisi
-      # güncellenmişse (bug fix vb.) sunucu eski sürümü çalıştırır ve asla
-      # yeni sürüme ulaşamaz. Bu nedenle scripti önce SCP ile gönderiyoruz.
-      - name: Deploy script'i güncelle (SCP)
+      # server_side_deploy.sh /opt/myk/scripts/ konumunda tutulur — git repo DIŞINDA.
+      # Böylece SCP sonrası git working tree dirty olmaz ve checkout güvenli çalışır.
+      # Repo içindeki scripts/server_side_deploy.sh kaynak gerçeğidir; sunucuya her
+      # deploy'da Actions runner'dan gönderilir.
+      - name: Deploy script'i güncelle (SCP → repo dışı konum)
         env:
           PROD_HOST: ${{ secrets.PROD_HOST }}
           PROD_PORT: ${{ secrets.PROD_PORT }}
           PROD_USER: ${{ secrets.PROD_USER }}
         run: |
+          ssh -p "${PROD_PORT}" "${PROD_USER}@${PROD_HOST}" \
+            "mkdir -p /opt/myk/scripts"
           scp -P "${PROD_PORT}" \
             scripts/server_side_deploy.sh \
-            "${PROD_USER}@${PROD_HOST}:/opt/myk/production/myk-platform-v2/scripts/server_side_deploy.sh"
+            "${PROD_USER}@${PROD_HOST}:/opt/myk/scripts/server_side_deploy.sh"
 
       # DEPLOY_TAG env var üzerinden geçirilir — doğrudan ${{ }} shell'e eklenmez.
       # Tag formatı yukarıda doğrulandı; single quote ile güvenli geçiş sağlanır.
@@ -223,7 +225,7 @@ jobs:
           PROD_PORT: ${{ secrets.PROD_PORT }}
           PROD_USER: ${{ secrets.PROD_USER }}
           DEPLOY_TAG: ${{ github.ref_name }}
-          REMOTE_SCRIPT: /opt/myk/production/myk-platform-v2/scripts/server_side_deploy.sh
+          REMOTE_SCRIPT: /opt/myk/scripts/server_side_deploy.sh
         run: |
           ssh -p "${PROD_PORT}" "${PROD_USER}@${PROD_HOST}" \
             "bash '${REMOTE_SCRIPT}' --tag '${DEPLOY_TAG}'"
