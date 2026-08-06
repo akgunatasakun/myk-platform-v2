@@ -205,20 +205,38 @@ _h "5. Altyapı servisleri (db, redis, minio, pdf-service)"
 docker compose ${CF} up -d db redis minio pdf-service
 
 _i "db healthy olana kadar bekleniyor (max 90s)..."
-timeout 90 bash -c "
-  until docker compose ${CF} exec -T db pg_isready -q 2>/dev/null; do
-    sleep 3
-  done
-" && _ok "db healthy" || _fail "db 90 saniyede healthy olmadı — loglar: docker compose logs db"
+_PG_USER_HC="$(grep "^POSTGRES_USER=" "${ENV_FILE}" | cut -d= -f2-)"
+_PG_DB_HC="$(grep "^POSTGRES_DB=" "${ENV_FILE}" | cut -d= -f2-)"
+_DB_READY=false
+for _att in $(seq 1 30); do
+  if docker compose ${CF} exec -T db \
+      pg_isready -q \
+        -U "${_PG_USER_HC}" \
+        -d "${_PG_DB_HC}" \
+      2>/dev/null; then
+    _DB_READY=true; break
+  fi
+  sleep 3
+done
+[[ "${_DB_READY}" == "true" ]] \
+  && _ok "db healthy" \
+  || _fail "db 90 saniyede healthy olmadı — loglar: docker compose logs db"
+unset _DB_READY _att _PG_USER_HC _PG_DB_HC
 
 _i "pdf-service healthy olana kadar bekleniyor (max 60s)..."
-timeout 60 bash -c "
-  until docker compose ${CF} exec -T pdf-service \
-    python -c 'import urllib.request; urllib.request.urlopen(\"http://127.0.0.1:8001/health\", timeout=2)' \
-    > /dev/null 2>&1; do
-    sleep 3
-  done
-" && _ok "pdf-service healthy" || _warn "pdf-service 60s içinde healthy olmadı, devam ediliyor."
+_PDF_READY=false
+for _att in $(seq 1 20); do
+  if docker compose ${CF} exec -T pdf-service \
+      python -c 'import urllib.request; urllib.request.urlopen("http://127.0.0.1:8001/health", timeout=2)' \
+      > /dev/null 2>&1; then
+    _PDF_READY=true; break
+  fi
+  sleep 3
+done
+[[ "${_PDF_READY}" == "true" ]] \
+  && _ok "pdf-service healthy" \
+  || _warn "pdf-service 60s içinde healthy olmadı, devam ediliyor."
+unset _PDF_READY _att
 
 # ── Adım 6: Alembic migration ─────────────────────────────────────────────────
 _h "6. Alembic migration (upgrade head)"
@@ -247,20 +265,31 @@ _h "7. API, Frontend, Nginx başlat"
 docker compose ${CF} up -d api frontend nginx
 
 _i "API healthy olana kadar bekleniyor (max 120s)..."
-timeout 120 bash -c "
-  until docker compose ${CF} exec -T api \
-    curl -sf http://127.0.0.1:8000/api/v1/health > /dev/null 2>&1; do
-    sleep 5
-  done
-" && _ok "API healthy" || _fail "API 120s içinde healthy olmadı — loglar: docker compose logs api"
+_API_READY=false
+for _att in $(seq 1 24); do
+  if docker compose ${CF} exec -T api \
+      curl -sf http://127.0.0.1:8000/api/v1/health >/dev/null 2>&1; then
+    _API_READY=true; break
+  fi
+  sleep 5
+done
+[[ "${_API_READY}" == "true" ]] \
+  && _ok "API healthy" \
+  || _fail "API 120s içinde healthy olmadı — loglar: docker compose logs api"
+unset _API_READY _att
 
 _i "Nginx proxy test (port ${PROD_PORT})..."
-timeout 30 bash -c "
-  until curl -sf http://127.0.0.1:${PROD_PORT}/api/v1/health > /dev/null 2>&1; do
-    sleep 3
-  done
-" && _ok "Nginx proxy çalışıyor (127.0.0.1:${PROD_PORT})" \
+_NGINX_READY=false
+for _att in $(seq 1 10); do
+  if curl -sf http://127.0.0.1:${PROD_PORT}/api/v1/health >/dev/null 2>&1; then
+    _NGINX_READY=true; break
+  fi
+  sleep 3
+done
+[[ "${_NGINX_READY}" == "true" ]] \
+  && _ok "Nginx proxy çalışıyor (127.0.0.1:${PROD_PORT})" \
   || _warn "Nginx proxy testi başarısız (port ${PROD_PORT}) — loglar: docker compose logs nginx"
+unset _NGINX_READY _att
 
 # ── Adım 8: Production doğrulama ──────────────────────────────────────────────
 _h "8. Production doğrulama"
