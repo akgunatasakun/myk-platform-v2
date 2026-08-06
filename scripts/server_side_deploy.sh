@@ -119,16 +119,39 @@ cd "${REMOTE_DIR}"
 
 # Not: git fetch/checkout /etc/myk/production.env'e dokunamaz — repo dışında.
 # git clean -fd çalıştırılmamaktadır.
-git fetch origin --tags --prune 2>&1 | _hide
-git checkout "${DEPLOY_TAG}" 2>&1 | grep -v "^M " | _hide
+#
+# --force '+refs/tags/*:refs/tags/*' → remote'da değişen/yeniden oluşturulan tag'ler
+# local'e force-update edilir; böylece "would clobber existing tag" hatası oluşmaz.
+git fetch origin \
+  --prune \
+  --force \
+  '+refs/tags/*:refs/tags/*' 2>&1 | _hide
+_ok "Fetch tamamlandı"
+
+# Remote tag commit'ini doğrula (annotated tag için ^{} deref; lightweight için düz ref)
+REMOTE_TAG_COMMIT="$(
+  git ls-remote origin "refs/tags/${DEPLOY_TAG}^{}" 2>/dev/null |
+  awk '{print $1}'
+)"
+if [[ -z "${REMOTE_TAG_COMMIT}" ]]; then
+  REMOTE_TAG_COMMIT="$(
+    git ls-remote origin "refs/tags/${DEPLOY_TAG}" 2>/dev/null |
+    awk '{print $1}'
+  )"
+fi
+[[ -n "${REMOTE_TAG_COMMIT}" ]] \
+  || _fail "Remote'da tag bulunamadı: ${DEPLOY_TAG}"
+_ok "Remote tag commit: ${REMOTE_TAG_COMMIT:0:12}"
+
+# Tag'in commit'ine detached HEAD olarak geç (tag nesnesi değil, doğrudan commit)
+git checkout --detach "${DEPLOY_TAG}^{commit}" 2>&1 | grep -v "^M " | _hide
+
+LOCAL_COMMIT="$(git rev-parse HEAD)"
+[[ "${LOCAL_COMMIT}" == "${REMOTE_TAG_COMMIT}" ]] \
+  || _fail "Tag commit uyuşmazlığı: local=${LOCAL_COMMIT:0:12}, remote=${REMOTE_TAG_COMMIT:0:12}"
+
 COMMIT="$(git rev-parse --short HEAD)"
 _ok "Checkout: ${DEPLOY_TAG} (${COMMIT})"
-
-# Checkout edilen tag ile beklenen tag eşleşmeli
-ACTUAL_TAG="$(git describe --tags --exact-match HEAD 2>/dev/null || true)"
-[[ "${ACTUAL_TAG}" == "${DEPLOY_TAG}" ]] \
-  || _fail "Tag doğrulaması başarısız: beklenen '${DEPLOY_TAG}', HEAD='${ACTUAL_TAG}'"
-_ok "Tag doğrulandı: ${ACTUAL_TAG}"
 
 # ── Adım 3: Yedek ─────────────────────────────────────────────────────────────
 _h "3. Yedek"
