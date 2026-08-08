@@ -10,10 +10,11 @@ from sqlalchemy.ext.asyncio import async_engine_from_config
 
 # Modelleri import ederek metadata'yı doldur
 from app.database import Base  # noqa: F401
-import app.models.club        # noqa: F401
-import app.models.user        # noqa: F401
-import app.models.audit       # noqa: F401
-import app.models.person      # noqa: F401
+import app.models.club            # noqa: F401
+import app.models.user            # noqa: F401
+import app.models.audit           # noqa: F401
+import app.models.person          # noqa: F401
+import app.models.person_guardian # noqa: F401
 
 config = context.config
 

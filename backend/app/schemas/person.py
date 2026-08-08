@@ -188,6 +188,7 @@ class PersonOut(BaseModel):
     emergency_contact_phone: Optional[str] = None
     blood_type: Optional[str] = None
     notes: Optional[str] = None
+    member_number: Optional[str] = None   # üye numarası — onay sonrası atanır (MYK-YY-NNNN)
     # avatar_object_key kasıtlı olarak PersonOut'ta YOK — storage key iç altyapı bilgisi
     avatar_url: Optional[str] = None      # pre-signed URL, çalışma zamanında doldurulur
     has_avatar: bool = False              # avatar_object_key is not None

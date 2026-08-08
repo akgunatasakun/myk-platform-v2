@@ -2,7 +2,7 @@
 import uuid
 from datetime import datetime
 
-from pydantic import BaseModel, EmailStr, Field, field_validator
+from pydantic import BaseModel, EmailStr, Field, field_validator, model_validator
 
 
 class LoginRequest(BaseModel):
@@ -15,6 +15,7 @@ class TokenResponse(BaseModel):
     access_token: str
     token_type: str = "bearer"
     expires_in: int  # saniye
+    must_change_password: bool = False  # True → frontend zorunlu parola değiştirme ekranına yönlendirir
 
 
 class RefreshRequest(BaseModel):
@@ -67,5 +68,29 @@ class UserResponse(BaseModel):
     role: str
     is_active: bool
     created_at: datetime
+    must_change_password: bool = False  # Person'dan hesaplanır; /auth/me endpoint'i doldurur
 
     model_config = {"from_attributes": True}
+
+
+class ChangePasswordRequest(BaseModel):
+    """Kimlik doğrulanmış kullanıcının kendi parolasını değiştirme isteği."""
+
+    current_password: str = Field(..., min_length=1, max_length=128)
+    new_password: str = Field(..., min_length=8, max_length=128)
+    confirm_password: str = Field(..., min_length=8, max_length=128)
+
+    @field_validator("new_password")
+    @classmethod
+    def password_strength(cls, v: str) -> str:
+        if not any(c.isupper() for c in v):
+            raise ValueError("Parola en az bir büyük harf içermelidir.")
+        if not any(c.isdigit() for c in v):
+            raise ValueError("Parola en az bir rakam içermelidir.")
+        return v
+
+    @model_validator(mode="after")
+    def passwords_match(self) -> "ChangePasswordRequest":
+        if self.new_password != self.confirm_password:
+            raise ValueError("Yeni parolalar eşleşmiyor.")
+        return self

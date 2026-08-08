@@ -6,6 +6,7 @@ from app.models.sports_branch import SportsBranch
 from app.models.membership_application import MembershipApplication
 from app.models.application_counter import ApplicationCounter
 from app.models.member_counter import MemberCounter
+from app.models.person_guardian import PersonGuardian
 
 __all__ = [
     "Club",
@@ -19,4 +20,5 @@ __all__ = [
     "MembershipApplication",
     "ApplicationCounter",
     "MemberCounter",
+    "PersonGuardian",
 ]

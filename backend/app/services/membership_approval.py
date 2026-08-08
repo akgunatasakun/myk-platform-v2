@@ -199,6 +199,9 @@ async def _find_or_create_user(
         person_id=person.id,
     )
     db.add(user)
+
+    # Yeni kullanıcı geçici parola ile oluşturuldu; ilk girişte parola değiştirmesi zorunlu.
+    person.must_change_password = True
     await db.flush()
     logger.info("Onay servisi: yeni User oluşturuldu (id=%s)", user.id)
     return user, temp_password

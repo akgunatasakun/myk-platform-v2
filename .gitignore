@@ -88,3 +88,6 @@ pytest-output.txt
 # Frontend
 node_modules/
 dist/
+
+# Validation ortamı — gerçek değerler commit'e girmesin
+.env.validation

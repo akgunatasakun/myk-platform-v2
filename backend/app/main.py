@@ -81,6 +81,7 @@ async def get_me(
 ) -> UserResponse:
     from sqlalchemy import select
     from app.core.tenant import assert_same_club
+    from app.models.person import Person
     from app.models.user import User
     import uuid
 
@@ -95,7 +96,19 @@ async def get_me(
     if user is None:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Kullanıcı bulunamadı.")
     assert_same_club(user.club_id, uuid.UUID(current_user.club_id))
-    return UserResponse.model_validate(user)
+
+    # must_change_password: User modelinde değil, bağlı Person'da tutulur.
+    must_change_password = False
+    if user.person_id is not None:
+        person_result = await db.execute(
+            select(Person).where(Person.id == user.person_id)
+        )
+        person = person_result.scalar_one_or_none()
+        if person is not None:
+            must_change_password = person.must_change_password
+
+    base = UserResponse.model_validate(user)
+    return base.model_copy(update={"must_change_password": must_change_password})
 
 
 # ─── Root ─────────────────────────────────────────────────────────────────────

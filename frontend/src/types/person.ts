@@ -22,7 +22,9 @@ export interface Person {
   emergency_contact_phone?: string;
   blood_type?: BloodType;
   notes?: string;
-  avatar_url?: string;
+  member_number?: string | null;
+  avatar_url?: string | null;
+  has_avatar?: boolean;
   is_active: boolean;
   is_deleted: boolean;
   created_at: string;

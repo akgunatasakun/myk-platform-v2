@@ -10,6 +10,7 @@ from app.database import Base
 
 if TYPE_CHECKING:
     from app.models.membership_application import MembershipApplication
+    from app.models.person_guardian import PersonGuardian
 
 
 class Person(Base):
@@ -50,6 +51,20 @@ class Person(Base):
     )
     membership_applications: Mapped[List["MembershipApplication"]] = relationship(
         back_populates="person",
+        cascade="all, delete-orphan",
+    )
+
+    # Veli-sporcu bağlantıları — her iki taraf için
+    # "Bu kişi sporcu olarak" → veliieri
+    athlete_guardian_links: Mapped[List["PersonGuardian"]] = relationship(
+        foreign_keys="PersonGuardian.athlete_person_id",
+        back_populates="athlete",
+        cascade="all, delete-orphan",
+    )
+    # "Bu kişi veli olarak" → sporcuları
+    guardian_links: Mapped[List["PersonGuardian"]] = relationship(
+        foreign_keys="PersonGuardian.guardian_person_id",
+        back_populates="guardian",
         cascade="all, delete-orphan",
     )
 

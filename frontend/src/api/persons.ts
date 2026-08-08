@@ -1,5 +1,6 @@
 import apiClient from './client';
 import type { Person, PersonCreate, PersonListResponse, PersonUpdate } from '@/types/person';
+import type { PersonGuardian, PersonGuardianCreate, PersonGuardianUpdate } from '@/types/guardian';
 
 export interface PersonListParams {
   skip?: number;
@@ -20,4 +21,14 @@ export const personsApi = {
     apiClient.patch<Person>(`/persons/${id}`, data),
   delete: (id: string) =>
     apiClient.delete(`/persons/${id}`),
+
+  // ── Guardian CRUD ─────────────────────────────────────────────────────────
+  getGuardians: (personId: string) =>
+    apiClient.get<PersonGuardian[]>(`/persons/${personId}/guardians`),
+  addGuardian: (personId: string, data: PersonGuardianCreate) =>
+    apiClient.post<PersonGuardian>(`/persons/${personId}/guardians`, data),
+  updateGuardian: (personId: string, guardianId: string, data: PersonGuardianUpdate) =>
+    apiClient.patch<PersonGuardian>(`/persons/${personId}/guardians/${guardianId}`, data),
+  deleteGuardian: (personId: string, guardianId: string) =>
+    apiClient.delete(`/persons/${personId}/guardians/${guardianId}`),
 };

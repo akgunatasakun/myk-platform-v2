@@ -1,0 +1,152 @@
+# docker-compose.validation.yml — Sprint 5B E2E validation ortamı
+# Production'dan tamamen izole: ayrı project name, ayrı DB/volume, port 28080
+#
+# Kullanım (scripts/sprint5b_e2e.sh tarafından otomatik çağrılır):
+#   docker compose -p myk_validation \
+#     -f docker-compose.validation.yml \
+#     --env-file .env.validation up -d --build
+#
+# Manuel teardown (yalnızca test verisi silinir — production dokunulmaz):
+#   docker compose -p myk_validation \
+#     -f docker-compose.validation.yml \
+#     --env-file .env.validation down -v
+#
+# GÜVENLİK:
+#   - Bu dosya production .env veya docker-compose.yml'e bağımlı değil
+#   - Volume adları Docker Compose proje adı (myk_validation) ile izole edilir
+#   - Port 28080 — production (443/80) ve staging (18080) ile çakışmaz
+
+services:
+
+  # ── PostgreSQL (validation) ───────────────────────────────────────────────
+  db:
+    image: postgres:16-alpine
+    environment:
+      POSTGRES_DB: ${POSTGRES_DB:-myk_validation}
+      POSTGRES_USER: ${POSTGRES_USER:-myk_val}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
+    volumes:
+      - postgres_val_data:/var/lib/postgresql/data
+      - ./infra/postgres/init.sql:/docker-entrypoint-initdb.d/init.sql:ro
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER:-myk_val} -d ${POSTGRES_DB:-myk_validation}"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+    networks:
+      - myk_val_network
+
+  # ── Redis (validation) ────────────────────────────────────────────────────
+  redis:
+    image: redis:7-alpine
+    # --save "" → veri diske yazılmaz; test verisi ephemeral
+    command: redis-server --save "" --loglevel warning
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 5s
+      timeout: 3s
+      retries: 5
+    networks:
+      - myk_val_network
+
+  # ── MinIO (validation) ────────────────────────────────────────────────────
+  minio:
+    image: minio/minio:latest
+    command: server /data --console-address ":9001"
+    environment:
+      MINIO_ROOT_USER: ${STORAGE_ACCESS_KEY:-miniovalacc}
+      MINIO_ROOT_PASSWORD: ${STORAGE_SECRET_KEY:-minioval_secret_change_me}
+    volumes:
+      - minio_val_data:/data
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:9000/minio/health/live"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    networks:
+      - myk_val_network
+
+  # ── PDF Service (validation) ──────────────────────────────────────────────
+  pdf-service:
+    build:
+      context: ./pdf-service
+      dockerfile: Dockerfile
+    environment:
+      STORAGE_ENDPOINT: http://minio:9000
+      STORAGE_ACCESS_KEY: ${STORAGE_ACCESS_KEY:-miniovalacc}
+      STORAGE_SECRET_KEY: ${STORAGE_SECRET_KEY:-minioval_secret_change_me}
+      STORAGE_BUCKET: ${STORAGE_BUCKET:-myk-val-media}
+      STORAGE_SECURE: "false"
+    healthcheck:
+      test:
+        ["CMD", "python", "-c",
+         "import urllib.request; urllib.request.urlopen('http://127.0.0.1:8001/health', timeout=3)"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 20s
+    networks:
+      - myk_val_network
+
+  # ── Backend API (validation) ──────────────────────────────────────────────
+  api:
+    build:
+      context: ./backend
+      dockerfile: Dockerfile
+    env_file: .env.validation
+    environment:
+      # DATABASE_URL: env_file'ı override eder — validation DB'ye bağlanır
+      DATABASE_URL: postgresql+asyncpg://${POSTGRES_USER:-myk_val}:${POSTGRES_PASSWORD}@db:5432/${POSTGRES_DB:-myk_validation}
+      REDIS_URL: redis://redis:6379/0
+      STORAGE_ENDPOINT: http://minio:9000
+      PDF_SERVICE_URL: http://pdf-service:8001
+    depends_on:
+      db:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+      minio:
+        condition: service_healthy
+      pdf-service:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8000/api/v1/health"]
+      interval: 10s
+      timeout: 5s
+      retries: 10
+      start_period: 30s
+    networks:
+      - myk_val_network
+
+  # ── Frontend (validation — production build) ──────────────────────────────
+  frontend:
+    build:
+      context: ./frontend
+      dockerfile: Dockerfile
+      target: production   # Statik build — dev server değil
+    networks:
+      - myk_val_network
+
+  # ── Nginx (validation) ────────────────────────────────────────────────────
+  nginx:
+    image: nginx:alpine
+    ports:
+      # 127.0.0.1 ile sadece localhost'a açık — dış ağa publish edilmez
+      - "127.0.0.1:28080:80"
+    volumes:
+      - ./infra/nginx/nginx.conf:/etc/nginx/nginx.conf:ro
+    depends_on:
+      - api
+      - frontend
+    networks:
+      - myk_val_network
+
+# Volume adları Docker Compose proje adı (myk_validation_) ile otomatik prefix alır
+# → production volume'larından (myk_prod_postgres_data vb.) tamamen ayrı
+volumes:
+  postgres_val_data:
+  minio_val_data:
+
+networks:
+  myk_val_network:
+    driver: bridge

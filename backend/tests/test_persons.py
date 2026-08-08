@@ -435,3 +435,53 @@ async def test_yonetici_can_get_single_person(
     data = resp.json()
     assert data["id"] == str(person.id)
     assert data["first_name"] == "Tekil"
+
+
+# ─── Test 14: member_number API alanı ────────────────────────────────────────
+
+async def test_member_number_null_for_new_person(
+    client: AsyncClient,
+    db_session: AsyncSession,
+    test_club: Club,
+    yonetici_token: str,
+) -> None:
+    """Yeni oluşturulan kişide member_number API yanıtında None gelir."""
+    person = await _create_person_direct(
+        db_session, test_club,
+        first_name="Numara", last_name="Test",
+        email=f"membno-{uuid.uuid4().hex[:8]}@test.com",
+    )
+
+    resp = await client.get(
+        f"{PERSONS_URL}/{person.id}",
+        headers=_yonetici_headers(yonetici_token),
+    )
+    assert resp.status_code == 200
+    data = resp.json()
+    assert "member_number" in data          # alan API yanıtında bulunmalı
+    assert data["member_number"] is None    # henüz atanmamış
+
+
+async def test_member_number_returned_when_set(
+    client: AsyncClient,
+    db_session: AsyncSession,
+    test_club: Club,
+    yonetici_token: str,
+) -> None:
+    """member_number atanmış kişide değer API yanıtında döner."""
+    person = await _create_person_direct(
+        db_session, test_club,
+        first_name="Üye", last_name="Numaralı",
+        email=f"membno2-{uuid.uuid4().hex[:8]}@test.com",
+    )
+    # member_number'ı doğrudan ORM üzerinden ata (onay akışını simüle etmeden)
+    person.member_number = "MYK-26-0099"
+    await db_session.flush()
+
+    resp = await client.get(
+        f"{PERSONS_URL}/{person.id}",
+        headers=_yonetici_headers(yonetici_token),
+    )
+    assert resp.status_code == 200
+    data = resp.json()
+    assert data["member_number"] == "MYK-26-0099"

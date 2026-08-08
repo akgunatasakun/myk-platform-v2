@@ -22,6 +22,7 @@ export interface UserResponse {
   role: Role;
   is_active: boolean;
   created_at: string; // ISO8601
+  must_change_password: boolean; // true → ilk girişte parola değiştirme zorunlu
 }
 
 export type Role =

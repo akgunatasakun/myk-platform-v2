@@ -1,9 +1,10 @@
 """Kişi yönetimi API router — CRUD + tenant izolasyonu + RBAC."""
 import uuid
-from typing import Optional
+from typing import List, Optional
 
-from fastapi import APIRouter, Depends, HTTPException, Query, Request, status
-from sqlalchemy import func, select
+from fastapi import APIRouter, Depends, HTTPException, Query, Request, Response, status
+from sqlalchemy import func, select, update
+from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import selectinload
 
@@ -14,8 +15,14 @@ from app.core.tenant import get_club_id
 from app.database import get_db
 from app.dependencies.storage import get_storage
 from app.models.person import Person, PersonRole
+from app.models.person_guardian import PersonGuardian
 from app.schemas.auth import TokenPayload
 from app.schemas.person import PersonCreate, PersonListOut, PersonOut, PersonUpdate
+from app.schemas.person_guardian import (
+    PersonGuardianCreate,
+    PersonGuardianOut,
+    PersonGuardianUpdate,
+)
 from app.services.storage import ObjectStorageService
 
 AVATAR_URL_EXPIRES = 3600   # 1 saat
@@ -326,3 +333,261 @@ async def delete_person(
         resource_id=str(person.id),
         request=request,
     )
+
+
+# ─── Veli-Sporcu ilişki endpoint'leri ────────────────────────────────────────
+
+
+async def _get_guardian_link(
+    link_id: uuid.UUID,
+    athlete_person_id: uuid.UUID,
+    club_id: uuid.UUID,
+    db: AsyncSession,
+) -> PersonGuardian:
+    """Guardian bağlantısını yükle; kulüp ve sporcu uyuşmazsa 404 döndür."""
+    result = await db.execute(
+        select(PersonGuardian)
+        .options(selectinload(PersonGuardian.guardian))
+        .where(
+            PersonGuardian.id == link_id,
+            PersonGuardian.athlete_person_id == athlete_person_id,
+            PersonGuardian.club_id == club_id,
+        )
+    )
+    link = result.scalar_one_or_none()
+    if link is None:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND, detail="Veli bağlantısı bulunamadı."
+        )
+    return link
+
+
+async def _clear_primary_for_athlete(
+    athlete_person_id: uuid.UUID,
+    club_id: uuid.UUID,
+    exclude_id: Optional[uuid.UUID],
+    db: AsyncSession,
+) -> None:
+    """Sporcunun mevcut primary veli bağlantılarını False yap (exclude_id hariç)."""
+    stmt = (
+        update(PersonGuardian)
+        .where(
+            PersonGuardian.athlete_person_id == athlete_person_id,
+            PersonGuardian.club_id == club_id,
+            PersonGuardian.is_primary.is_(True),
+        )
+        .values(is_primary=False)
+    )
+    if exclude_id is not None:
+        stmt = stmt.where(PersonGuardian.id != exclude_id)
+    await db.execute(stmt)
+
+
+@router.get(
+    "/{person_id}/guardians",
+    response_model=List[PersonGuardianOut],
+    summary="Sporcu velilerini listele",
+)
+async def list_guardians(
+    person_id: uuid.UUID,
+    club_id: uuid.UUID = Depends(get_club_id),
+    _current_user: TokenPayload = Depends(get_current_user),
+    _perm: None = Depends(require_permission("kisi:read")),
+    db: AsyncSession = Depends(get_db),
+) -> List[PersonGuardianOut]:
+    # Sporcu bu kulübe ait mi?
+    await _get_person_for_club(person_id, club_id, db)
+
+    result = await db.execute(
+        select(PersonGuardian)
+        .options(selectinload(PersonGuardian.guardian))
+        .where(
+            PersonGuardian.athlete_person_id == person_id,
+            PersonGuardian.club_id == club_id,
+        )
+        .order_by(PersonGuardian.is_primary.desc(), PersonGuardian.created_at)
+    )
+    links = result.scalars().all()
+    return [PersonGuardianOut.model_validate(lnk) for lnk in links]
+
+
+@router.post(
+    "/{person_id}/guardians",
+    response_model=PersonGuardianOut,
+    status_code=status.HTTP_201_CREATED,
+    summary="Sporcu velisi ekle",
+)
+async def add_guardian(
+    person_id: uuid.UUID,
+    body: PersonGuardianCreate,
+    request: Request,
+    club_id: uuid.UUID = Depends(get_club_id),
+    current_user: TokenPayload = Depends(get_current_user),
+    _perm: None = Depends(require_permission("kisi:write")),
+    db: AsyncSession = Depends(get_db),
+) -> PersonGuardianOut:
+    # 1. Sporcu bu kulübe ait mi?
+    await _get_person_for_club(person_id, club_id, db)
+
+    # 2. Kendi kendini veli yapamaz
+    if body.guardian_person_id == person_id:
+        raise HTTPException(
+            status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+            detail="Kişi kendini veli olarak atayamaz.",
+        )
+
+    # 3. Veli kişisi aynı kulüpte mevcut mu ve silinmemiş mi?
+    guardian_person = await db.execute(
+        select(Person).where(
+            Person.id == body.guardian_person_id,
+            Person.club_id == club_id,
+            Person.is_deleted.is_(False),
+        )
+    )
+    if guardian_person.scalar_one_or_none() is None:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Veli olarak atanacak kişi bu kulüpte bulunamadı.",
+        )
+
+    # 4. is_primary=True ise mevcut primary bağlantıları temizle
+    if body.is_primary:
+        await _clear_primary_for_athlete(person_id, club_id, exclude_id=None, db=db)
+
+    # 5. Bağlantı kaydı oluştur
+    link = PersonGuardian(
+        club_id=club_id,
+        athlete_person_id=person_id,
+        guardian_person_id=body.guardian_person_id,
+        relationship_type=body.relationship_type,
+        is_primary=body.is_primary,
+        can_pickup=body.can_pickup,
+        can_receive_notifications=body.can_receive_notifications,
+    )
+    db.add(link)
+
+    try:
+        await db.flush()
+    except IntegrityError:
+        await db.rollback()
+        raise HTTPException(
+            status_code=status.HTTP_409_CONFLICT,
+            detail="Bu sporcu için aynı veli zaten kayıtlı.",
+        )
+
+    # guardian ilişkisini yükle (eager)
+    result = await db.execute(
+        select(PersonGuardian)
+        .options(selectinload(PersonGuardian.guardian))
+        .where(PersonGuardian.id == link.id)
+    )
+    link = result.scalar_one()
+
+    await log_action(
+        db,
+        action="guardian_added",
+        resource_type="person_guardian",
+        club_id=club_id,
+        user_id=uuid.UUID(current_user.sub),
+        resource_id=str(link.id),
+        after={
+            "athlete_person_id": str(person_id),
+            "guardian_person_id": str(body.guardian_person_id),
+            "relationship_type": body.relationship_type,
+            "is_primary": body.is_primary,
+        },
+        request=request,
+    )
+    return PersonGuardianOut.model_validate(link)
+
+
+@router.patch(
+    "/{person_id}/guardians/{guardian_id}",
+    response_model=PersonGuardianOut,
+    summary="Veli bağlantısını güncelle",
+)
+async def update_guardian(
+    person_id: uuid.UUID,
+    guardian_id: uuid.UUID,
+    body: PersonGuardianUpdate,
+    request: Request,
+    club_id: uuid.UUID = Depends(get_club_id),
+    current_user: TokenPayload = Depends(get_current_user),
+    _perm: None = Depends(require_permission("kisi:write")),
+    db: AsyncSession = Depends(get_db),
+) -> PersonGuardianOut:
+    # Sporcu bu kulübe ait mi?
+    await _get_person_for_club(person_id, club_id, db)
+
+    link = await _get_guardian_link(guardian_id, person_id, club_id, db)
+
+    update_data = body.model_dump(exclude_unset=True)
+    if not update_data:
+        # Değişiklik yok — mevcut kaydı döndür
+        return PersonGuardianOut.model_validate(link)
+
+    # is_primary=True atanıyorsa diğerlerini temizle
+    if update_data.get("is_primary") is True and not link.is_primary:
+        await _clear_primary_for_athlete(
+            person_id, club_id, exclude_id=link.id, db=db
+        )
+
+    for field, value in update_data.items():
+        setattr(link, field, value)
+
+    await db.flush()
+
+    # güncel guardian verisiyle yeniden yükle
+    result = await db.execute(
+        select(PersonGuardian)
+        .options(selectinload(PersonGuardian.guardian))
+        .where(PersonGuardian.id == link.id)
+    )
+    link = result.scalar_one()
+
+    await log_action(
+        db,
+        action="guardian_updated",
+        resource_type="person_guardian",
+        club_id=club_id,
+        user_id=uuid.UUID(current_user.sub),
+        resource_id=str(link.id),
+        after=update_data,
+        request=request,
+    )
+    return PersonGuardianOut.model_validate(link)
+
+
+@router.delete(
+    "/{person_id}/guardians/{guardian_id}",
+    status_code=status.HTTP_204_NO_CONTENT,
+    response_class=Response,
+    summary="Veli bağlantısını sil",
+)
+async def delete_guardian(
+    person_id: uuid.UUID,
+    guardian_id: uuid.UUID,
+    request: Request,
+    club_id: uuid.UUID = Depends(get_club_id),
+    current_user: TokenPayload = Depends(get_current_user),
+    _perm: None = Depends(require_permission("kisi:write")),
+    db: AsyncSession = Depends(get_db),
+) -> Response:
+    # Sporcu bu kulübe ait mi?
+    await _get_person_for_club(person_id, club_id, db)
+
+    link = await _get_guardian_link(guardian_id, person_id, club_id, db)
+
+    await db.delete(link)
+    await db.flush()
+
+    await log_action(
+        db,
+        action="guardian_removed",
+        resource_type="person_guardian",
+        club_id=club_id,
+        user_id=uuid.UUID(current_user.sub),
+        resource_id=str(guardian_id),
+        request=request,
+    )
+    return Response(status_code=status.HTTP_204_NO_CONTENT)

@@ -8,6 +8,7 @@ export interface DashboardStats {
   vadesi_gecen_odeme: number;
   yaklasan_egitim: number;
   bakim_bekleyen_ekipman: number;
+  bekleyen_basvuru: number;
   son_aktiviteler: unknown[];
 }
 

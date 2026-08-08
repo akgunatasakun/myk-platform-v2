@@ -1,0 +1,537 @@
+/**
+ * Public üyelik başvuru formu — /basvuru
+ *
+ * Kimlik doğrulama gerektirmez. AppShell kullanılmaz.
+ * POST /api/v1/public/membership-applications
+ */
+import { useState } from 'react'
+import { publicApi } from '@/api/public'
+import type { PublicApplicationData } from '@/api/public'
+
+// ─── Sabitler ────────────────────────────────────────────────────────────────
+
+const CLUB_SLUG = 'mersin-yelken'
+
+const GENDER_OPTIONS = [
+  { value: '', label: 'Seçiniz' },
+  { value: 'erkek', label: 'Erkek' },
+  { value: 'kadin', label: 'Kadın' },
+  { value: 'belirtilmedi', label: 'Belirtilmedi' },
+]
+
+const BLOOD_TYPE_OPTIONS = [
+  { value: '', label: 'Seçiniz' },
+  { value: 'A+', label: 'A Rh+' },
+  { value: 'A-', label: 'A Rh-' },
+  { value: 'B+', label: 'B Rh+' },
+  { value: 'B-', label: 'B Rh-' },
+  { value: 'AB+', label: 'AB Rh+' },
+  { value: 'AB-', label: 'AB Rh-' },
+  { value: '0+', label: '0 Rh+' },
+  { value: '0-', label: '0 Rh-' },
+]
+
+// ─── Form state arayüzü ───────────────────────────────────────────────────────
+
+interface FormFields {
+  first_name: string
+  last_name: string
+  national_id: string
+  birth_date: string
+  gender: string
+  blood_type: string
+  phone: string
+  email: string
+  address: string
+  emergency_contact_name: string
+  emergency_contact_phone: string
+  guardian_name: string
+  guardian_phone: string
+  consent_accepted: boolean
+}
+
+type FieldErrors = Partial<Record<keyof FormFields, string>>
+
+const INITIAL: FormFields = {
+  first_name: '',
+  last_name: '',
+  national_id: '',
+  birth_date: '',
+  gender: '',
+  blood_type: '',
+  phone: '',
+  email: '',
+  address: '',
+  emergency_contact_name: '',
+  emergency_contact_phone: '',
+  guardian_name: '',
+  guardian_phone: '',
+  consent_accepted: false,
+}
+
+// ─── Doğrulama ────────────────────────────────────────────────────────────────
+
+function validate(fields: FormFields): FieldErrors {
+  const errors: FieldErrors = {}
+
+  if (!fields.first_name.trim()) errors.first_name = 'Ad zorunludur.'
+  if (!fields.last_name.trim()) errors.last_name = 'Soyad zorunludur.'
+
+  if (!fields.email.trim()) {
+    errors.email = 'E-posta zorunludur.'
+  } else if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(fields.email.trim())) {
+    errors.email = 'Geçerli bir e-posta adresi giriniz.'
+  }
+
+  if (!fields.phone.trim()) {
+    errors.phone = 'Telefon zorunludur.'
+  }
+
+  if (fields.national_id.trim() && !/^\d{11}$/.test(fields.national_id.trim())) {
+    errors.national_id = 'T.C. kimlik no 11 haneli rakam olmalıdır.'
+  }
+
+  if (!fields.consent_accepted) {
+    errors.consent_accepted = 'KVKK aydınlatma metnini onaylamanız zorunludur.'
+  }
+
+  return errors
+}
+
+// ─── Telefon normalizasyonu ───────────────────────────────────────────────────
+
+function normalizePhone(raw: string): string {
+  // boşluk, tire, parantez kaldır; + işaretini koru
+  return raw.replace(/[\s\-()]/g, '')
+}
+
+// ─── 422 hata ayrıştırıcı ────────────────────────────────────────────────────
+
+function extractApiError(err: unknown): string {
+  const data = (err as { response?: { data?: unknown } })?.response?.data
+  if (!data) return 'Sunucuya bağlanılamadı. Lütfen tekrar deneyin.'
+
+  // Pydantic 422 — detail bir dizi olabilir
+  const detail = (data as { detail?: unknown })?.detail
+  if (Array.isArray(detail)) {
+    return detail
+      .map((d: unknown) => {
+        const item = d as { msg?: string; loc?: string[] }
+        return item.msg ?? JSON.stringify(d)
+      })
+      .join(' ')
+  }
+  if (typeof detail === 'string') return detail
+
+  // Genel mesaj
+  return 'Başvuru gönderilemedi. Lütfen bilgilerinizi kontrol edip tekrar deneyin.'
+}
+
+// ─── Yardımcı bileşenler ──────────────────────────────────────────────────────
+
+function FormField({
+  label,
+  required,
+  error,
+  children,
+}: {
+  label: string
+  required?: boolean
+  error?: string
+  children: React.ReactNode
+}) {
+  return (
+    <div className="public-field">
+      <label className={`form-label${required ? ' required' : ''}`}>{label}</label>
+      {children}
+      {error && <span className="form-error">{error}</span>}
+    </div>
+  )
+}
+
+// ─── Başarı ekranı ─────────────────────────────────────────────────────────────
+
+function SuccessScreen({ applicationNumber }: { applicationNumber: string | null }) {
+  return (
+    <div className="public-success">
+      <div className="public-success-icon">⛵</div>
+      <h2 className="public-success-title">Başvurunuz Alındı!</h2>
+      <p className="public-success-desc">
+        Üyelik başvurunuz başarıyla iletildi. Yetkili tarafından incelendikten sonra
+        e-posta adresinize bilgilendirme yapılacaktır.
+      </p>
+      {applicationNumber && (
+        <div className="public-success-number">
+          <span className="public-success-number-label">Başvuru Numaranız</span>
+          <span className="public-success-number-value">{applicationNumber}</span>
+        </div>
+      )}
+      <p className="public-success-note">
+        Bu numarayı not alarak başvurunuzun durumunu klüple iletişime geçerek
+        öğrenebilirsiniz.
+      </p>
+    </div>
+  )
+}
+
+// ─── Ana bileşen ──────────────────────────────────────────────────────────────
+
+export default function ApplicationFormPage() {
+  const [fields, setFields] = useState<FormFields>(INITIAL)
+  const [errors, setErrors] = useState<FieldErrors>({})
+  const [submitting, setSubmitting] = useState(false)
+  const [apiError, setApiError] = useState<string | null>(null)
+  const [successNumber, setSuccessNumber] = useState<string | null | undefined>(undefined)
+
+  const submitted = successNumber !== undefined
+
+  const set = (key: keyof FormFields, value: string | boolean) => {
+    setFields((prev) => ({ ...prev, [key]: value }))
+    if (errors[key]) setErrors((prev) => ({ ...prev, [key]: undefined }))
+  }
+
+  const handleSubmit = async (e: React.FormEvent) => {
+    e.preventDefault()
+    if (submitting) return
+
+    const fieldErrors = validate(fields)
+    if (Object.keys(fieldErrors).length > 0) {
+      setErrors(fieldErrors)
+      // İlk hatalı alana odaklan
+      const firstKey = Object.keys(fieldErrors)[0]
+      const el = document.getElementById(`field-${firstKey}`)
+      el?.focus()
+      return
+    }
+
+    setSubmitting(true)
+    setApiError(null)
+
+    try {
+      const payload: PublicApplicationData = {
+        club_slug: CLUB_SLUG,
+        first_name: fields.first_name.trim(),
+        last_name: fields.last_name.trim(),
+        email: fields.email.trim().toLowerCase(),
+        phone: normalizePhone(fields.phone),
+        consent_accepted: fields.consent_accepted,
+      }
+
+      // Opsiyonel alanları yalnızca doldurulmuşsa ekle
+      if (fields.national_id.trim()) payload.national_id = fields.national_id.trim()
+      if (fields.birth_date) payload.birth_date = fields.birth_date
+      if (fields.gender) payload.gender = fields.gender
+      if (fields.blood_type) payload.blood_type = fields.blood_type
+      if (fields.address.trim()) payload.address = fields.address.trim()
+      if (fields.emergency_contact_name.trim())
+        payload.emergency_contact_name = fields.emergency_contact_name.trim()
+      if (fields.emergency_contact_phone.trim())
+        payload.emergency_contact_phone = normalizePhone(fields.emergency_contact_phone)
+      if (fields.guardian_name.trim()) payload.guardian_name = fields.guardian_name.trim()
+      if (fields.guardian_phone.trim())
+        payload.guardian_phone = normalizePhone(fields.guardian_phone)
+
+      const resp = await publicApi.submitApplication(payload)
+      setSuccessNumber(resp.data.application_number)
+    } catch (err: unknown) {
+      setApiError(extractApiError(err))
+    } finally {
+      setSubmitting(false)
+    }
+  }
+
+  return (
+    <div className="public-page">
+      {/* Header */}
+      <header className="public-header">
+        <div className="public-header-inner">
+          <div className="public-header-logo">
+            <span className="public-header-logo-icon">⛵</span>
+            <div>
+              <div className="public-header-club">Mersin Yelken Kulübü</div>
+              <div className="public-header-sub">Üyelik Başvurusu</div>
+            </div>
+          </div>
+        </div>
+      </header>
+
+      {/* İçerik */}
+      <main className="public-main">
+        <div className="public-card">
+          {submitted ? (
+            <SuccessScreen applicationNumber={successNumber ?? null} />
+          ) : (
+            <>
+              <div className="public-card-title">
+                <h1>Üyelik Başvuru Formu</h1>
+                <p className="public-card-desc">
+                  Aşağıdaki formu eksiksiz doldurun. Yıldızlı alanlar (<span className="required-star">*</span>) zorunludur.
+                </p>
+              </div>
+
+              {apiError && (
+                <div className="alert alert-error" style={{ margin: '0 0 20px' }}>
+                  <span>⚠️</span>
+                  <span>{apiError}</span>
+                </div>
+              )}
+
+              <form onSubmit={handleSubmit} noValidate>
+
+                {/* Kişisel Bilgiler */}
+                <section className="public-section">
+                  <h2 className="public-section-title">Kişisel Bilgiler</h2>
+                  <div className="public-form-grid">
+                    <FormField label="Ad" required error={errors.first_name}>
+                      <input
+                        id="field-first_name"
+                        type="text"
+                        className={`form-input${errors.first_name ? ' error' : ''}`}
+                        placeholder="Adınız"
+                        value={fields.first_name}
+                        onChange={(e) => set('first_name', e.target.value)}
+                        autoComplete="given-name"
+                        maxLength={100}
+                      />
+                    </FormField>
+
+                    <FormField label="Soyad" required error={errors.last_name}>
+                      <input
+                        id="field-last_name"
+                        type="text"
+                        className={`form-input${errors.last_name ? ' error' : ''}`}
+                        placeholder="Soyadınız"
+                        value={fields.last_name}
+                        onChange={(e) => set('last_name', e.target.value)}
+                        autoComplete="family-name"
+                        maxLength={100}
+                      />
+                    </FormField>
+
+                    <FormField label="T.C. Kimlik No" error={errors.national_id}>
+                      <input
+                        id="field-national_id"
+                        type="text"
+                        className={`form-input${errors.national_id ? ' error' : ''}`}
+                        placeholder="11 haneli T.C. kimlik no"
+                        value={fields.national_id}
+                        onChange={(e) => set('national_id', e.target.value.replace(/\D/g, ''))}
+                        inputMode="numeric"
+                        maxLength={11}
+                      />
+                    </FormField>
+
+                    <FormField label="Doğum Tarihi" error={errors.birth_date}>
+                      <input
+                        id="field-birth_date"
+                        type="date"
+                        className={`form-input${errors.birth_date ? ' error' : ''}`}
+                        value={fields.birth_date}
+                        onChange={(e) => set('birth_date', e.target.value)}
+                        max={new Date().toISOString().slice(0, 10)}
+                      />
+                    </FormField>
+
+                    <FormField label="Cinsiyet" error={errors.gender}>
+                      <select
+                        id="field-gender"
+                        className={`form-select${errors.gender ? ' error' : ''}`}
+                        value={fields.gender}
+                        onChange={(e) => set('gender', e.target.value)}
+                      >
+                        {GENDER_OPTIONS.map((o) => (
+                          <option key={o.value} value={o.value}>{o.label}</option>
+                        ))}
+                      </select>
+                    </FormField>
+
+                    <FormField label="Kan Grubu" error={errors.blood_type}>
+                      <select
+                        id="field-blood_type"
+                        className={`form-select${errors.blood_type ? ' error' : ''}`}
+                        value={fields.blood_type}
+                        onChange={(e) => set('blood_type', e.target.value)}
+                      >
+                        {BLOOD_TYPE_OPTIONS.map((o) => (
+                          <option key={o.value} value={o.value}>{o.label}</option>
+                        ))}
+                      </select>
+                    </FormField>
+                  </div>
+                </section>
+
+                {/* İletişim */}
+                <section className="public-section">
+                  <h2 className="public-section-title">İletişim Bilgileri</h2>
+                  <div className="public-form-grid">
+                    <FormField label="Telefon" required error={errors.phone}>
+                      <input
+                        id="field-phone"
+                        type="tel"
+                        className={`form-input${errors.phone ? ' error' : ''}`}
+                        placeholder="+90 5XX XXX XX XX"
+                        value={fields.phone}
+                        onChange={(e) => set('phone', e.target.value)}
+                        autoComplete="tel"
+                        maxLength={20}
+                      />
+                    </FormField>
+
+                    <FormField label="E-posta" required error={errors.email}>
+                      <input
+                        id="field-email"
+                        type="email"
+                        className={`form-input${errors.email ? ' error' : ''}`}
+                        placeholder="ornek@eposta.com"
+                        value={fields.email}
+                        onChange={(e) => set('email', e.target.value)}
+                        autoComplete="email"
+                        maxLength={255}
+                      />
+                    </FormField>
+
+                    <FormField label="Adres" error={errors.address}>
+                      <textarea
+                        id="field-address"
+                        className={`form-textarea${errors.address ? ' error' : ''}`}
+                        placeholder="Açık adresiniz"
+                        value={fields.address}
+                        onChange={(e) => set('address', e.target.value)}
+                        rows={2}
+                        maxLength={500}
+                        style={{ gridColumn: '1 / -1' }}
+                      />
+                    </FormField>
+                  </div>
+                </section>
+
+                {/* Acil Durum */}
+                <section className="public-section">
+                  <h2 className="public-section-title">Acil Durum Kişisi</h2>
+                  <p className="public-section-desc">
+                    Sizinle iletişime geçilemediğinde ulaşılabilecek kişi.
+                  </p>
+                  <div className="public-form-grid">
+                    <FormField label="Acil Kişi Adı Soyadı" error={errors.emergency_contact_name}>
+                      <input
+                        id="field-emergency_contact_name"
+                        type="text"
+                        className={`form-input${errors.emergency_contact_name ? ' error' : ''}`}
+                        placeholder="Ad Soyad"
+                        value={fields.emergency_contact_name}
+                        onChange={(e) => set('emergency_contact_name', e.target.value)}
+                        maxLength={150}
+                      />
+                    </FormField>
+
+                    <FormField label="Acil Kişi Telefonu" error={errors.emergency_contact_phone}>
+                      <input
+                        id="field-emergency_contact_phone"
+                        type="tel"
+                        className={`form-input${errors.emergency_contact_phone ? ' error' : ''}`}
+                        placeholder="+90 5XX XXX XX XX"
+                        value={fields.emergency_contact_phone}
+                        onChange={(e) => set('emergency_contact_phone', e.target.value)}
+                        maxLength={20}
+                      />
+                    </FormField>
+                  </div>
+                </section>
+
+                {/* Veli Bilgileri */}
+                <section className="public-section">
+                  <h2 className="public-section-title">Veli Bilgileri</h2>
+                  <p className="public-section-desc">
+                    18 yaş altı sporcular için veli bilgilerini giriniz.
+                  </p>
+                  <div className="public-form-grid">
+                    <FormField label="Veli Adı Soyadı" error={errors.guardian_name}>
+                      <input
+                        id="field-guardian_name"
+                        type="text"
+                        className={`form-input${errors.guardian_name ? ' error' : ''}`}
+                        placeholder="Ad Soyad"
+                        value={fields.guardian_name}
+                        onChange={(e) => set('guardian_name', e.target.value)}
+                        maxLength={150}
+                      />
+                    </FormField>
+
+                    <FormField label="Veli Telefonu" error={errors.guardian_phone}>
+                      <input
+                        id="field-guardian_phone"
+                        type="tel"
+                        className={`form-input${errors.guardian_phone ? ' error' : ''}`}
+                        placeholder="+90 5XX XXX XX XX"
+                        value={fields.guardian_phone}
+                        onChange={(e) => set('guardian_phone', e.target.value)}
+                        maxLength={20}
+                      />
+                    </FormField>
+                  </div>
+                </section>
+
+                {/* KVKK */}
+                <section className="public-section">
+                  <h2 className="public-section-title">Kişisel Verilerin Korunması</h2>
+                  <div
+                    className={`public-kvkk-box${errors.consent_accepted ? ' public-kvkk-box--error' : ''}`}
+                  >
+                    <label className="public-kvkk-label">
+                      <input
+                        id="field-consent_accepted"
+                        type="checkbox"
+                        className="public-kvkk-checkbox"
+                        checked={fields.consent_accepted}
+                        onChange={(e) => set('consent_accepted', e.target.checked)}
+                      />
+                      <span>
+                        6698 sayılı KVKK kapsamında kişisel verilerimin Mersin Yelken Kulübü
+                        tarafından üyelik işlemleri amacıyla işlenmesine ilişkin{' '}
+                        <strong>Aydınlatma Metni</strong>'ni okudum ve anladım. Verilerimin
+                        işlenmesini kabul ediyorum.{' '}
+                        <span className="required-star">*</span>
+                      </span>
+                    </label>
+                    {errors.consent_accepted && (
+                      <p className="form-error" style={{ marginTop: 8 }}>
+                        {errors.consent_accepted}
+                      </p>
+                    )}
+                  </div>
+                </section>
+
+                {/* Gönder */}
+                <div className="public-submit-row">
+                  <button
+                    type="submit"
+                    className="btn btn-primary public-submit-btn"
+                    disabled={submitting}
+                  >
+                    {submitting ? (
+                      <>
+                        <span className="loading-spinner" style={{ borderTopColor: '#fff' }} />
+                        Gönderiliyor…
+                      </>
+                    ) : (
+                      'Başvuruyu Gönder →'
+                    )}
+                  </button>
+                  <p className="public-submit-note">
+                    Başvurunuz incelendikten sonra e-posta adresinize bilgi verilecektir.
+                  </p>
+                </div>
+
+              </form>
+            </>
+          )}
+        </div>
+      </main>
+
+      {/* Footer */}
+      <footer className="public-footer">
+        <p>© {new Date().getFullYear()} Mersin Yelken Kulübü — Tüm hakları saklıdır.</p>
+      </footer>
+    </div>
+  )
+}

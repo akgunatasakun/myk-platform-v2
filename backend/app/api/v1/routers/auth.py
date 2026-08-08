@@ -17,14 +17,17 @@ from app.core.security import (
     create_access_token,
     create_refresh_token,
     decode_access_token,
+    get_current_user,
     hash_password,
     verify_password,
 )
 from app.core.tenant import get_club_id
 from app.database import get_db
 from app.models.club import Club
+from app.models.person import Person
 from app.models.user import RefreshToken, User
 from app.schemas.auth import (
+    ChangePasswordRequest,
     LoginRequest,
     RefreshRequest,
     SetupRequest,
@@ -132,9 +135,21 @@ async def login(
 
     _set_auth_cookies(response, access_token, raw_refresh)
 
+    # must_change_password: person'a bağlı kullanıcılarda Person'dan okunur.
+    # Doğrudan oluşturulmuş kullanıcılarda (yönetici vb.) person_id yoktur → False.
+    must_change_password = False
+    if user.person_id is not None:
+        person_result = await db.execute(
+            select(Person).where(Person.id == user.person_id)
+        )
+        person = person_result.scalar_one_or_none()
+        if person is not None:
+            must_change_password = person.must_change_password
+
     return TokenResponse(
         access_token=access_token,
         expires_in=settings.jwt_access_token_expire_minutes * 60,
+        must_change_password=must_change_password,
     )
 
 
@@ -186,6 +201,66 @@ async def refresh_token(
 
     _set_auth_cookies(response, new_access, new_raw_refresh)
     return TokenResponse(access_token=new_access, expires_in=settings.jwt_access_token_expire_minutes * 60)
+
+
+@router.post(
+    "/change-password",
+    status_code=status.HTTP_204_NO_CONTENT,
+    response_class=Response,
+    summary="Kimlik doğrulanmış kullanıcının parolasını değiştirir",
+)
+async def change_password(
+    body: ChangePasswordRequest,
+    response: Response,
+    current_user: TokenPayload = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db),
+    request: Request = None,  # type: ignore[assignment]
+) -> Response:
+    """
+    Mevcut parolayı doğrulayarak yeni parola belirler.
+
+    - `current_password` yanlışsa 400 döner.
+    - `new_password` ile `confirm_password` eşleşmezse 422 döner (Pydantic validator).
+    - Başarı durumunda Person.must_change_password=False yapılır.
+    """
+    result = await db.execute(
+        select(User).where(
+            User.id == uuid.UUID(current_user.sub),
+            User.is_active.is_(True),
+            User.is_deleted.is_(False),
+        )
+    )
+    user = result.scalar_one_or_none()
+    if user is None:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Kullanıcı bulunamadı.")
+
+    if not verify_password(body.current_password, user.password_hash):
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Mevcut parola hatalı.",
+        )
+
+    user.password_hash = hash_password(body.new_password)
+
+    # Person.must_change_password sıfırla (person_id olmayan yöneticilerde atla)
+    if user.person_id is not None:
+        person_result = await db.execute(
+            select(Person).where(Person.id == user.person_id)
+        )
+        person = person_result.scalar_one_or_none()
+        if person is not None:
+            person.must_change_password = False
+
+    await log_action(
+        db,
+        action="password_changed",
+        resource_type="user",
+        club_id=user.club_id,
+        user_id=user.id,
+        request=request,
+    )
+    await db.commit()
+    return Response(status_code=status.HTTP_204_NO_CONTENT)
 
 
 @router.post("/logout", status_code=status.HTTP_204_NO_CONTENT)

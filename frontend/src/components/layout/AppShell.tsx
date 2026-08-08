@@ -1,6 +1,7 @@
 import { useState } from 'react'
 import { NavLink, useNavigate } from 'react-router-dom'
 import { useAuth } from '@/hooks/useAuth'
+import { usePendingApplications } from '@/hooks/usePendingApplications'
 
 interface NavItem {
   path: string
@@ -10,6 +11,7 @@ interface NavItem {
 
 const NAV_ITEMS: NavItem[] = [
   { path: '/dashboard', label: 'Genel Bakış', icon: '📊' },
+  { path: '/admin/applications', label: 'Başvurular', icon: '📋' },
   { path: '/persons', label: 'Kişiler', icon: '👥' },
   { path: '/sporcular', label: 'Sporcular', icon: '⛵' },
   { path: '/veliler', label: 'Veliler', icon: '👨‍👩‍👧' },
@@ -33,6 +35,7 @@ export default function AppShell({ children, title }: AppShellProps) {
   const [sidebarOpen, setSidebarOpen] = useState(false)
   const { user, logout } = useAuth()
   const navigate = useNavigate()
+  const pendingApplications = usePendingApplications()
 
   const handleLogout = async () => {
     await logout()
@@ -64,20 +67,29 @@ export default function AppShell({ children, title }: AppShellProps) {
 
         <nav>
           <ul className="sidebar-nav">
-            {NAV_ITEMS.map((item) => (
-              <li key={item.path}>
-                <NavLink
-                  to={item.path}
-                  className={({ isActive }) =>
-                    `sidebar-nav-item${isActive ? ' active' : ''}`
-                  }
-                  onClick={closeSidebar}
-                >
-                  <span className="sidebar-nav-item-icon">{item.icon}</span>
-                  {item.label}
-                </NavLink>
-              </li>
-            ))}
+            {NAV_ITEMS.map((item) => {
+              const showBadge =
+                item.path === '/admin/applications' && pendingApplications > 0
+              return (
+                <li key={item.path}>
+                  <NavLink
+                    to={item.path}
+                    className={({ isActive }) =>
+                      `sidebar-nav-item${isActive ? ' active' : ''}`
+                    }
+                    onClick={closeSidebar}
+                  >
+                    <span className="sidebar-nav-item-icon">{item.icon}</span>
+                    <span style={{ flex: 1 }}>{item.label}</span>
+                    {showBadge && (
+                      <span className="sidebar-nav-badge">
+                        {pendingApplications > 99 ? '99+' : pendingApplications}
+                      </span>
+                    )}
+                  </NavLink>
+                </li>
+              )
+            })}
           </ul>
         </nav>
 

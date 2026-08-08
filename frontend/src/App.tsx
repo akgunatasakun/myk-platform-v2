@@ -1,15 +1,21 @@
-import { BrowserRouter, Navigate, Route, Routes } from 'react-router-dom'
+import { BrowserRouter, Navigate, Route, Routes, useLocation } from 'react-router-dom'
 import { useAuth, useAuthInit } from '@/hooks/useAuth'
 import Login from '@/pages/Login'
 import Dashboard from '@/pages/Dashboard'
 import PersonsPage from '@/pages/persons/PersonsPage'
 import PersonDetailPage from '@/pages/persons/PersonDetailPage'
+import ApplicationsPage from '@/pages/applications/ApplicationsPage'
+import ApplicationDetailPage from '@/pages/applications/ApplicationDetailPage'
+import ApplicationFormPage from '@/pages/public/ApplicationFormPage'
+import ChangePasswordPage from '@/pages/change-password/ChangePasswordPage'
 import ComingSoon from '@/pages/ComingSoon'
 import Forbidden from '@/pages/Forbidden'
 import NotFound from '@/pages/NotFound'
 
 function ProtectedRoute({ children }: { children: React.ReactNode }) {
-  const { isAuthenticated, isLoading } = useAuth()
+  const { isAuthenticated, isLoading, user } = useAuth()
+  const location = useLocation()
+
   if (isLoading) {
     return (
       <div
@@ -24,7 +30,14 @@ function ProtectedRoute({ children }: { children: React.ReactNode }) {
       </div>
     )
   }
+
   if (!isAuthenticated) return <Navigate to="/login" replace />
+
+  // İlk girişte parola değiştirme zorunlu — /change-password dışındaki tüm route'ları engelle.
+  if (user?.must_change_password && location.pathname !== '/change-password') {
+    return <Navigate to="/change-password" replace />
+  }
+
   return <>{children}</>
 }
 
@@ -34,9 +47,20 @@ export default function App() {
   return (
     <BrowserRouter>
       <Routes>
-        {/* Public */}
+        {/* Public — kimlik doğrulama gerektirmez */}
         <Route path="/login" element={<Login />} />
         <Route path="/403" element={<Forbidden />} />
+        <Route path="/basvuru" element={<ApplicationFormPage />} />
+
+        {/* Zorunlu parola değiştirme — authenticated, AppShell yok */}
+        <Route
+          path="/change-password"
+          element={
+            <ProtectedRoute>
+              <ChangePasswordPage />
+            </ProtectedRoute>
+          }
+        />
 
         {/* Protected */}
         <Route
@@ -63,6 +87,24 @@ export default function App() {
             </ProtectedRoute>
           }
         />
+        {/* Üyelik Başvuruları */}
+        <Route
+          path="/admin/applications"
+          element={
+            <ProtectedRoute>
+              <ApplicationsPage />
+            </ProtectedRoute>
+          }
+        />
+        <Route
+          path="/admin/applications/:id"
+          element={
+            <ProtectedRoute>
+              <ApplicationDetailPage />
+            </ProtectedRoute>
+          }
+        />
+
         <Route
           path="/sporcular"
           element={

@@ -266,6 +266,339 @@ async def test_production_allow_public_setup_false_ok() -> None:
     assert not s.allow_public_setup
 
 
+# ─── must_change_password flag testleri ──────────────────────────────────────
+
+@pytest.mark.asyncio
+async def test_login_must_change_password_false_for_admin(
+    client: AsyncClient,
+    test_club: Club,
+    test_user: User,
+) -> None:
+    """person_id olmayan kullanıcıda (yönetici) must_change_password her zaman False."""
+    # test_user doğrudan oluşturulmuş, person_id yok
+    assert test_user.person_id is None
+
+    resp = await client.post(
+        "/api/v1/auth/login",
+        json={
+            "club_slug": test_club.slug,
+            "email": test_user.email,
+            "password": "Gizli1234!",
+        },
+    )
+    assert resp.status_code == 200
+    data = resp.json()
+    assert "must_change_password" in data
+    assert data["must_change_password"] is False
+
+
+@pytest.mark.asyncio
+async def test_login_must_change_password_true_for_linked_person(
+    client: AsyncClient,
+    db_session,
+    test_club: Club,
+) -> None:
+    """Person'ı must_change_password=True olan bağlantılı kullanıcı login'de flag True döner."""
+    import uuid
+    from app.core.security import hash_password
+    from app.models.person import Person
+    from app.models.user import User as UserModel
+
+    # must_change_password=True olan Person oluştur
+    person = Person(
+        club_id=test_club.id,
+        first_name="İlk",
+        last_name="Giriş",
+        member_number="MYK-26-9999",
+        must_change_password=True,
+    )
+    db_session.add(person)
+    await db_session.flush()
+
+    # Bu Person'a bağlı kullanıcı
+    unique_email = f"firstlogin-{uuid.uuid4().hex[:8]}@test.com"
+    user = UserModel(
+        club_id=test_club.id,
+        email=unique_email,
+        password_hash=hash_password("Gecici1234!"),
+        full_name="İlk Giriş",
+        role="uye",
+        is_active=True,
+        is_deleted=False,
+        person_id=person.id,
+    )
+    db_session.add(user)
+    await db_session.flush()
+
+    resp = await client.post(
+        "/api/v1/auth/login",
+        json={
+            "club_slug": test_club.slug,
+            "email": unique_email,
+            "password": "Gecici1234!",
+        },
+    )
+    assert resp.status_code == 200
+    data = resp.json()
+    assert data["must_change_password"] is True
+
+
+@pytest.mark.asyncio
+async def test_login_must_change_password_false_after_password_changed(
+    client: AsyncClient,
+    db_session,
+    test_club: Club,
+) -> None:
+    """Şifresi değiştirilen (must_change_password=False) kullanıcıda flag False döner."""
+    import uuid
+    from app.core.security import hash_password
+    from app.models.person import Person
+    from app.models.user import User as UserModel
+
+    person = Person(
+        club_id=test_club.id,
+        first_name="Değişti",
+        last_name="Parola",
+        must_change_password=False,  # şifre zaten değiştirildi
+    )
+    db_session.add(person)
+    await db_session.flush()
+
+    unique_email = f"changed-{uuid.uuid4().hex[:8]}@test.com"
+    user = UserModel(
+        club_id=test_club.id,
+        email=unique_email,
+        password_hash=hash_password("Yeni1234!"),
+        full_name="Değişti Parola",
+        role="uye",
+        is_active=True,
+        is_deleted=False,
+        person_id=person.id,
+    )
+    db_session.add(user)
+    await db_session.flush()
+
+    resp = await client.post(
+        "/api/v1/auth/login",
+        json={
+            "club_slug": test_club.slug,
+            "email": unique_email,
+            "password": "Yeni1234!",
+        },
+    )
+    assert resp.status_code == 200
+    data = resp.json()
+    assert data["must_change_password"] is False
+
+
+# ─── POST /auth/change-password testleri ─────────────────────────────────────
+
+@pytest.mark.asyncio
+async def test_change_password_success(
+    client: AsyncClient,
+    db_session,
+    test_club: Club,
+) -> None:
+    """Doğru mevcut parola + geçerli yeni parola → 204, yeni parola ile giriş yapılabilir."""
+    import uuid
+    from app.core.security import hash_password
+    from app.models.user import User
+
+    email = f"changetest-{uuid.uuid4().hex[:6]}@test.com"
+    old_pw = "EskiParola1!"
+    new_pw = "YeniParola2@"
+
+    user = User(
+        id=uuid.uuid4(),
+        club_id=test_club.id,
+        email=email,
+        password_hash=hash_password(old_pw),
+        full_name="Değişim Test",
+        role="uye",
+        is_active=True,
+        is_deleted=False,
+    )
+    db_session.add(user)
+    await db_session.flush()
+
+    # Login → token al
+    login_resp = await client.post(
+        "/api/v1/auth/login",
+        json={"club_slug": test_club.slug, "email": email, "password": old_pw},
+    )
+    assert login_resp.status_code == 200
+    token = login_resp.json()["access_token"]
+
+    # Parola değiştir
+    change_resp = await client.post(
+        "/api/v1/auth/change-password",
+        json={
+            "current_password": old_pw,
+            "new_password": new_pw,
+            "confirm_password": new_pw,
+        },
+        headers={"Authorization": f"Bearer {token}"},
+    )
+    assert change_resp.status_code == 204
+
+    # Eski parola artık çalışmamalı
+    old_login = await client.post(
+        "/api/v1/auth/login",
+        json={"club_slug": test_club.slug, "email": email, "password": old_pw},
+    )
+    assert old_login.status_code == 401
+
+    # Yeni parola ile giriş
+    new_login = await client.post(
+        "/api/v1/auth/login",
+        json={"club_slug": test_club.slug, "email": email, "password": new_pw},
+    )
+    assert new_login.status_code == 200
+
+
+@pytest.mark.asyncio
+async def test_change_password_wrong_current(
+    client: AsyncClient,
+    db_session,
+    test_club: Club,
+    test_user: User,
+) -> None:
+    """Yanlış mevcut parola → 400."""
+    login_resp = await client.post(
+        "/api/v1/auth/login",
+        json={"club_slug": test_club.slug, "email": test_user.email, "password": "Gizli1234!"},
+    )
+    assert login_resp.status_code == 200
+    token = login_resp.json()["access_token"]
+
+    resp = await client.post(
+        "/api/v1/auth/change-password",
+        json={
+            "current_password": "YanlisParola1!",
+            "new_password": "YeniParola2@",
+            "confirm_password": "YeniParola2@",
+        },
+        headers={"Authorization": f"Bearer {token}"},
+    )
+    assert resp.status_code == 400
+    assert "hatalı" in resp.json()["detail"].lower()
+
+
+@pytest.mark.asyncio
+async def test_change_password_mismatch(
+    client: AsyncClient,
+    db_session,
+    test_club: Club,
+    test_user: User,
+) -> None:
+    """Yeni parolalar eşleşmezse → 422."""
+    login_resp = await client.post(
+        "/api/v1/auth/login",
+        json={"club_slug": test_club.slug, "email": test_user.email, "password": "Gizli1234!"},
+    )
+    assert login_resp.status_code == 200
+    token = login_resp.json()["access_token"]
+
+    resp = await client.post(
+        "/api/v1/auth/change-password",
+        json={
+            "current_password": "Gizli1234!",
+            "new_password": "YeniParola2@",
+            "confirm_password": "FarkliParola3#",
+        },
+        headers={"Authorization": f"Bearer {token}"},
+    )
+    assert resp.status_code == 422
+
+
+@pytest.mark.asyncio
+async def test_change_password_clears_must_change_password(
+    client: AsyncClient,
+    db_session,
+    test_club: Club,
+) -> None:
+    """must_change_password=True olan Person'a bağlı kullanıcı parola değiştirince flag False olur."""
+    import uuid
+    from app.core.security import hash_password
+    from app.models.person import Person
+    from app.models.user import User
+
+    email = f"mustchange-{uuid.uuid4().hex[:6]}@test.com"
+    password = "GeciciParola1!"
+
+    # must_change_password=True olan Person oluştur
+    person = Person(
+        id=uuid.uuid4(),
+        club_id=test_club.id,
+        first_name="Zorunlu",
+        last_name="Değişim",
+        must_change_password=True,
+    )
+    db_session.add(person)
+    await db_session.flush()
+
+    user = User(
+        id=uuid.uuid4(),
+        club_id=test_club.id,
+        email=email,
+        password_hash=hash_password(password),
+        full_name="Zorunlu Değişim",
+        role="uye",
+        is_active=True,
+        is_deleted=False,
+        person_id=person.id,
+    )
+    db_session.add(user)
+    await db_session.flush()
+
+    # Login — must_change_password=True gelmeli
+    login_resp = await client.post(
+        "/api/v1/auth/login",
+        json={"club_slug": test_club.slug, "email": email, "password": password},
+    )
+    assert login_resp.status_code == 200
+    assert login_resp.json()["must_change_password"] is True
+    token = login_resp.json()["access_token"]
+
+    # Parola değiştir
+    change_resp = await client.post(
+        "/api/v1/auth/change-password",
+        json={
+            "current_password": password,
+            "new_password": "YeniParola2@",
+            "confirm_password": "YeniParola2@",
+        },
+        headers={"Authorization": f"Bearer {token}"},
+    )
+    assert change_resp.status_code == 204
+
+    # Person.must_change_password şimdi False olmalı
+    await db_session.refresh(person)
+    assert person.must_change_password is False
+
+    # /auth/me de artık must_change_password=False döndürmeli
+    me_resp = await client.get(
+        "/api/v1/auth/me",
+        headers={"Authorization": f"Bearer {token}"},
+    )
+    assert me_resp.status_code == 200
+    assert me_resp.json()["must_change_password"] is False
+
+
+@pytest.mark.asyncio
+async def test_change_password_unauthenticated(client: AsyncClient) -> None:
+    """Token olmadan → 401/403."""
+    resp = await client.post(
+        "/api/v1/auth/change-password",
+        json={
+            "current_password": "EskiParola1!",
+            "new_password": "YeniParola2@",
+            "confirm_password": "YeniParola2@",
+        },
+    )
+    assert resp.status_code in (401, 403)
+
+
 @pytest.mark.asyncio
 async def test_production_setup_always_denied_when_club_exists(
     client: AsyncClient, test_club: Club

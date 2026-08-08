@@ -2,6 +2,7 @@ import { useEffect, useState } from 'react'
 import { useNavigate, useParams } from 'react-router-dom'
 import AppShell from '@/components/layout/AppShell'
 import PersonFormModal from './PersonFormModal'
+import PersonGuardiansSection from './PersonGuardiansSection'
 import { personsApi } from '@/api/persons'
 import type { Person, PersonRoleCode } from '@/types/person'
 
@@ -217,7 +218,7 @@ export default function PersonDetailPage() {
           </div>
 
           {person.notes && (
-            <div className="card">
+            <div className="card" style={{ marginBottom: 20 }}>
               <div className="card-header">Notlar</div>
               <div className="card-body">
                 <p style={{ fontSize: 14, lineHeight: 1.6, whiteSpace: 'pre-wrap' }}>
@@ -226,6 +227,9 @@ export default function PersonDetailPage() {
               </div>
             </div>
           )}
+
+          {/* Veliler / Vasiler bölümü */}
+          <PersonGuardiansSection personId={person.id} />
         </>
       )}
 
