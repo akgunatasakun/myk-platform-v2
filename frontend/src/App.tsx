@@ -8,6 +8,9 @@ import ApplicationsPage from '@/pages/applications/ApplicationsPage'
 import ApplicationDetailPage from '@/pages/applications/ApplicationDetailPage'
 import ApplicationFormPage from '@/pages/public/ApplicationFormPage'
 import ChangePasswordPage from '@/pages/change-password/ChangePasswordPage'
+import AkademiPage from '@/pages/akademi/AkademiPage'
+import ProgramPage from '@/pages/akademi/ProgramPage'
+import LessonPage from '@/pages/akademi/LessonPage'
 import ComingSoon from '@/pages/ComingSoon'
 import Forbidden from '@/pages/Forbidden'
 import NotFound from '@/pages/NotFound'
@@ -134,6 +137,30 @@ export default function App() {
           element={
             <ProtectedRoute>
               <ComingSoon />
+            </ProtectedRoute>
+          }
+        />
+        <Route
+          path="/akademi"
+          element={
+            <ProtectedRoute>
+              <AkademiPage />
+            </ProtectedRoute>
+          }
+        />
+        <Route
+          path="/akademi/program/:slug"
+          element={
+            <ProtectedRoute>
+              <ProgramPage />
+            </ProtectedRoute>
+          }
+        />
+        <Route
+          path="/akademi/ders/:slug"
+          element={
+            <ProtectedRoute>
+              <LessonPage />
             </ProtectedRoute>
           }
         />
