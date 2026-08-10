@@ -8,6 +8,7 @@ from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
 
 from app.api.v1.routers import health, auth, persons, dashboard, avatar, memberships, public
+from app.api.v1.routers.academy import router as academy_router
 from app.config import get_settings
 from app.core.security import get_current_user
 from app.core.tenant import get_club_id
@@ -71,6 +72,7 @@ app.include_router(avatar.router, prefix=API_PREFIX)
 app.include_router(memberships.router, prefix=API_PREFIX)
 app.include_router(dashboard.router, prefix=API_PREFIX)
 app.include_router(public.router, prefix=API_PREFIX)
+app.include_router(academy_router, prefix=f"{API_PREFIX}/academy", tags=["academy"])
 
 
 # ─── /me endpoint — inject correct dependency ─────────────────────────────────
