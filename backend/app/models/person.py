@@ -12,6 +12,7 @@ if TYPE_CHECKING:
     from app.models.membership_application import MembershipApplication
     from app.models.person_guardian import PersonGuardian
     from app.models.academy import AcademyEnrollment, AcademyProgress, AcademySession, AcademyQuizAttempt
+    from app.models.training import TrainingEnrollment, TrainingAttendance
 
 
 class Person(Base):
@@ -81,6 +82,16 @@ class Person(Base):
     )
     quiz_attempts: Mapped[List["AcademyQuizAttempt"]] = relationship(
         back_populates="person"
+    )
+
+    # Training ilişkileri
+    training_enrollments: Mapped[List["TrainingEnrollment"]] = relationship(
+        foreign_keys="TrainingEnrollment.person_id",
+        back_populates="person",
+    )
+    training_attendances: Mapped[List["TrainingAttendance"]] = relationship(
+        foreign_keys="TrainingAttendance.person_id",
+        back_populates="person",
     )
 
     def __repr__(self) -> str:
