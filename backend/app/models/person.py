@@ -11,6 +11,7 @@ from app.database import Base
 if TYPE_CHECKING:
     from app.models.membership_application import MembershipApplication
     from app.models.person_guardian import PersonGuardian
+    from app.models.academy import AcademyEnrollment, AcademyProgress, AcademySession, AcademyQuizAttempt
 
 
 class Person(Base):
@@ -66,6 +67,20 @@ class Person(Base):
         foreign_keys="PersonGuardian.guardian_person_id",
         back_populates="guardian",
         cascade="all, delete-orphan",
+    )
+
+    # Academy ilişkileri
+    academy_enrollments: Mapped[List["AcademyEnrollment"]] = relationship(
+        back_populates="person"
+    )
+    academy_progresses: Mapped[List["AcademyProgress"]] = relationship(
+        back_populates="person"
+    )
+    academy_sessions: Mapped[List["AcademySession"]] = relationship(
+        back_populates="person", foreign_keys="AcademySession.person_id"
+    )
+    quiz_attempts: Mapped[List["AcademyQuizAttempt"]] = relationship(
+        back_populates="person"
     )
 
     def __repr__(self) -> str:

@@ -7,6 +7,18 @@ from app.models.membership_application import MembershipApplication
 from app.models.application_counter import ApplicationCounter
 from app.models.member_counter import MemberCounter
 from app.models.person_guardian import PersonGuardian
+from app.models.academy import (
+    AcademyProgram,
+    AcademyModule,
+    AcademyLesson,
+    AcademyLessonStep,
+    AcademyEnrollment,
+    AcademySession,
+    AcademyProgress,
+    AcademyQuizQuestion,
+    AcademyQuizAttempt,
+    AcademyQuizAnswer,
+)
 
 __all__ = [
     "Club",
@@ -21,4 +33,14 @@ __all__ = [
     "ApplicationCounter",
     "MemberCounter",
     "PersonGuardian",
+    "AcademyProgram",
+    "AcademyModule",
+    "AcademyLesson",
+    "AcademyLessonStep",
+    "AcademyEnrollment",
+    "AcademySession",
+    "AcademyProgress",
+    "AcademyQuizQuestion",
+    "AcademyQuizAttempt",
+    "AcademyQuizAnswer",
 ]

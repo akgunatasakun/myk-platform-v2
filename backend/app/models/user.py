@@ -10,6 +10,7 @@ from app.database import Base
 
 if TYPE_CHECKING:
     from app.models.person import Person
+    from app.models.academy import AcademySession
 
 
 class User(Base):
@@ -38,6 +39,9 @@ class User(Base):
 
     refresh_tokens: Mapped[list["RefreshToken"]] = relationship(
         back_populates="user", cascade="all, delete-orphan"
+    )
+    academy_sessions: Mapped[list["AcademySession"]] = relationship(
+        back_populates="user", foreign_keys="AcademySession.user_id"
     )
 
     def __repr__(self) -> str:
