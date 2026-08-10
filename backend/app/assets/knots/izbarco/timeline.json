@@ -1,0 +1,602 @@
+{
+  "$schema": "myk/knotplayer-timeline/v1",
+  "slug": "izbarco",
+  "version": 1,
+  "locale": "tr-TR",
+  "title": "İzbarço",
+  "subtitle": "Bowline",
+  "difficulty": "baslangic",
+  "category": "kasa-baglari",
+  "duration_ms": 42000,
+  "audio": null,
+  "poster_step": 0,
+  "viewBox": "0 0 480 290",
+  "colors": {
+    "rope_main": "#4db8f0",
+    "rope_end":  "#ff8c42",
+    "arrow":     "#ffd700",
+    "success":   "#00c8a0"
+  },
+  "steps": [
+    {
+      "id": 1,
+      "title": "Kroz oluştur",
+      "description": "Beden ipini eline al. Serbest uçla yukarıdan bir küçük halka oluştur — halat üstünden kendi üstüne geçmeli.",
+      "audio_range": [0, 6200],
+      "paths": [
+        {
+          "id": "beden-sol",
+          "d": "M30,145 L230,145",
+          "stroke": "rope_main",
+          "stroke_width": 9,
+          "stroke_linecap": "round",
+          "animated": true,
+          "layer": 1
+        },
+        {
+          "id": "ilmek",
+          "d": "M230,145 C228,128 234,106 252,99 C270,92 300,98 310,118 C320,138 314,160 294,164 C274,168 234,164 230,145",
+          "stroke": "rope_main",
+          "stroke_width": 9,
+          "stroke_linecap": "round",
+          "fill": "none",
+          "animated": true,
+          "layer": 1
+        },
+        {
+          "id": "beden-sag-soluk",
+          "d": "M310,118 L460,145",
+          "stroke": "rope_main",
+          "stroke_width": 9,
+          "stroke_linecap": "round",
+          "opacity": 0.2,
+          "animated": false,
+          "layer": 1
+        }
+      ],
+      "labels": [
+        {
+          "id": "lbl-beden",
+          "text": "← beden (sabit uç)",
+          "x": 110,
+          "y": 164,
+          "fill": "rgba(77,184,240,.55)",
+          "font_size": 11,
+          "text_anchor": "middle",
+          "delay_ms": 500
+        },
+        {
+          "id": "lbl-ilmek",
+          "text": "küçük ilmek (tavşan deliği)",
+          "x": 272,
+          "y": 86,
+          "fill": "rgba(255,255,255,.5)",
+          "font_size": 11,
+          "text_anchor": "middle",
+          "delay_ms": 650
+        },
+        {
+          "id": "lbl-yuk",
+          "text": "yük ucu →",
+          "x": 400,
+          "y": 133,
+          "fill": "rgba(77,184,240,.4)",
+          "font_size": 10,
+          "text_anchor": "middle",
+          "delay_ms": 500
+        }
+      ]
+    },
+    {
+      "id": 2,
+      "title": "Çıma ilmekten geçir",
+      "description": "Serbest ucu (çıma) ilmeğin içinden aşağıdan yukarıya doğru geçir — 'tavşan delikten çıkıyor'.",
+      "audio_range": [6200, 10700],
+      "paths": [
+        {
+          "id": "beden-sol",
+          "d": "M30,145 L230,145",
+          "stroke": "rope_main",
+          "stroke_width": 9,
+          "stroke_linecap": "round",
+          "animated": false,
+          "layer": 1
+        },
+        {
+          "id": "ilmek",
+          "d": "M230,145 C228,128 234,106 252,99 C270,92 300,98 310,118 C320,138 314,160 294,164 C274,168 234,164 230,145",
+          "stroke": "rope_main",
+          "stroke_width": 9,
+          "stroke_linecap": "round",
+          "fill": "none",
+          "animated": false,
+          "layer": 1
+        },
+        {
+          "id": "beden-sag-soluk",
+          "d": "M310,118 L460,145",
+          "stroke": "rope_main",
+          "stroke_width": 9,
+          "stroke_linecap": "round",
+          "opacity": 0.2,
+          "animated": false,
+          "layer": 1
+        },
+        {
+          "id": "cima-alt",
+          "d": "M268,265 L268,164",
+          "stroke": "rope_end",
+          "stroke_width": 7,
+          "stroke_linecap": "round",
+          "animated": true,
+          "layer": 2
+        },
+        {
+          "id": "cima-gecis",
+          "d": "M268,164 C267,155 266,148 265,140 C264,132 266,122 268,114",
+          "stroke": "rope_end",
+          "stroke_width": 7,
+          "stroke_linecap": "round",
+          "fill": "none",
+          "animated": true,
+          "layer": 2
+        },
+        {
+          "id": "cima-ust",
+          "d": "M268,114 L268,95",
+          "stroke": "rope_end",
+          "stroke_width": 7,
+          "stroke_linecap": "round",
+          "animated": true,
+          "layer": 2
+        }
+      ],
+      "labels": [
+        {
+          "id": "lbl-cima",
+          "text": "çıma (serbest uç)",
+          "x": 268,
+          "y": 280,
+          "fill": "rgba(255,140,66,.6)",
+          "font_size": 11,
+          "text_anchor": "middle",
+          "delay_ms": 500
+        },
+        {
+          "id": "lbl-gecis",
+          "text": "↑ içten geçiyor",
+          "x": 195,
+          "y": 118,
+          "fill": "rgba(255,215,0,.65)",
+          "font_size": 11,
+          "delay_ms": 850
+        }
+      ]
+    },
+    {
+      "id": 3,
+      "title": "Bedenin arkasından dola",
+      "description": "Serbest ucu bedenin arkasından dola — bedenin (yük ucunun) üstünden atlayarak arkasına geç.",
+      "audio_range": [10700, 16200],
+      "paths": [
+        {
+          "id": "beden-sol",
+          "d": "M30,145 L230,145",
+          "stroke": "rope_main",
+          "stroke_width": 9,
+          "stroke_linecap": "round",
+          "animated": false,
+          "layer": 1
+        },
+        {
+          "id": "ilmek",
+          "d": "M230,145 C228,128 234,106 252,99 C270,92 300,98 310,118 C320,138 314,160 294,164 C274,168 234,164 230,145",
+          "stroke": "rope_main",
+          "stroke_width": 9,
+          "stroke_linecap": "round",
+          "fill": "none",
+          "animated": false,
+          "layer": 1
+        },
+        {
+          "id": "beden-sag-soluk",
+          "d": "M310,118 L460,145",
+          "stroke": "rope_main",
+          "stroke_width": 9,
+          "stroke_linecap": "round",
+          "opacity": 0.2,
+          "animated": false,
+          "layer": 1
+        },
+        {
+          "id": "cima-alt",
+          "d": "M268,265 L268,164",
+          "stroke": "rope_end",
+          "stroke_width": 7,
+          "stroke_linecap": "round",
+          "animated": false,
+          "layer": 2
+        },
+        {
+          "id": "cima-gecis",
+          "d": "M268,164 C267,155 266,148 265,140 C264,132 266,122 268,114",
+          "stroke": "rope_end",
+          "stroke_width": 7,
+          "stroke_linecap": "round",
+          "fill": "none",
+          "animated": false,
+          "layer": 2
+        },
+        {
+          "id": "cima-ust",
+          "d": "M268,114 L268,95",
+          "stroke": "rope_end",
+          "stroke_width": 7,
+          "stroke_linecap": "round",
+          "animated": false,
+          "layer": 2
+        },
+        {
+          "id": "cima-arka",
+          "d": "M268,95 C268,86 278,80 295,80 C316,80 326,92 326,108",
+          "stroke": "rope_end",
+          "stroke_width": 7,
+          "stroke_linecap": "round",
+          "fill": "none",
+          "opacity": 0.4,
+          "animated": true,
+          "layer": 0,
+          "note": "bedenin arkasında — soluk"
+        },
+        {
+          "id": "cima-on",
+          "d": "M326,108 C326,120 318,128 310,128",
+          "stroke": "rope_end",
+          "stroke_width": 7,
+          "stroke_linecap": "round",
+          "fill": "none",
+          "animated": true,
+          "layer": 2
+        },
+        {
+          "id": "beden-cover",
+          "d": "M305,122 C302,119 298,116 295,115",
+          "stroke": "rope_main",
+          "stroke_width": 11,
+          "stroke_linecap": "round",
+          "animated": false,
+          "layer": 3,
+          "note": "beden çımanın üstünde görünmeli — cover trick"
+        }
+      ],
+      "labels": [
+        {
+          "id": "lbl-arka",
+          "text": "bedenin arkasından dola",
+          "x": 298,
+          "y": 68,
+          "fill": "rgba(255,215,0,.65)",
+          "font_size": 10,
+          "text_anchor": "middle",
+          "delay_ms": 900
+        }
+      ]
+    },
+    {
+      "id": 4,
+      "title": "Tekrar ilmekten geçir",
+      "description": "Serbest ucun çımasını tekrar ilmekten geçir — bu sefer yukarıdan aşağıya, 'tavşan tekrar deliğe giriyor'.",
+      "audio_range": [16200, 21700],
+      "paths": [
+        {
+          "id": "beden-sol",
+          "d": "M30,145 L230,145",
+          "stroke": "rope_main",
+          "stroke_width": 9,
+          "stroke_linecap": "round",
+          "animated": false,
+          "layer": 1
+        },
+        {
+          "id": "ilmek",
+          "d": "M230,145 C228,128 234,106 252,99 C270,92 300,98 310,118 C320,138 314,160 294,164 C274,168 234,164 230,145",
+          "stroke": "rope_main",
+          "stroke_width": 9,
+          "stroke_linecap": "round",
+          "fill": "none",
+          "animated": false,
+          "layer": 1
+        },
+        {
+          "id": "beden-sag-soluk",
+          "d": "M310,118 L460,145",
+          "stroke": "rope_main",
+          "stroke_width": 9,
+          "stroke_linecap": "round",
+          "opacity": 0.2,
+          "animated": false,
+          "layer": 1
+        },
+        {
+          "id": "cima-alt",
+          "d": "M268,265 L268,164",
+          "stroke": "rope_end",
+          "stroke_width": 7,
+          "stroke_linecap": "round",
+          "animated": false,
+          "layer": 2
+        },
+        {
+          "id": "cima-gecis",
+          "d": "M268,164 C267,155 266,148 265,140 C264,132 266,122 268,114",
+          "stroke": "rope_end",
+          "stroke_width": 7,
+          "stroke_linecap": "round",
+          "fill": "none",
+          "animated": false,
+          "layer": 2
+        },
+        {
+          "id": "cima-ust",
+          "d": "M268,114 L268,95",
+          "stroke": "rope_end",
+          "stroke_width": 7,
+          "stroke_linecap": "round",
+          "animated": false,
+          "layer": 2
+        },
+        {
+          "id": "cima-arka",
+          "d": "M268,95 C268,86 278,80 295,80 C316,80 326,92 326,108",
+          "stroke": "rope_end",
+          "stroke_width": 7,
+          "stroke_linecap": "round",
+          "fill": "none",
+          "opacity": 0.4,
+          "animated": false,
+          "layer": 0
+        },
+        {
+          "id": "cima-on",
+          "d": "M326,108 C326,120 318,128 310,128",
+          "stroke": "rope_end",
+          "stroke_width": 7,
+          "stroke_linecap": "round",
+          "fill": "none",
+          "animated": false,
+          "layer": 2
+        },
+        {
+          "id": "beden-cover",
+          "d": "M305,122 C302,119 298,116 295,115",
+          "stroke": "rope_main",
+          "stroke_width": 11,
+          "stroke_linecap": "round",
+          "animated": false,
+          "layer": 3
+        },
+        {
+          "id": "cima-asagi-1",
+          "d": "M310,128 C310,140 308,154 306,162",
+          "stroke": "rope_end",
+          "stroke_width": 7,
+          "stroke_linecap": "round",
+          "fill": "none",
+          "animated": true,
+          "layer": 2
+        },
+        {
+          "id": "cima-asagi-2",
+          "d": "M306,162 C302,178 296,205 292,230 C288,250 276,265 268,265",
+          "stroke": "rope_end",
+          "stroke_width": 7,
+          "stroke_linecap": "round",
+          "fill": "none",
+          "animated": true,
+          "layer": 2
+        },
+        {
+          "id": "cima-kuyruk",
+          "d": "M310,128 L450,145",
+          "stroke": "rope_end",
+          "stroke_width": 7,
+          "stroke_linecap": "round",
+          "opacity": 0.35,
+          "animated": true,
+          "layer": 2
+        }
+      ],
+      "labels": [
+        {
+          "id": "lbl-kasa",
+          "text": "büyük ilmek (kasa) oluşuyor",
+          "x": 288,
+          "y": 252,
+          "fill": "rgba(255,140,66,.55)",
+          "font_size": 10,
+          "text_anchor": "middle",
+          "delay_ms": 900
+        },
+        {
+          "id": "lbl-tekrar",
+          "text": "↓ tekrar içten",
+          "x": 335,
+          "y": 133,
+          "fill": "rgba(255,215,0,.65)",
+          "font_size": 10,
+          "delay_ms": 800
+        }
+      ]
+    },
+    {
+      "id": 5,
+      "title": "Sıkıştır",
+      "description": "Her iki yönden çekerek sıkıştır. İlmek boyutu sabit kalır — serbest uç kolayca çözülür. İzbarço tamamlandı! ✅",
+      "audio_range": [21700, 42000],
+      "paths": [
+        {
+          "id": "beden-sol",
+          "d": "M30,145 L228,145",
+          "stroke": "rope_main",
+          "stroke_width": 9,
+          "stroke_linecap": "round",
+          "animated": false,
+          "layer": 1
+        },
+        {
+          "id": "ilmek-sikismis",
+          "d": "M228,145 C226,130 231,110 248,104 C265,98 294,103 303,120 C312,137 306,156 287,160 C268,164 228,162 228,145",
+          "stroke": "rope_main",
+          "stroke_width": 9,
+          "stroke_linecap": "round",
+          "fill": "none",
+          "animated": false,
+          "layer": 1,
+          "note": "ilmek biraz daha kompakt — sıkışmış"
+        },
+        {
+          "id": "beden-sag",
+          "d": "M303,120 L460,145",
+          "stroke": "rope_main",
+          "stroke_width": 9,
+          "stroke_linecap": "round",
+          "animated": false,
+          "layer": 1,
+          "note": "gergin — tam opaklık"
+        },
+        {
+          "id": "cima-alt",
+          "d": "M262,250 L262,162",
+          "stroke": "rope_end",
+          "stroke_width": 7,
+          "stroke_linecap": "round",
+          "animated": false,
+          "layer": 2
+        },
+        {
+          "id": "cima-gecis",
+          "d": "M262,162 C261,153 262,142 263,132 C264,122 266,114 268,108",
+          "stroke": "rope_end",
+          "stroke_width": 7,
+          "stroke_linecap": "round",
+          "fill": "none",
+          "animated": false,
+          "layer": 2
+        },
+        {
+          "id": "cima-ust",
+          "d": "M268,108 L268,96",
+          "stroke": "rope_end",
+          "stroke_width": 7,
+          "stroke_linecap": "round",
+          "animated": false,
+          "layer": 2
+        },
+        {
+          "id": "cima-arka",
+          "d": "M268,96 C268,86 277,80 294,80 C315,80 324,92 324,108",
+          "stroke": "rope_end",
+          "stroke_width": 7,
+          "stroke_linecap": "round",
+          "fill": "none",
+          "opacity": 0.4,
+          "animated": false,
+          "layer": 0
+        },
+        {
+          "id": "cima-on",
+          "d": "M324,108 C324,120 316,128 308,130",
+          "stroke": "rope_end",
+          "stroke_width": 7,
+          "stroke_linecap": "round",
+          "fill": "none",
+          "animated": false,
+          "layer": 2
+        },
+        {
+          "id": "beden-cover",
+          "d": "M303,124 C300,121 296,118 293,117",
+          "stroke": "rope_main",
+          "stroke_width": 11,
+          "stroke_linecap": "round",
+          "animated": false,
+          "layer": 3
+        },
+        {
+          "id": "cima-asagi",
+          "d": "M308,130 C308,142 305,154 302,162",
+          "stroke": "rope_end",
+          "stroke_width": 7,
+          "stroke_linecap": "round",
+          "fill": "none",
+          "animated": false,
+          "layer": 2
+        },
+        {
+          "id": "cima-kuyruk",
+          "d": "M308,130 L430,145",
+          "stroke": "rope_end",
+          "stroke_width": 7,
+          "stroke_linecap": "round",
+          "opacity": 0.4,
+          "animated": false,
+          "layer": 2
+        },
+        {
+          "id": "kasa-kol",
+          "d": "M302,162 C296,188 284,230 262,250",
+          "stroke": "rope_end",
+          "stroke_width": 7,
+          "stroke_linecap": "round",
+          "fill": "none",
+          "animated": true,
+          "layer": 2
+        },
+        {
+          "id": "kasa-alt",
+          "d": "M262,250 C258,256 248,262 236,262 C224,262 212,258 204,250",
+          "stroke": "rope_end",
+          "stroke_width": 7,
+          "stroke_linecap": "round",
+          "fill": "none",
+          "opacity": 0.55,
+          "animated": true,
+          "layer": 2
+        }
+      ],
+      "labels": [
+        {
+          "id": "lbl-tamam",
+          "text": "✅ İzbarço Tamamlandı!",
+          "x": 240,
+          "y": 48,
+          "fill": "#00c8a0",
+          "font_size": 14,
+          "font_weight": 700,
+          "text_anchor": "middle",
+          "delay_ms": 1000
+        },
+        {
+          "id": "lbl-aciklama",
+          "text": "İlmek sabit — serbest uç kolay çözülür",
+          "x": 240,
+          "y": 66,
+          "fill": "rgba(0,200,150,.6)",
+          "font_size": 10,
+          "text_anchor": "middle",
+          "delay_ms": 1100
+        },
+        {
+          "id": "lbl-kasa",
+          "text": "← büyük ilmek (kasa) →",
+          "x": 233,
+          "y": 278,
+          "fill": "rgba(255,140,66,.65)",
+          "font_size": 11,
+          "text_anchor": "middle",
+          "delay_ms": 1000
+        }
+      ]
+    }
+  ]
+}
