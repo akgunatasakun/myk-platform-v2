@@ -1,65 +1,72 @@
-// ─── Academy TypeScript Tipleri ───────────────────────────────────────────────
+// ─── Academy TypeScript Tipleri — backend şemalarıyla birebir eşleşir ──────────
+// Backend alan adları Türkçedir (ad, aciklama, sira, vb.).
+// Frontend bileşenlerinde bu alan adları doğrudan kullanılmalıdır.
 
 export interface AcademyProgramListItem {
   id: string
   slug: string
-  title: string
-  description: string | null
-  seviye: string
-  is_published: boolean
-  club_id: string | null
-}
-
-export interface AcademyModule {
-  id: string
-  slug: string
-  title: string
-  siralama: number
-  lessons: AcademyLessonSummary[]
+  ad: string
+  kod: string
+  seviye: number // int: 1=Başlangıç, 2=Orta, 3=İleri
 }
 
 export interface AcademyLessonSummary {
   id: string
   slug: string
-  title: string
-  lesson_type: string
-  siralama: number
-  sure_dakika: number | null
+  ad: string
+  ders_tipi: string
+  sira: number
+  tahmini_sure_dk: number | null
 }
 
-export interface AcademyProgramOut extends AcademyProgramListItem {
+export interface AcademyModule {
+  id: string
+  slug: string
+  ad: string
+  sira: number
+  lessons: AcademyLessonSummary[]
+}
+
+export interface AcademyProgramOut {
+  id: string
+  slug: string
+  ad: string
+  kod: string
+  aciklama: string | null
+  seviye: number
   modules: AcademyModule[]
 }
 
 export interface EnrollmentOut {
   id: string
   program_id: string
-  person_id: string
+  status: string
   enrolled_at: string
 }
 
 export interface LessonStep {
   id: string
-  step_type: string
-  siralama: number
+  tip: string // 'knot_animation' | 'text' | ...
+  sira: number
   baslik: string | null
   data_json: Record<string, unknown>
 }
 
 export interface QuizQuestion {
   id: string
+  sira: number
   soru_metni: string
-  secenekler: Record<string, string>
-  aciklama: string | null
+  options: Array<{ harf: string; metin: string }> // [{"harf":"A","metin":"..."}]
 }
 
 export interface AcademyLessonOut {
   id: string
   slug: string
-  title: string
-  lesson_type: string
-  siralama: number
-  sure_dakika: number | null
+  ad: string
+  aciklama: string | null
+  ders_tipi: string
+  sira: number
+  tahmini_sure_dk: number | null
   steps: LessonStep[]
   quiz_questions: QuizQuestion[]
 }
@@ -72,13 +79,24 @@ export interface SessionOut {
 
 export interface ProgressOut {
   lesson_id: string
-  yuzde: number
   tamamlandi: boolean
-  sure_saniye: number
+  yuzde: number
+  toplam_sure_sn: number
+  son_adim_sira: number | null
+}
+
+export interface QuizAttemptOut {
+  id: string
+  lesson_id: string
+  basladi_at: string
+  bitti_at: string | null
+  dogru: number
+  toplam: number
+  gecti: boolean | null
 }
 
 export interface QuizAttemptStartOut {
-  attempt_id: string
+  attempt: QuizAttemptOut
   questions: QuizQuestion[]
 }
 
@@ -98,16 +116,10 @@ export interface QuizAttemptResult {
   sorular: QuizSoruResult[]
 }
 
-// KnotPlayer global tip bildirimi (knotplayer.js window global'dan yükleniyor)
+// KnotPlayer global tip bildirimi (knotplayer.js window'a yüklüyor)
 export interface KnotPlayerInstance {
   goToStep(index: number): void
   play(): void
   pause(): void
-  setSpeed(multiplier: number): void
   destroy(): void
-}
-
-export interface KnotPlayerConstructor {
-  new (container: HTMLElement, timeline: unknown, options?: { adapter?: string }): KnotPlayerInstance
-  registerAdapter(name: string, AdapterClass: unknown): void
 }

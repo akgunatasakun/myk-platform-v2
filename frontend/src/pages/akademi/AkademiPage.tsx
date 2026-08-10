@@ -36,10 +36,10 @@ export default function AkademiPage() {
     }
   }
 
-  const seviyeLabel: Record<string, string> = {
-    baslangic: 'Başlangıç',
-    orta: 'Orta',
-    ileri: 'İleri',
+  const seviyeLabel: Record<number, string> = {
+    1: 'Başlangıç',
+    2: 'Orta',
+    3: 'İleri',
   }
 
   return (
@@ -73,16 +73,11 @@ export default function AkademiPage() {
               <div key={program.id} className="card">
                 <div className="card-body">
                   <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: '0.5rem' }}>
-                    <h3 className="card-title" style={{ margin: 0 }}>{program.title}</h3>
+                    <h3 className="card-title" style={{ margin: 0 }}>{program.ad}</h3>
                     <span className="badge badge-info" style={{ flexShrink: 0, marginLeft: '0.5rem' }}>
-                      {seviyeLabel[program.seviye] ?? program.seviye}
+                      {seviyeLabel[program.seviye] ?? `Seviye ${program.seviye}`}
                     </span>
                   </div>
-                  {program.description && (
-                    <p style={{ color: 'var(--color-text-secondary)', fontSize: '0.875rem', marginBottom: '1rem' }}>
-                      {program.description}
-                    </p>
-                  )}
                   <div style={{ display: 'flex', gap: '0.5rem', marginTop: 'auto' }}>
                     {isEnrolled ? (
                       <button

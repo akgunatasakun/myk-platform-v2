@@ -10,7 +10,20 @@ from typing import Optional
 from pydantic import BaseModel
 
 
-# ── Program ───────────────────────────────────────────────────────────────────
+# ── Quiz sorusu (AcademyLessonOut'tan önce tanımlanmalı — forward ref yok) ────
+
+class QuizQuestionOut(BaseModel):
+    """Quiz sorusu — correct_letter BULUNMAMALI (güvenlik kuralı)."""
+    id: uuid.UUID
+    sira: int
+    soru_metni: str
+    options: list[dict]  # [{"harf": "A", "metin": "..."}]
+    # correct_letter kasıtlı olarak dışarıda bırakıldı
+
+    model_config = {"from_attributes": True}
+
+
+# ── Ders adımı ────────────────────────────────────────────────────────────────
 
 class AcademyLessonStepOut(BaseModel):
     id: uuid.UUID
@@ -22,6 +35,8 @@ class AcademyLessonStepOut(BaseModel):
     model_config = {"from_attributes": True}
 
 
+# ── Ders detayı (quiz_questions dahil) ───────────────────────────────────────
+
 class AcademyLessonOut(BaseModel):
     id: uuid.UUID
     slug: str
@@ -31,19 +46,38 @@ class AcademyLessonOut(BaseModel):
     tahmini_sure_dk: Optional[int] = None
     sira: int
     steps: list[AcademyLessonStepOut] = []
+    quiz_questions: list[QuizQuestionOut] = []
 
     model_config = {"from_attributes": True}
 
+
+# ── Ders özeti (modül içinde) ─────────────────────────────────────────────────
+
+class AcademyLessonSummaryOut(BaseModel):
+    """Modül listesi için kısa ders bilgisi — quiz_questions dahil değil."""
+    id: uuid.UUID
+    slug: str
+    ad: str
+    ders_tipi: str
+    sira: int
+    tahmini_sure_dk: Optional[int] = None
+
+    model_config = {"from_attributes": True}
+
+
+# ── Modül ─────────────────────────────────────────────────────────────────────
 
 class AcademyModuleOut(BaseModel):
     id: uuid.UUID
     slug: str
     ad: str
     sira: int
-    lessons: list[AcademyLessonOut] = []
+    lessons: list[AcademyLessonSummaryOut] = []
 
     model_config = {"from_attributes": True}
 
+
+# ── Program ───────────────────────────────────────────────────────────────────
 
 class AcademyProgramOut(BaseModel):
     id: uuid.UUID
@@ -108,17 +142,6 @@ class ProgressOut(BaseModel):
 
 
 # ── Quiz ──────────────────────────────────────────────────────────────────────
-
-class QuizQuestionOut(BaseModel):
-    """Quiz sorusu — correct_letter BULUNMAMALI (güvenlik kuralı)."""
-    id: uuid.UUID
-    sira: int
-    soru_metni: str
-    options: list[dict]  # [{"harf": "A", "metin": "..."}]
-    # correct_letter kasıtlı olarak dışarıda bırakıldı
-
-    model_config = {"from_attributes": True}
-
 
 class QuizAnswerIn(BaseModel):
     question_id: uuid.UUID

@@ -244,7 +244,10 @@ async def get_lesson(
     """Global slug ile dersi ve adımlarını döndür."""
     result = await db.execute(
         select(AcademyLesson)
-        .options(selectinload(AcademyLesson.steps))
+        .options(
+            selectinload(AcademyLesson.steps),
+            selectinload(AcademyLesson.quiz_questions),
+        )
         .where(AcademyLesson.slug == slug, AcademyLesson.aktif.is_(True))
     )
     lesson = result.scalar_one_or_none()
@@ -347,7 +350,7 @@ async def heartbeat(
     progress.updated_at = now
 
     await db.flush()
-    return {"ok": True, "toplam_sure_sn": progress.toplam_sure_sn}
+    return {"ok": True, "toplam_sure_sn": progress.toplam_sure_sn, "yuzde": progress.yuzde}
 
 
 # ── 8. Progress durumu ────────────────────────────────────────────────────────

@@ -175,10 +175,10 @@ function QuizSection({ lessonId, questions, onPass }: QuizSectionProps) {
       for (const q of attempt.questions) {
         const secilen = answers[q.id]
         if (secilen) {
-          await academyApi.submitAnswer(attempt.attempt_id, q.id, secilen)
+          await academyApi.submitAnswer(attempt.attempt.id, q.id, secilen)
         }
       }
-      const res = await academyApi.finishQuiz(attempt.attempt_id)
+      const res = await academyApi.finishQuiz(attempt.attempt.id)
       setResult(res)
       if (res.gecti) onPass()
     } catch {
@@ -220,7 +220,7 @@ function QuizSection({ lessonId, questions, onPass }: QuizSectionProps) {
                   {idx + 1}. {q.soru_metni}
                 </p>
                 <div style={{ display: 'flex', flexDirection: 'column', gap: '0.4rem' }}>
-                  {Object.entries(q.secenekler).map(([harf, metin]) => (
+                  {q.options.map(({ harf, metin }) => (
                     <label
                       key={harf}
                       style={{
@@ -353,17 +353,17 @@ export default function LessonPage() {
   }, [slug])
 
   // knot_animation adımı var mı?
-  const knotStep = lesson?.steps.find((s) => s.step_type === 'knot_animation')
+  const knotStep = lesson?.steps.find((s) => s.tip === 'knot_animation')
   const knotData = knotStep?.data_json as { slug?: string; timeline_url?: string } | undefined
 
   return (
-    <AppShell title={lesson?.title ?? 'Ders'}>
+    <AppShell title={lesson?.ad ?? 'Ders'}>
       <div className="page-header">
         <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
           <button className="btn btn-ghost btn-sm" onClick={() => navigate(-1)}>
             ← Geri
           </button>
-          <h1 className="page-title" style={{ margin: 0 }}>{lesson?.title ?? '…'}</h1>
+          <h1 className="page-title" style={{ margin: 0 }}>{lesson?.ad ?? '…'}</h1>
           {tamamlandi && (
             <span className="badge badge-success" style={{ marginLeft: '0.5rem' }}>Tamamlandı ✓</span>
           )}
@@ -407,7 +407,7 @@ export default function LessonPage() {
 
           {/* Metin adımları */}
           {lesson.steps
-            .filter((s) => s.step_type !== 'knot_animation')
+            .filter((s) => s.tip !== 'knot_animation')
             .map((step) => (
               <div key={step.id} className="card" style={{ marginBottom: '1rem' }}>
                 <div className="card-body">

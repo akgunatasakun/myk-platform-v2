@@ -35,7 +35,7 @@ export const academyApi = {
     return apiClient.post(`/academy/lessons/${lessonId}/sessions`).then((r) => r.data)
   },
 
-  heartbeat(sessionId: string): Promise<{ sure_saniye: number; yuzde: number }> {
+  heartbeat(sessionId: string): Promise<{ ok: boolean; toplam_sure_sn: number; yuzde: number }> {
     return apiClient.post(`/academy/sessions/${sessionId}/heartbeat`).then((r) => r.data)
   },
 

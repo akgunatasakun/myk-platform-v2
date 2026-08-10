@@ -40,13 +40,13 @@ export default function ProgramPage() {
   }
 
   return (
-    <AppShell title={program?.title ?? 'Program'}>
+    <AppShell title={program?.ad ?? 'Program'}>
       <div className="page-header">
         <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
           <button className="btn btn-ghost btn-sm" onClick={() => navigate('/akademi')}>
             ← Geri
           </button>
-          <h1 className="page-title" style={{ margin: 0 }}>{program?.title ?? '…'}</h1>
+          <h1 className="page-title" style={{ margin: 0 }}>{program?.ad ?? '…'}</h1>
         </div>
       </div>
 
@@ -58,9 +58,9 @@ export default function ProgramPage() {
         </div>
       ) : program ? (
         <>
-          {program.description && (
+          {program.aciklama && (
             <p style={{ color: 'var(--color-text-secondary)', marginBottom: '1.5rem' }}>
-              {program.description}
+              {program.aciklama}
             </p>
           )}
 
@@ -78,7 +78,7 @@ export default function ProgramPage() {
           {program.modules.map((mod) => (
             <div key={mod.id} className="card" style={{ marginBottom: '1rem' }}>
               <div className="card-body">
-                <h3 className="card-title">{mod.title}</h3>
+                <h3 className="card-title">{mod.ad}</h3>
                 <ul style={{ listStyle: 'none', padding: 0, margin: 0 }}>
                   {mod.lessons.map((lesson) => (
                     <li key={lesson.id} style={{ padding: '0.5rem 0', borderBottom: '1px solid var(--color-border)' }}>
@@ -87,10 +87,10 @@ export default function ProgramPage() {
                         style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', textDecoration: 'none', color: 'var(--color-text)' }}
                       >
                         <span>🪢</span>
-                        <span>{lesson.title}</span>
-                        {lesson.sure_dakika && (
+                        <span>{lesson.ad}</span>
+                        {lesson.tahmini_sure_dk && (
                           <span style={{ marginLeft: 'auto', color: 'var(--color-text-secondary)', fontSize: '0.8rem' }}>
-                            {lesson.sure_dakika} dk
+                            {lesson.tahmini_sure_dk} dk
                           </span>
                         )}
                       </Link>
