@@ -13,6 +13,7 @@ if TYPE_CHECKING:
     from app.models.person_guardian import PersonGuardian
     from app.models.academy import AcademyEnrollment, AcademyProgress, AcademySession, AcademyQuizAttempt
     from app.models.training import TrainingEnrollment, TrainingAttendance
+    from app.models.payment import Payment
 
 
 class Person(Base):
@@ -92,6 +93,12 @@ class Person(Base):
     training_attendances: Mapped[List["TrainingAttendance"]] = relationship(
         foreign_keys="TrainingAttendance.person_id",
         back_populates="person",
+    )
+
+    # Payment ilişkileri
+    payments: Mapped[List["Payment"]] = relationship(
+        foreign_keys="Payment.person_id",
+        lazy="select",
     )
 
     def __repr__(self) -> str:

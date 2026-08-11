@@ -20,6 +20,14 @@ from app.models.academy import (
     AcademyQuizAnswer,
 )
 
+from app.models.training import (
+    TrainingCourse,
+    TrainingSession,
+    TrainingEnrollment,
+    TrainingAttendance,
+)
+from app.models.payment import Payment
+
 __all__ = [
     "Club",
     "User",
@@ -43,4 +51,9 @@ __all__ = [
     "AcademyQuizQuestion",
     "AcademyQuizAttempt",
     "AcademyQuizAnswer",
+    "TrainingCourse",
+    "TrainingSession",
+    "TrainingEnrollment",
+    "TrainingAttendance",
+    "Payment",
 ]

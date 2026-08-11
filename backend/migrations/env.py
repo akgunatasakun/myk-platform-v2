@@ -16,6 +16,8 @@ import app.models.audit           # noqa: F401
 import app.models.person          # noqa: F401
 import app.models.person_guardian # noqa: F401
 import app.models.academy         # noqa: F401
+import app.models.training        # noqa: F401
+import app.models.payment         # noqa: F401
 
 config = context.config
 
