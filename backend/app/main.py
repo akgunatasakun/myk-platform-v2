@@ -11,6 +11,7 @@ from app.api.v1.routers import health, auth, persons, dashboard, avatar, members
 from app.api.v1.routers.academy import router as academy_router
 from app.api.v1.routers.training import router as training_router
 from app.api.v1.routers.payments import router as payments_router
+from app.api.v1.routers.equipment import router as equipment_router
 from app.config import get_settings
 from app.core.security import get_current_user
 from app.core.tenant import get_club_id
@@ -77,6 +78,7 @@ app.include_router(public.router, prefix=API_PREFIX)
 app.include_router(academy_router, prefix=f"{API_PREFIX}/academy", tags=["academy"])
 app.include_router(training_router, prefix=API_PREFIX)
 app.include_router(payments_router, prefix=API_PREFIX)
+app.include_router(equipment_router, prefix=API_PREFIX)
 
 
 # ─── /me endpoint — inject correct dependency ─────────────────────────────────

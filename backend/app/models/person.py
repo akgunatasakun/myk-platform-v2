@@ -14,6 +14,7 @@ if TYPE_CHECKING:
     from app.models.academy import AcademyEnrollment, AcademyProgress, AcademySession, AcademyQuizAttempt
     from app.models.training import TrainingEnrollment, TrainingAttendance
     from app.models.payment import Payment
+    from app.models.equipment import Equipment
 
 
 class Person(Base):
@@ -98,6 +99,12 @@ class Person(Base):
     # Payment ilişkileri
     payments: Mapped[List["Payment"]] = relationship(
         foreign_keys="Payment.person_id",
+        lazy="select",
+    )
+
+    # Equipment zimmet ilişkisi
+    assigned_equipment: Mapped[List["Equipment"]] = relationship(
+        foreign_keys="Equipment.assigned_person_id",
         lazy="select",
     )
 

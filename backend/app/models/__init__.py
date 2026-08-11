@@ -27,6 +27,7 @@ from app.models.training import (
     TrainingAttendance,
 )
 from app.models.payment import Payment
+from app.models.equipment import Equipment, EquipmentMaintenanceRecord
 
 __all__ = [
     "Club",
@@ -56,4 +57,6 @@ __all__ = [
     "TrainingEnrollment",
     "TrainingAttendance",
     "Payment",
+    "Equipment",
+    "EquipmentMaintenanceRecord",
 ]
