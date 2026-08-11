@@ -13,6 +13,9 @@ import ProgramPage from '@/pages/akademi/ProgramPage'
 import LessonPage from '@/pages/akademi/LessonPage'
 import EquipmentPage from '@/pages/equipment/EquipmentPage'
 import EquipmentDetailPage from '@/pages/equipment/EquipmentDetailPage'
+import TrainingPage from '@/pages/training/TrainingPage'
+import TrainingDetailPage from '@/pages/training/TrainingDetailPage'
+import AttendancePage from '@/pages/training/AttendancePage'
 import ComingSoon from '@/pages/ComingSoon'
 import Forbidden from '@/pages/Forbidden'
 import NotFound from '@/pages/NotFound'
@@ -170,7 +173,15 @@ export default function App() {
           path="/egitimler"
           element={
             <ProtectedRoute>
-              <ComingSoon />
+              <TrainingPage />
+            </ProtectedRoute>
+          }
+        />
+        <Route
+          path="/egitimler/:id"
+          element={
+            <ProtectedRoute>
+              <TrainingDetailPage />
             </ProtectedRoute>
           }
         />
@@ -186,7 +197,7 @@ export default function App() {
           path="/yoklama"
           element={
             <ProtectedRoute>
-              <ComingSoon />
+              <AttendancePage />
             </ProtectedRoute>
           }
         />

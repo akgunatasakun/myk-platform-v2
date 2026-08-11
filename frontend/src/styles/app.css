@@ -644,6 +644,11 @@ html, body {
 .badge-hasarli    { background-color: #fee2e2; color: #b91c1c; }
 .badge-hizmetdisi { background-color: #f1f5f9; color: #64748b; }
 
+/* Eğitim (Training) durum badge'leri */
+.badge-planlandi  { background-color: #eff6ff; color: #1d4ed8; }
+.badge-tamamlandi { background-color: #f0fdf4; color: #15803d; border: 1px solid #bbf7d0; }
+.badge-iptal      { background-color: #fff1f2; color: #be123c; }
+
 /* Üyelik başvurusu durum badge'leri */
 .badge-status-draft     { background-color: #f3f4f6; color: #6b7280; }
 .badge-status-submitted { background-color: #fef3c7; color: #92400e; border: 1px solid #fde68a; }
