@@ -1,6 +1,11 @@
 import apiClient from './client';
 import type { Person, PersonCreate, PersonListResponse, PersonUpdate } from '@/types/person';
-import type { PersonGuardian, PersonGuardianCreate, PersonGuardianUpdate } from '@/types/guardian';
+import type {
+  GuardianAthlete,
+  PersonGuardian,
+  PersonGuardianCreate,
+  PersonGuardianUpdate,
+} from '@/types/guardian';
 
 export interface PersonListParams {
   skip?: number;
@@ -21,6 +26,10 @@ export const personsApi = {
     apiClient.patch<Person>(`/persons/${id}`, data),
   delete: (id: string) =>
     apiClient.delete(`/persons/${id}`),
+
+  // ── Guardian reverse lookup ───────────────────────────────────────────────
+  getAthletes: (guardianPersonId: string) =>
+    apiClient.get<GuardianAthlete[]>(`/persons/${guardianPersonId}/athletes`),
 
   // ── Guardian CRUD ─────────────────────────────────────────────────────────
   getGuardians: (personId: string) =>

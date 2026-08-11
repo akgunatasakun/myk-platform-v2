@@ -57,3 +57,21 @@ class PersonGuardianOut(BaseModel):
     guardian: PersonMiniOut
 
     model_config = {"from_attributes": True}
+
+
+class GuardianAthleteOut(BaseModel):
+    """Velinin bağlı olduğu sporcu ilişkisi API yanıtı."""
+
+    id: uuid.UUID
+    club_id: uuid.UUID
+    athlete_person_id: uuid.UUID
+    guardian_person_id: uuid.UUID
+    relationship_type: Optional[str]
+    is_primary: bool
+    can_pickup: bool
+    can_receive_notifications: bool
+    created_at: datetime
+    updated_at: datetime
+    athlete: PersonMiniOut
+
+    model_config = {"from_attributes": True}

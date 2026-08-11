@@ -19,6 +19,7 @@ from app.models.person_guardian import PersonGuardian
 from app.schemas.auth import TokenPayload
 from app.schemas.person import PersonCreate, PersonListOut, PersonOut, PersonUpdate
 from app.schemas.person_guardian import (
+    GuardianAthleteOut,
     PersonGuardianCreate,
     PersonGuardianOut,
     PersonGuardianUpdate,
@@ -409,6 +410,40 @@ async def list_guardians(
     )
     links = result.scalars().all()
     return [PersonGuardianOut.model_validate(lnk) for lnk in links]
+
+
+
+@router.get(
+    "/{person_id}/athletes",
+    response_model=List[GuardianAthleteOut],
+    summary="Velinin bağlı olduğu sporcuları listele",
+)
+async def list_guardian_athletes(
+    person_id: uuid.UUID,
+    club_id: uuid.UUID = Depends(get_club_id),
+    _current_user: TokenPayload = Depends(get_current_user),
+    _perm: None = Depends(require_permission("kisi:read")),
+    db: AsyncSession = Depends(get_db),
+) -> List[GuardianAthleteOut]:
+    # Veli kişisi gerçekten bu tenant içinde mevcut mu?
+    await _get_person_for_club(person_id, club_id, db)
+
+    result = await db.execute(
+        select(PersonGuardian)
+        .options(selectinload(PersonGuardian.athlete))
+        .where(
+            PersonGuardian.guardian_person_id == person_id,
+            PersonGuardian.club_id == club_id,
+        )
+        .order_by(
+            PersonGuardian.is_primary.desc(),
+            PersonGuardian.created_at,
+        )
+    )
+    links = result.scalars().all()
+
+    return [GuardianAthleteOut.model_validate(link) for link in links]
+
 
 
 @router.post(

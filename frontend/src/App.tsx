@@ -20,6 +20,8 @@ import PaymentsPage from '@/pages/payments/PaymentsPage'
 import ReportsPage from '@/pages/payments/ReportsPage'
 import AthletesPage from '@/pages/athletes/AthletesPage'
 import AthleteDetailPage from '@/pages/athletes/AthleteDetailPage'
+import GuardiansPage from '@/pages/guardians/GuardiansPage'
+import GuardianDetailPage from '@/pages/guardians/GuardianDetailPage'
 import ComingSoon from '@/pages/ComingSoon'
 import Forbidden from '@/pages/Forbidden'
 import NotFound from '@/pages/NotFound'
@@ -137,7 +139,15 @@ export default function App() {
           path="/veliler"
           element={
             <ProtectedRoute>
-              <ComingSoon />
+              <GuardiansPage />
+            </ProtectedRoute>
+          }
+        />
+        <Route
+          path="/veliler/:id"
+          element={
+            <ProtectedRoute>
+              <GuardianDetailPage />
             </ProtectedRoute>
           }
         />
