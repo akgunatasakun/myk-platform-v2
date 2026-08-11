@@ -22,6 +22,8 @@ import AthletesPage from '@/pages/athletes/AthletesPage'
 import AthleteDetailPage from '@/pages/athletes/AthleteDetailPage'
 import GuardiansPage from '@/pages/guardians/GuardiansPage'
 import GuardianDetailPage from '@/pages/guardians/GuardianDetailPage'
+import MembersPage from '@/pages/members/MembersPage'
+import MemberDetailPage from '@/pages/members/MemberDetailPage'
 import ComingSoon from '@/pages/ComingSoon'
 import Forbidden from '@/pages/Forbidden'
 import NotFound from '@/pages/NotFound'
@@ -155,7 +157,15 @@ export default function App() {
           path="/uyeler"
           element={
             <ProtectedRoute>
-              <ComingSoon />
+              <MembersPage />
+            </ProtectedRoute>
+          }
+        />
+        <Route
+          path="/uyeler/:id"
+          element={
+            <ProtectedRoute>
+              <MemberDetailPage />
             </ProtectedRoute>
           }
         />

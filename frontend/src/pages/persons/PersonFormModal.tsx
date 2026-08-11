@@ -24,6 +24,10 @@ interface Props {
   onClose: () => void
   person?: Person
   onSaved: (p: Person) => void
+  /** Modal başlığını geçersiz kıl */
+  title?: string
+  /** Bu rol her zaman role_codes listesine eklenir (kullanıcı kaldıramaz) */
+  forcedRole?: PersonRoleCode
 }
 
 interface FormData {
@@ -76,7 +80,7 @@ function personToForm(p: Person): FormData {
   }
 }
 
-export default function PersonFormModal({ isOpen, onClose, person, onSaved }: Props) {
+export default function PersonFormModal({ isOpen, onClose, person, onSaved, title, forcedRole }: Props) {
   const [form, setForm] = useState<FormData>(EMPTY_FORM)
   const [errors, setErrors] = useState<Partial<Record<keyof FormData, string>>>({})
   const [apiError, setApiError] = useState<string | null>(null)
@@ -86,12 +90,16 @@ export default function PersonFormModal({ isOpen, onClose, person, onSaved }: Pr
   useEffect(() => {
     if (isOpen) {
       const initial = person ? personToForm(person) : EMPTY_FORM
+      // forcedRole varsa ve listede yoksa ekle
+      if (forcedRole && !initial.role_codes.includes(forcedRole)) {
+        initial.role_codes = [...initial.role_codes, forcedRole]
+      }
       setForm(initial)
       setErrors({})
       setApiError(null)
       isDirty.current = false
     }
-  }, [isOpen, person])
+  }, [isOpen, person, forcedRole])
 
   const handleChange = (
     e: React.ChangeEvent<HTMLInputElement | HTMLSelectElement | HTMLTextAreaElement>
@@ -103,6 +111,8 @@ export default function PersonFormModal({ isOpen, onClose, person, onSaved }: Pr
   }
 
   const handleRoleToggle = (code: PersonRoleCode) => {
+    // forcedRole kaldırılamaz
+    if (code === forcedRole) return
     isDirty.current = true
     setForm((prev) => ({
       ...prev,
@@ -186,7 +196,7 @@ export default function PersonFormModal({ isOpen, onClose, person, onSaved }: Pr
       <div className="modal-box">
         <div className="modal-header">
           <h2 className="modal-title">
-            {person ? 'Kişiyi Düzenle' : 'Yeni Kişi Ekle'}
+            {title ?? (person ? 'Kişiyi Düzenle' : 'Yeni Kişi Ekle')}
           </h2>
           <button className="modal-close" onClick={handleClose} type="button">
             ✕
@@ -380,16 +390,26 @@ export default function PersonFormModal({ isOpen, onClose, person, onSaved }: Pr
             <div className="form-group">
               <label className="form-label">Roller</label>
               <div className="form-checkboxes">
-                {ROLE_OPTIONS.map((r) => (
-                  <label key={r.code} className="form-checkbox-item">
-                    <input
-                      type="checkbox"
-                      checked={form.role_codes.includes(r.code)}
-                      onChange={() => handleRoleToggle(r.code)}
-                    />
-                    {r.label}
-                  </label>
-                ))}
+                {ROLE_OPTIONS.map((r) => {
+                  const locked = r.code === forcedRole
+                  return (
+                    <label
+                      key={r.code}
+                      className="form-checkbox-item"
+                      style={locked ? { opacity: 0.6, cursor: 'not-allowed' } : undefined}
+                      title={locked ? 'Bu rol bu ekrandan kaldırılamaz' : undefined}
+                    >
+                      <input
+                        type="checkbox"
+                        checked={form.role_codes.includes(r.code)}
+                        onChange={() => handleRoleToggle(r.code)}
+                        disabled={locked}
+                      />
+                      {r.label}
+                      {locked && <span style={{ fontSize: 11, marginLeft: 4, color: 'var(--color-text-muted)' }}>(zorunlu)</span>}
+                    </label>
+                  )
+                })}
               </div>
             </div>
           </div>
