@@ -26,7 +26,7 @@ import MembersPage from '@/pages/members/MembersPage'
 import MemberDetailPage from '@/pages/members/MemberDetailPage'
 import CoachesPage from '@/pages/coaches/CoachesPage'
 import CoachDetailPage from '@/pages/coaches/CoachDetailPage'
-import ComingSoon from '@/pages/ComingSoon'
+import SettingsPage from '@/pages/settings/SettingsPage'
 import Forbidden from '@/pages/Forbidden'
 import NotFound from '@/pages/NotFound'
 
@@ -271,7 +271,7 @@ export default function App() {
           path="/ayarlar"
           element={
             <ProtectedRoute>
-              <ComingSoon />
+              <SettingsPage />
             </ProtectedRoute>
           }
         />
