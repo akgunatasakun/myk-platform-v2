@@ -16,6 +16,8 @@ import EquipmentDetailPage from '@/pages/equipment/EquipmentDetailPage'
 import TrainingPage from '@/pages/training/TrainingPage'
 import TrainingDetailPage from '@/pages/training/TrainingDetailPage'
 import AttendancePage from '@/pages/training/AttendancePage'
+import PaymentsPage from '@/pages/payments/PaymentsPage'
+import ReportsPage from '@/pages/payments/ReportsPage'
 import ComingSoon from '@/pages/ComingSoon'
 import Forbidden from '@/pages/Forbidden'
 import NotFound from '@/pages/NotFound'
@@ -221,7 +223,7 @@ export default function App() {
           path="/odemeler"
           element={
             <ProtectedRoute>
-              <ComingSoon />
+              <PaymentsPage />
             </ProtectedRoute>
           }
         />
@@ -229,7 +231,7 @@ export default function App() {
           path="/raporlar"
           element={
             <ProtectedRoute>
-              <ComingSoon />
+              <ReportsPage />
             </ProtectedRoute>
           }
         />
