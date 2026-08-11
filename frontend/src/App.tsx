@@ -11,6 +11,8 @@ import ChangePasswordPage from '@/pages/change-password/ChangePasswordPage'
 import AkademiPage from '@/pages/akademi/AkademiPage'
 import ProgramPage from '@/pages/akademi/ProgramPage'
 import LessonPage from '@/pages/akademi/LessonPage'
+import EquipmentPage from '@/pages/equipment/EquipmentPage'
+import EquipmentDetailPage from '@/pages/equipment/EquipmentDetailPage'
 import ComingSoon from '@/pages/ComingSoon'
 import Forbidden from '@/pages/Forbidden'
 import NotFound from '@/pages/NotFound'
@@ -192,7 +194,15 @@ export default function App() {
           path="/tekneler"
           element={
             <ProtectedRoute>
-              <ComingSoon />
+              <EquipmentPage />
+            </ProtectedRoute>
+          }
+        />
+        <Route
+          path="/tekneler/:id"
+          element={
+            <ProtectedRoute>
+              <EquipmentDetailPage />
             </ProtectedRoute>
           }
         />

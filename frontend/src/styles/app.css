@@ -635,9 +635,14 @@ html, body {
 .badge-antrenor { background-color: #ede9fe; color: #6d28d9; }
 .badge-personel { background-color: #fee2e2; color: #b91c1c; }
 .badge-misafir { background-color: #f3f4f6; color: #374151; }
-.badge-aktif { background-color: #dcfce7; color: #15803d; }
-.badge-pasif { background-color: #fee2e2; color: #b91c1c; }
-.badge-default { background-color: #f3f4f6; color: #374151; }
+.badge-aktif      { background-color: #dcfce7; color: #15803d; }
+.badge-pasif      { background-color: #fee2e2; color: #b91c1c; }
+.badge-default    { background-color: #f3f4f6; color: #374151; }
+
+/* Ekipman durum badge'leri */
+.badge-bakimda    { background-color: #fef3c7; color: #92400e; }
+.badge-hasarli    { background-color: #fee2e2; color: #b91c1c; }
+.badge-hizmetdisi { background-color: #f1f5f9; color: #64748b; }
 
 /* Üyelik başvurusu durum badge'leri */
 .badge-status-draft     { background-color: #f3f4f6; color: #6b7280; }
