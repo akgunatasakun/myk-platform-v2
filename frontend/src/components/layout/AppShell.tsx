@@ -19,7 +19,6 @@ const NAV_ITEMS: NavItem[] = [
   { path: '/antrenorler', label: 'Antrenörler', icon: '🎯' },
   { path: '/akademi', label: 'Deniz Akademisi', icon: '🪢' },
   { path: '/egitimler', label: 'Eğitimler', icon: '📚' },
-  { path: '/gruplar', label: 'Gruplar', icon: '🗂️' },
   { path: '/yoklama', label: 'Yoklama', icon: '✅' },
   { path: '/tekneler', label: 'Ekipmanlar', icon: '🛟' },
   { path: '/odemeler', label: 'Ödemeler', icon: '💳' },

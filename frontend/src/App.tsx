@@ -228,14 +228,6 @@ export default function App() {
           }
         />
         <Route
-          path="/gruplar"
-          element={
-            <ProtectedRoute>
-              <ComingSoon />
-            </ProtectedRoute>
-          }
-        />
-        <Route
           path="/yoklama"
           element={
             <ProtectedRoute>
