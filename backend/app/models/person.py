@@ -15,6 +15,7 @@ if TYPE_CHECKING:
     from app.models.training import TrainingEnrollment, TrainingAttendance
     from app.models.payment import Payment
     from app.models.equipment import Equipment
+    from app.models.athlete_profile import AthleteProfile
 
 
 class Person(Base):
@@ -106,6 +107,14 @@ class Person(Base):
     assigned_equipment: Mapped[List["Equipment"]] = relationship(
         foreign_keys="Equipment.assigned_person_id",
         lazy="select",
+    )
+
+    # Sporcu profili (1:1, opsiyonel)
+    athlete_profile: Mapped[Optional["AthleteProfile"]] = relationship(
+        back_populates="person",
+        uselist=False,
+        lazy="selectin",
+        cascade="all, delete-orphan",
     )
 
     def __repr__(self) -> str:

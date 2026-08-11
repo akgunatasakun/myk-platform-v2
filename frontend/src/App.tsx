@@ -18,6 +18,8 @@ import TrainingDetailPage from '@/pages/training/TrainingDetailPage'
 import AttendancePage from '@/pages/training/AttendancePage'
 import PaymentsPage from '@/pages/payments/PaymentsPage'
 import ReportsPage from '@/pages/payments/ReportsPage'
+import AthletesPage from '@/pages/athletes/AthletesPage'
+import AthleteDetailPage from '@/pages/athletes/AthleteDetailPage'
 import ComingSoon from '@/pages/ComingSoon'
 import Forbidden from '@/pages/Forbidden'
 import NotFound from '@/pages/NotFound'
@@ -119,7 +121,15 @@ export default function App() {
           path="/sporcular"
           element={
             <ProtectedRoute>
-              <ComingSoon />
+              <AthletesPage />
+            </ProtectedRoute>
+          }
+        />
+        <Route
+          path="/sporcular/:id"
+          element={
+            <ProtectedRoute>
+              <AthleteDetailPage />
             </ProtectedRoute>
           }
         />
