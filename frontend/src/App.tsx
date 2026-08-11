@@ -24,6 +24,8 @@ import GuardiansPage from '@/pages/guardians/GuardiansPage'
 import GuardianDetailPage from '@/pages/guardians/GuardianDetailPage'
 import MembersPage from '@/pages/members/MembersPage'
 import MemberDetailPage from '@/pages/members/MemberDetailPage'
+import CoachesPage from '@/pages/coaches/CoachesPage'
+import CoachDetailPage from '@/pages/coaches/CoachDetailPage'
 import ComingSoon from '@/pages/ComingSoon'
 import Forbidden from '@/pages/Forbidden'
 import NotFound from '@/pages/NotFound'
@@ -173,7 +175,15 @@ export default function App() {
           path="/antrenorler"
           element={
             <ProtectedRoute>
-              <ComingSoon />
+              <CoachesPage />
+            </ProtectedRoute>
+          }
+        />
+        <Route
+          path="/antrenorler/:id"
+          element={
+            <ProtectedRoute>
+              <CoachDetailPage />
             </ProtectedRoute>
           }
         />
