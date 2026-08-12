@@ -378,3 +378,102 @@ async def run_all_scans(db: AsyncSession) -> dict[str, int]:
         logger.exception("Nightly scan başarısız, rollback yapıldı")
         raise
     return results
+
+
+# ─────────────────────────────────────────────────────────────────────────────
+# 3. E-posta dispatch (Sprint 13)
+# ─────────────────────────────────────────────────────────────────────────────
+
+async def dispatch_pending_events(db: AsyncSession) -> dict[str, int]:
+    """Bugün oluşturulmuş pending event'leri kulüp e-postasına gönder.
+
+    Yalnızca date(created_at) = bugün olan event'ler işlenir — eski birikmiş
+    event'lerin ilk deploy'da toplu gönderilmesini önler.
+
+    status geçişleri:
+      pending → done    (e-posta başarıyla gönderildi / log modunda yazıldı)
+      pending → failed  (gönderim hatası veya kulüp e-postası tanımsız)
+
+    Dönen dict: {"dispatched": N, "failed": N, "skipped": N}
+    """
+    from datetime import timezone as _tz
+
+    from sqlalchemy import and_, cast, func as sa_func
+    from sqlalchemy import Date as SaDate
+
+    from app.models.club import Club
+    from app.services.email_service import dispatch_domain_event_email
+
+    today = date.today()
+    results: dict[str, int] = {"dispatched": 0, "failed": 0, "skipped": 0}
+
+    # Bugün oluşturulan, henüz işlenmemiş event'leri al
+    stmt = (
+        select(DomainEvent)
+        .where(
+            DomainEvent.status == "pending",
+            DomainEvent.processed_at.is_(None),
+            cast(DomainEvent.created_at, SaDate) == today,
+        )
+        .order_by(DomainEvent.created_at)
+        .limit(200)  # tek seferinde max 200 gönderim
+    )
+    events = (await db.execute(stmt)).scalars().all()
+
+    if not events:
+        logger.info("dispatch_pending_events: gönderilek event yok")
+        return results
+
+    # Club kayıtlarını önbelleğe al (aynı club için tekrar sorgu yapmamak için)
+    club_email_cache: dict[str, Optional[str]] = {}
+
+    for event in events:
+        club_id_str = str(event.club_id)
+
+        if club_id_str not in club_email_cache:
+            club = await db.get(Club, event.club_id)
+            if club:
+                email = (club.settings or {}).get("email") or ""
+                club_email_cache[club_id_str] = email.strip() or None
+            else:
+                club_email_cache[club_id_str] = None
+
+        to_email = club_email_cache[club_id_str]
+
+        if not to_email:
+            logger.warning(
+                "dispatch: kulüp e-postası tanımsız, event atlandı: %s club_id=%s",
+                event.event_type, club_id_str,
+            )
+            event.status = "failed"
+            event.processed_at = datetime.now(tz=timezone.utc)
+            results["failed"] += 1
+            continue
+
+        try:
+            await dispatch_domain_event_email(event, to_email)
+            event.status = "done"
+            event.processed_at = datetime.now(tz=timezone.utc)
+            results["dispatched"] += 1
+        except Exception:
+            logger.exception(
+                "dispatch: e-posta gönderilemedi event=%s to=%s",
+                event.event_type, to_email,
+            )
+            event.status = "failed"
+            event.processed_at = datetime.now(tz=timezone.utc)
+            results["failed"] += 1
+
+    try:
+        await db.commit()
+    except Exception:
+        await db.rollback()
+        logger.exception("dispatch_pending_events: commit başarısız")
+        raise
+
+    total = results["dispatched"] + results["failed"]
+    logger.info(
+        "dispatch_pending_events tamamlandı: %d gönderildi, %d başarısız, %d atlandı",
+        results["dispatched"], results["failed"], results["skipped"],
+    )
+    return results

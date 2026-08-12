@@ -4,8 +4,11 @@ Endpoint'ler:
   GET  /notifications              → son 50 event (unread önce, sonra read)
   GET  /notifications/unread-count → okunmamış badge sayısı
   POST /notifications/{id}/read   → tek event okundu işaretle
+  POST /notifications/read-all    → tüm eventleri okundu işaretle
+  POST /notifications/dispatch-now → bugünkü pending eventleri e-postayla gönder (admin)
 
 Yetkilendirme: tüm endpoint'ler `kulup:read` gerektirir.
+dispatch-now: yalnızca `kulup_yonetici` veya `super_admin` rolü.
 
 MVP notu: acknowledged_at kulüp seviyesindedir — aynı bildirimi gören
 tüm admin kullanıcılar için tek seferdir. Gelecekte per-user okuma
@@ -154,3 +157,49 @@ async def mark_all_as_read(
         .values(acknowledged_at=now)
     )
     await db.commit()
+
+
+# ── Dispatch (Sprint 13) ──────────────────────────────────────────────────────
+
+class DispatchResultOut(BaseModel):
+    dispatched: int
+    failed: int
+    skipped: int
+    message: str
+
+
+_DISPATCH_ROLES = {"super_admin", "kulup_yonetici"}
+
+
+@router.post("/dispatch-now", response_model=DispatchResultOut)
+async def dispatch_now(
+    club_id: uuid.UUID = Depends(get_club_id),
+    current_user: TokenPayload = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db),
+) -> DispatchResultOut:
+    """Bugünkü pending event'leri kulüp e-postasına gönder (manuel tetik).
+
+    Yalnızca super_admin ve kulup_yonetici rolü kullanabilir.
+    Nightly job ile aynı fonksiyonu çağırır; idempotent (processed_at dolu olanlar atlanır).
+    """
+    if current_user.role not in _DISPATCH_ROLES:
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Bu işlem için kulup_yonetici veya super_admin yetkisi gerekiyor.",
+        )
+
+    from app.services.event_service import dispatch_pending_events
+
+    results = await dispatch_pending_events(db)
+    total = results["dispatched"] + results["failed"]
+    msg = (
+        f"{results['dispatched']} e-posta gönderildi"
+        if total > 0
+        else "Gönderilek pending event bulunamadı"
+    )
+    return DispatchResultOut(
+        dispatched=results["dispatched"],
+        failed=results["failed"],
+        skipped=results["skipped"],
+        message=msg,
+    )

@@ -92,13 +92,44 @@ async def nightly_event_scan() -> None:
     logger.info("Nightly event scan bitti")
 
 
+async def email_dispatch_job() -> None:
+    """Bugün oluşturulan pending event'leri kulüp e-postasına gönder.
+
+    Çağrı zinciri: APScheduler (02:05) → bu fonksiyon → event_service.dispatch_pending_events()
+    Scan'den 5 dakika sonra çalışır; yeni event'lerin commit edilmesi için yeterli süre.
+    """
+    from app.database import AsyncSessionLocal
+    from app.services.event_service import dispatch_pending_events
+
+    logger.info("Email dispatch job başladı")
+    async with AsyncSessionLocal() as db:
+        locked = await _try_advisory_lock(db)
+        if not locked:
+            logger.info("Email dispatch: advisory lock alınamadı, atlanıyor")
+            return
+        try:
+            results = await dispatch_pending_events(db)
+            logger.info(
+                "Email dispatch tamamlandı: %d gönderildi, %d başarısız",
+                results.get("dispatched", 0),
+                results.get("failed", 0),
+            )
+        except Exception:
+            logger.exception("Email dispatch job başarısız")
+        finally:
+            await _release_advisory_lock(db)
+
+    logger.info("Email dispatch job bitti")
+
+
 def setup_scheduler() -> AsyncIOScheduler:
     """Scheduler'ı yapılandır ve döndür (henüz başlatma)."""
     sched = get_scheduler()
 
-    # Mevcut job varsa kaldır (hot-reload güvenliği)
-    if sched.get_job("nightly_scan"):
-        sched.remove_job("nightly_scan")
+    # Mevcut jobları kaldır (hot-reload güvenliği)
+    for job_id in ("nightly_scan", "email_dispatch"):
+        if sched.get_job(job_id):
+            sched.remove_job(job_id)
 
     sched.add_job(
         nightly_event_scan,
@@ -107,10 +138,25 @@ def setup_scheduler() -> AsyncIOScheduler:
         minute=0,
         id="nightly_scan",
         name="Nightly Domain Event Scanner",
-        misfire_grace_time=3600,  # 1 saat geç çalışmaya izin ver
-        coalesce=True,            # birden fazla gecikme birleştir
+        misfire_grace_time=3600,
+        coalesce=True,
         max_instances=1,
     )
 
-    logger.info("APScheduler yapılandırıldı (nightly_scan 02:00 Europe/Istanbul)")
+    sched.add_job(
+        email_dispatch_job,
+        trigger="cron",
+        hour=2,
+        minute=5,
+        id="email_dispatch",
+        name="Email Dispatch for Domain Events",
+        misfire_grace_time=3600,
+        coalesce=True,
+        max_instances=1,
+    )
+
+    logger.info(
+        "APScheduler yapılandırıldı "
+        "(nightly_scan 02:00, email_dispatch 02:05 Europe/Istanbul)"
+    )
     return sched

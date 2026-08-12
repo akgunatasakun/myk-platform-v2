@@ -2,13 +2,20 @@
 
 Config'de SMTP_HOST boş bırakılırsa e-posta sessizce loglanır (dev/test modu).
 Production'da /etc/myk/production.env üzerinden SMTP_ değişkenleri set edilmelidir.
+
+Sprint 13 eki:
+  dispatch_domain_event_email()  — DomainEvent'e göre şablon seç ve gönder.
+  _build_event_email()           — 7 event tipi için konu + HTML üretir.
 """
 from __future__ import annotations
 
 import logging
 from email.mime.multipart import MIMEMultipart
 from email.mime.text import MIMEText
-from typing import Optional
+from typing import TYPE_CHECKING, Optional, Tuple
+
+if TYPE_CHECKING:
+    from app.models.events import DomainEvent
 
 logger = logging.getLogger(__name__)
 
@@ -150,4 +157,174 @@ async def send_password_reset_email(
     </body>
     </html>
     """
+    await _send(subject, to_email, html)
+
+
+# ── Domain Event Dispatch (Sprint 13) ─────────────────────────────────────────
+
+# Ortak e-posta şablonu kapsayıcısı
+_BASE_STYLE = (
+    "font-family:Arial,sans-serif;max-width:600px;margin:0 auto;padding:20px;"
+)
+_HEADER = '<h2 style="color:#1a5276;">Mersin Yelken Kulübü</h2>'
+_FOOTER = (
+    '<hr><p style="font-size:12px;color:#666;">'
+    "Mersin Yelken Yat ve Su Sporları Kulübü<br>"
+    "Bu e-posta otomatik olarak gönderilmiştir.</p>"
+)
+
+
+def _wrap(body: str) -> str:
+    return (
+        f'<!DOCTYPE html><html lang="tr">'
+        f'<body style="{_BASE_STYLE}">'
+        f"{_HEADER}{body}{_FOOTER}"
+        f"</body></html>"
+    )
+
+
+def _days_badge(days: int) -> str:
+    if days < 0:
+        color = "#c0392b"
+        text = f"{abs(days)} gün geçti"
+    elif days == 0:
+        color = "#c0392b"
+        text = "Bugün!"
+    elif days <= 7:
+        color = "#e67e22"
+        text = f"{days} gün kaldı"
+    else:
+        color = "#f39c12"
+        text = f"{days} gün kaldı"
+    return (
+        f'<span style="background:{color};color:#fff;padding:2px 8px;'
+        f'border-radius:4px;font-weight:bold;">{text}</span>'
+    )
+
+
+def _build_event_email(event: "DomainEvent") -> Tuple[str, str]:
+    """Event tipine göre (konu, html) döndürür.
+
+    Bilinmeyen event tipi için genel şablon kullanılır.
+    """
+    p: dict = event.payload or {}
+    et = event.event_type
+
+    # ── payment.overdue ────────────────────────────────────────────────────
+    if et == "payment.overdue":
+        due = p.get("due_date", "—")
+        amount = p.get("amount", "—")
+        ptype = p.get("payment_type", "")
+        subject = f"⚠️ Gecikmiş Ödeme — {due}"
+        body = (
+            f"<h3>Gecikmiş Ödeme Uyarısı</h3>"
+            f"<p>Aşağıdaki ödeme vadesi geçmiş durumda:</p>"
+            f"<table style='border-collapse:collapse;width:100%;'>"
+            f"<tr><td style='padding:6px;font-weight:bold;'>Tutar</td>"
+            f"<td style='padding:6px;'>{amount} TL</td></tr>"
+            f"<tr><td style='padding:6px;font-weight:bold;'>Vade Tarihi</td>"
+            f"<td style='padding:6px;'>{due}</td></tr>"
+            f"<tr><td style='padding:6px;font-weight:bold;'>Tür</td>"
+            f"<td style='padding:6px;'>{ptype}</td></tr>"
+            f"</table>"
+        )
+        return subject, _wrap(body)
+
+    # ── equipment.maintenance.due ──────────────────────────────────────────
+    if et == "equipment.maintenance.due":
+        name = p.get("name", "—")
+        mdate = p.get("next_maintenance_date", "—")
+        days = p.get("days_remaining", 0)
+        subject = f"🔧 Bakım Zamanı — {name}"
+        body = (
+            f"<h3>Ekipman Bakım Hatırlatması</h3>"
+            f"<p><strong>{name}</strong> için bakım tarihi yaklaşıyor. "
+            f"{_days_badge(days)}</p>"
+            f"<p><strong>Planlanan Bakım Tarihi:</strong> {mdate}</p>"
+        )
+        return subject, _wrap(body)
+
+    # ── equipment.insurance.expiring_soon ─────────────────────────────────
+    if et == "equipment.insurance.expiring_soon":
+        name = p.get("name", "—")
+        edate = p.get("insurance_expiry_date", "—")
+        days = p.get("days_remaining", 0)
+        subject = f"📋 Sigorta Bitiyor — {name}"
+        body = (
+            f"<h3>Ekipman Sigorta Bitiş Uyarısı</h3>"
+            f"<p><strong>{name}</strong> sigortası bitiyor. "
+            f"{_days_badge(days)}</p>"
+            f"<p><strong>Sigorta Bitiş Tarihi:</strong> {edate}</p>"
+        )
+        return subject, _wrap(body)
+
+    # ── athlete.license.expiring_soon ─────────────────────────────────────
+    if et == "athlete.license.expiring_soon":
+        edate = p.get("expiry_date", "—")
+        days = p.get("days_remaining", 0)
+        subject = f"🏅 Sporcu Lisansı Bitiyor — {edate}"
+        body = (
+            f"<h3>Sporcu Lisansı Bitiş Uyarısı</h3>"
+            f"<p>Bir sporcunun lisansı bitiyor. {_days_badge(days)}</p>"
+            f"<p><strong>Bitiş Tarihi:</strong> {edate}</p>"
+        )
+        return subject, _wrap(body)
+
+    # ── athlete.visa.expiring_soon ────────────────────────────────────────
+    if et == "athlete.visa.expiring_soon":
+        edate = p.get("expiry_date", "—")
+        days = p.get("days_remaining", 0)
+        subject = f"🛂 Sporcu Vizesi Bitiyor — {edate}"
+        body = (
+            f"<h3>Sporcu Vize Bitiş Uyarısı</h3>"
+            f"<p>Bir sporcunun vizesi bitiyor. {_days_badge(days)}</p>"
+            f"<p><strong>Bitiş Tarihi:</strong> {edate}</p>"
+        )
+        return subject, _wrap(body)
+
+    # ── athlete.health_report.expiring_soon ───────────────────────────────
+    if et == "athlete.health_report.expiring_soon":
+        edate = p.get("expiry_date", "—")
+        days = p.get("days_remaining", 0)
+        subject = f"🏥 Sağlık Raporu Bitiyor — {edate}"
+        body = (
+            f"<h3>Sporcu Sağlık Raporu Bitiş Uyarısı</h3>"
+            f"<p>Bir sporcunun sağlık raporu bitiyor. {_days_badge(days)}</p>"
+            f"<p><strong>Bitiş Tarihi:</strong> {edate}</p>"
+        )
+        return subject, _wrap(body)
+
+    # ── training.session.starts_tomorrow ──────────────────────────────────
+    if et == "training.session.starts_tomorrow":
+        course = p.get("course_name", "—")
+        sdate = p.get("session_date", "—")
+        stime = p.get("start_time", "")
+        time_str = f" — {stime}" if stime else ""
+        subject = f"📚 Yarın Eğitim Var — {course}"
+        body = (
+            f"<h3>Yarınki Eğitim Hatırlatması</h3>"
+            f"<p><strong>{course}</strong> eğitim oturumu yarın gerçekleşiyor.</p>"
+            f"<p><strong>Tarih:</strong> {sdate}{time_str}</p>"
+        )
+        return subject, _wrap(body)
+
+    # ── Genel / bilinmeyen event tipi ─────────────────────────────────────
+    subject = f"MYK Bildirim — {et}"
+    body = (
+        f"<h3>Platform Bildirimi</h3>"
+        f"<p>Yeni bir sistem olayı oluştu: <strong>{et}</strong></p>"
+        f"<p>Detaylar için yönetim paneline giriş yapın.</p>"
+    )
+    return subject, _wrap(body)
+
+
+async def dispatch_domain_event_email(
+    event: "DomainEvent",
+    to_email: str,
+) -> None:
+    """DomainEvent'e göre şablonu seç, alıcıya gönder.
+
+    SMTP kapalıysa (smtp_host boş) _send() sessizce loglar — hata fırlatmaz.
+    """
+    subject, html = _build_event_email(event)
     await _send(subject, to_email, html)
