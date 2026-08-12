@@ -28,6 +28,7 @@ import CoachesPage from '@/pages/coaches/CoachesPage'
 import CoachDetailPage from '@/pages/coaches/CoachDetailPage'
 import SettingsPage from '@/pages/settings/SettingsPage'
 import NotificationsPage from '@/pages/notifications/NotificationsPage'
+import CalendarPage from '@/pages/calendar/CalendarPage'
 import Forbidden from '@/pages/Forbidden'
 import NotFound from '@/pages/NotFound'
 
@@ -281,6 +282,14 @@ export default function App() {
           element={
             <ProtectedRoute>
               <NotificationsPage />
+            </ProtectedRoute>
+          }
+        />
+        <Route
+          path="/takvim"
+          element={
+            <ProtectedRoute>
+              <CalendarPage />
             </ProtectedRoute>
           }
         />
