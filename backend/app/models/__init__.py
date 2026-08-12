@@ -29,6 +29,7 @@ from app.models.training import (
 from app.models.payment import Payment
 from app.models.equipment import Equipment, EquipmentMaintenanceRecord
 from app.models.athlete_profile import AthleteProfile
+from app.models.events import DomainEvent
 
 __all__ = [
     "Club",
@@ -61,4 +62,5 @@ __all__ = [
     "Equipment",
     "EquipmentMaintenanceRecord",
     "AthleteProfile",
+    "DomainEvent",
 ]

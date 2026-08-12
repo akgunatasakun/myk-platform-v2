@@ -35,6 +35,7 @@ from sqlalchemy.orm import selectinload
 
 from app.core.audit import log_action
 from app.core.rbac import require_permission
+from app.services.event_service import emit_event
 from app.core.security import get_current_user
 from app.core.tenant import get_club_id
 from app.database import get_db
@@ -590,6 +591,19 @@ async def create_session(
         resource_id=str(session.id),
         after={"course_id": str(course_id), "session_date": str(body.session_date)},
         request=request,
+    )
+
+    await emit_event(
+        db,
+        club_id=club_id,
+        event_type="training.session.created",
+        aggregate_type="training_session",
+        aggregate_id=session.id,
+        payload={
+            "course_id": str(course_id),
+            "session_date": str(body.session_date),
+            "start_time": str(body.start_time) if body.start_time else None,
+        },
     )
 
     out = TrainingSessionOut.model_validate(session)

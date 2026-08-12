@@ -27,6 +27,7 @@ import MemberDetailPage from '@/pages/members/MemberDetailPage'
 import CoachesPage from '@/pages/coaches/CoachesPage'
 import CoachDetailPage from '@/pages/coaches/CoachDetailPage'
 import SettingsPage from '@/pages/settings/SettingsPage'
+import NotificationsPage from '@/pages/notifications/NotificationsPage'
 import Forbidden from '@/pages/Forbidden'
 import NotFound from '@/pages/NotFound'
 
@@ -272,6 +273,14 @@ export default function App() {
           element={
             <ProtectedRoute>
               <SettingsPage />
+            </ProtectedRoute>
+          }
+        />
+        <Route
+          path="/bildirimler"
+          element={
+            <ProtectedRoute>
+              <NotificationsPage />
             </ProtectedRoute>
           }
         />

@@ -27,6 +27,7 @@ from sqlalchemy import func, select, text
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.audit import log_action
+from app.services.event_service import emit_event
 from app.core.rbac import require_permission
 from app.core.security import get_current_user
 from app.core.tenant import get_club_id
@@ -393,6 +394,29 @@ async def transition_status(
         after=audit_after,
         request=request,
     )
+    # ── Domain event (commit öncesi — outbox pattern) ────────────────────────
+    if to_status == "approved":
+        await emit_event(
+            db,
+            club_id=club_id,
+            event_type="application.approved",
+            aggregate_type="membership_application",
+            aggregate_id=app.id,
+            payload={"application_number": app.application_number, "email": app.email},
+        )
+    elif to_status == "rejected":
+        await emit_event(
+            db,
+            club_id=club_id,
+            event_type="application.rejected",
+            aggregate_type="membership_application",
+            aggregate_id=app.id,
+            payload={
+                "application_number": app.application_number,
+                "reason": app.rejection_reason,
+            },
+        )
+
     await db.commit()
     await db.refresh(app)
 

@@ -20,6 +20,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.config import get_settings
 from app.core.audit import log_action
+from app.services.event_service import emit_event
 from app.core.security import hash_password
 from app.database import get_db
 from app.models.club import Club
@@ -164,6 +165,20 @@ async def public_create_application(
         },
         request=request,
     )
+
+    await emit_event(
+        db,
+        club_id=club.id,
+        event_type="application.submitted",
+        aggregate_type="membership_application",
+        aggregate_id=app.id,
+        payload={
+            "application_number": app_number,
+            "first_name": body.first_name,
+            "last_name": body.last_name,
+        },
+    )
+
     await db.commit()
     await db.refresh(app)
     return MembershipApplicationOut.from_orm_safe(app)

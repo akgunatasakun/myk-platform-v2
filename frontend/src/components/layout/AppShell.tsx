@@ -1,7 +1,8 @@
-import { useState } from 'react'
+import { useState, useEffect } from 'react'
 import { NavLink, useNavigate } from 'react-router-dom'
 import { useAuth } from '@/hooks/useAuth'
 import { usePendingApplications } from '@/hooks/usePendingApplications'
+import { notificationsApi } from '@/api/notifications'
 
 interface NavItem {
   path: string
@@ -23,6 +24,7 @@ const NAV_ITEMS: NavItem[] = [
   { path: '/tekneler', label: 'Ekipmanlar', icon: '🛟' },
   { path: '/odemeler', label: 'Ödemeler', icon: '💳' },
   { path: '/raporlar', label: 'Raporlar', icon: '📈' },
+  { path: '/bildirimler', label: 'Bildirimler', icon: '🔔' },
   { path: '/ayarlar', label: 'Ayarlar', icon: '⚙️' },
 ]
 
@@ -33,9 +35,23 @@ interface AppShellProps {
 
 export default function AppShell({ children, title }: AppShellProps) {
   const [sidebarOpen, setSidebarOpen] = useState(false)
+  const [unreadNotifications, setUnreadNotifications] = useState(0)
   const { user, logout } = useAuth()
   const navigate = useNavigate()
   const pendingApplications = usePendingApplications()
+
+  // Bildirim badge sayısını çek (60 saniyede bir yenile)
+  useEffect(() => {
+    let cancelled = false
+    const fetch = () => {
+      notificationsApi.unreadCount()
+        .then((r) => { if (!cancelled) setUnreadNotifications(r.data.count) })
+        .catch(() => { /* sessizce geç */ })
+    }
+    fetch()
+    const interval = setInterval(fetch, 60_000)
+    return () => { cancelled = true; clearInterval(interval) }
+  }, [])
 
   const handleLogout = async () => {
     await logout()
@@ -68,8 +84,10 @@ export default function AppShell({ children, title }: AppShellProps) {
         <nav>
           <ul className="sidebar-nav">
             {NAV_ITEMS.map((item) => {
-              const showBadge =
+              const showAppBadge =
                 item.path === '/admin/applications' && pendingApplications > 0
+              const showNotifBadge =
+                item.path === '/bildirimler' && unreadNotifications > 0
               return (
                 <li key={item.path}>
                   <NavLink
@@ -81,9 +99,14 @@ export default function AppShell({ children, title }: AppShellProps) {
                   >
                     <span className="sidebar-nav-item-icon">{item.icon}</span>
                     <span style={{ flex: 1 }}>{item.label}</span>
-                    {showBadge && (
+                    {showAppBadge && (
                       <span className="sidebar-nav-badge">
                         {pendingApplications > 99 ? '99+' : pendingApplications}
+                      </span>
+                    )}
+                    {showNotifBadge && (
+                      <span className="sidebar-nav-badge">
+                        {unreadNotifications > 99 ? '99+' : unreadNotifications}
                       </span>
                     )}
                   </NavLink>

@@ -26,6 +26,7 @@ from sqlalchemy.orm import selectinload
 
 from app.core.rbac import require_permission
 from app.core.audit import log_action
+from app.services.event_service import emit_event
 from app.core.security import get_current_user
 from app.core.tenant import get_club_id
 from app.database import get_db
@@ -305,6 +306,21 @@ async def create_payment(
             "payment_type": payment.payment_type or "",
         },
         request=request,
+    )
+
+    await emit_event(
+        db,
+        club_id=club_id,
+        event_type="payment.created",
+        aggregate_type="payment",
+        aggregate_id=payment.id,
+        payload={
+            "amount": str(payment.amount),
+            "payment_type": payment.payment_type,
+            "status": payment.status,
+            "due_date": str(payment.due_date) if payment.due_date else None,
+            "person_id": str(payment.person_id) if payment.person_id else None,
+        },
     )
 
     # person ilişkisini yükle
