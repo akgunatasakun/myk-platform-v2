@@ -5,10 +5,18 @@
 Bu dosya yalnızca argparse + sys.path bootstrap içerir.
 
 Kullanım:
+    # Tüm manifest:
     python scripts/import_documents.py \\
-        --manifest PHASE2_FILE_MANIFEST.csv \\
-        --source-dir /path/to/documents \\
+        --manifest MYK_Yazilim/Faz0_5_Ciktilari/DOCUMENT_MANIFEST.csv \\
+        --source-dir . \\
         --output import_plan.json
+
+    # Yalnızca R01-tamamlanmış batch:
+    python scripts/import_documents.py \\
+        --manifest MYK_Yazilim/Faz0_5_Ciktilari/DOCUMENT_MANIFEST.csv \\
+        --source-dir . \\
+        --output import_plan_r01.json \\
+        --content-status "R01-tamamlanmış"
 """
 from __future__ import annotations
 
@@ -39,8 +47,22 @@ def main() -> None:
         default="import_plan.json",
         help="Çıktı JSON dosyası (varsayılan: import_plan.json)",
     )
+    parser.add_argument(
+        "--content-status",
+        default=None,
+        dest="content_status",
+        help=(
+            "Sadece bu içerik_durumu değerine sahip satırları işle "
+            "(ör: 'R01-tamamlanmış'). Belirtilmezse tüm satırlar işlenir."
+        ),
+    )
     args = parser.parse_args()
-    run(args.manifest, args.source_dir, args.output)
+    run(
+        args.manifest,
+        args.source_dir,
+        args.output,
+        content_status_filter=args.content_status,
+    )
 
 
 if __name__ == "__main__":

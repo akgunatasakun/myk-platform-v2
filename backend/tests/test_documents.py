@@ -780,3 +780,257 @@ async def test_inmemory_storage_download_key_error() -> None:
         assert False, "KeyError bekleniyor"
     except KeyError:
         pass  # beklenen
+
+
+# ── DMS-27: Manifest column alias — yeni format ───────────────────────────────
+
+async def test_import_real_manifest_aliases() -> None:
+    """DMS-27: kaynak_dosya/belge_kodu_mevcut/belge_adi/dokuman_tipi/içerik_durumu çözülür."""
+    from app.services.document_import import run
+
+    with tempfile.TemporaryDirectory() as tmpdir:
+        csv_path = os.path.join(tmpdir, "manifest.csv")
+        src_dir = os.path.join(tmpdir, "docs")
+        os.makedirs(src_dir)
+        output_path = os.path.join(tmpdir, "plan.json")
+
+        with open(csv_path, "w", encoding="utf-8-sig") as f:
+            f.write("kaynak_dosya,belge_kodu_mevcut,belge_adi,dokuman_tipi,içerik_durumu\n")
+            f.write("MYK-TST-001_Test_R01.pdf,MYK-TST-001,Test Belgesi Başlığı,prosedur,R01-tamamlanmış\n")
+
+        with open(os.path.join(src_dir, "MYK-TST-001_Test_R01.pdf"), "wb") as pf:
+            pf.write(b"%PDF-1.4 test")
+
+        run(csv_path, src_dir, output_path)
+
+        with open(output_path, encoding="utf-8") as jf:
+            plan = json.load(jf)
+
+    docs = plan["documents"]
+    assert len(docs) == 1, f"Beklenen 1 belge, alınan: {len(docs)}"
+    doc = docs[0]
+    assert doc["code"] == "MYK-TST-001", f"Beklenen MYK-TST-001, alınan: {doc['code']}"
+    assert doc["title"] == "Test Belgesi Başlığı", f"Başlık yanlış: {doc['title']}"
+    assert doc["document_type"] == "prosedur"
+    assert plan["summary"]["total_manifest_rows"] == 1
+    assert plan["summary"]["logical_documents"] == 1
+
+
+# ── DMS-28: Manifest PDF + disk DOCX → auto-pair ─────────────────────────────
+
+async def test_import_pairs_manifest_pdf_with_disk_docx() -> None:
+    """DMS-28: Manifest'te yalnızca PDF, disk'te aynı stem DOCX → auto-pair."""
+    from app.services.document_import import run
+
+    with tempfile.TemporaryDirectory() as tmpdir:
+        csv_path = os.path.join(tmpdir, "manifest.csv")
+        src_dir = os.path.join(tmpdir, "docs")
+        os.makedirs(src_dir)
+        output_path = os.path.join(tmpdir, "plan.json")
+
+        with open(csv_path, "w", encoding="utf-8-sig") as f:
+            f.write("kaynak_dosya,belge_kodu_mevcut,belge_adi,dokuman_tipi,içerik_durumu\n")
+            f.write("MYK-ABC-001_Belge_R01.pdf,MYK-ABC-001,Test Belgesi,prosedur,R01-tamamlanmış\n")
+
+        with open(os.path.join(src_dir, "MYK-ABC-001_Belge_R01.pdf"), "wb") as pf:
+            pf.write(b"%PDF-1.4 pdf content")
+        with open(os.path.join(src_dir, "MYK-ABC-001_Belge_R01.docx"), "wb") as df:
+            df.write(b"PK\x03\x04 docx content")
+
+        run(csv_path, src_dir, output_path)
+
+        with open(output_path, encoding="utf-8") as jf:
+            plan = json.load(jf)
+
+    summary = plan["summary"]
+    assert summary["logical_documents"] == 1
+    assert summary["pdf_docx_pairs"] == 1
+
+    doc = plan["documents"][0]
+    assert doc["is_pdf_docx_pair"] is True
+    file_roles = {f["filename"]: f["file_role"] for f in doc["files"]}
+    assert file_roles.get("MYK-ABC-001_Belge_R01.pdf") == "published"
+    assert file_roles.get("MYK-ABC-001_Belge_R01.docx") == "source"
+
+
+# ── DMS-29: Birden fazla DOCX adayı → ambiguous, pair edilmez ────────────────
+
+async def test_import_does_not_pair_multiple_docx_candidates() -> None:
+    """DMS-29: Aynı normalized stem'e sahip 2 DOCX → auto-pair edilmez, ambiguous."""
+    from app.services.document_import import run
+
+    with tempfile.TemporaryDirectory() as tmpdir:
+        csv_path = os.path.join(tmpdir, "manifest.csv")
+        src_dir = os.path.join(tmpdir, "docs")
+        sub1 = os.path.join(src_dir, "sub1")
+        sub2 = os.path.join(src_dir, "sub2")
+        os.makedirs(sub1)
+        os.makedirs(sub2)
+        output_path = os.path.join(tmpdir, "plan.json")
+
+        with open(csv_path, "w", encoding="utf-8-sig") as f:
+            f.write("kaynak_dosya,belge_kodu_mevcut,belge_adi,dokuman_tipi,içerik_durumu\n")
+            f.write("belge_x.pdf,BLG-001,Belge X,prosedur,R01-tamamlanmış\n")
+
+        with open(os.path.join(src_dir, "belge_x.pdf"), "wb") as pf:
+            pf.write(b"%PDF-1.4")
+        # İki DOCX — casefold sonrası aynı stem ("belge_x")
+        with open(os.path.join(sub1, "belge_x.docx"), "wb") as df:
+            df.write(b"PK\x03\x04 v1")
+        with open(os.path.join(sub2, "Belge_X.docx"), "wb") as df:
+            df.write(b"PK\x03\x04 v2")
+
+        run(csv_path, src_dir, output_path)
+
+        with open(output_path, encoding="utf-8") as jf:
+            plan = json.load(jf)
+
+    summary = plan["summary"]
+    assert summary["pdf_docx_pairs"] == 0, "Ambiguous DOCX'ler pair edilmemeli"
+    assert summary["ambiguous_pairs"] >= 1
+
+
+# ── DMS-30: Duplicate document code → merge edilmez ──────────────────────────
+
+async def test_import_duplicate_document_codes_not_merged() -> None:
+    """DMS-30: İki farklı stem aynı kodu paylaşıyor → merge edilmez, duplicate_codes'a."""
+    from app.services.document_import import run
+
+    with tempfile.TemporaryDirectory() as tmpdir:
+        csv_path = os.path.join(tmpdir, "manifest.csv")
+        src_dir = os.path.join(tmpdir, "docs")
+        os.makedirs(src_dir)
+        output_path = os.path.join(tmpdir, "plan.json")
+
+        with open(csv_path, "w", encoding="utf-8-sig") as f:
+            f.write("kaynak_dosya,belge_kodu_mevcut,belge_adi,dokuman_tipi,içerik_durumu\n")
+            f.write("MYK-DUP-001_Versiyon_A_R01.pdf,MYK-DUP-001,Versiyon A,prosedur,R01-tamamlanmış\n")
+            f.write("MYK-DUP-001_Versiyon_B_R01.pdf,MYK-DUP-001,Versiyon B,prosedur,R01-tamamlanmış\n")
+
+        with open(os.path.join(src_dir, "MYK-DUP-001_Versiyon_A_R01.pdf"), "wb") as pf:
+            pf.write(b"%PDF-1.4 version A")
+        with open(os.path.join(src_dir, "MYK-DUP-001_Versiyon_B_R01.pdf"), "wb") as pf:
+            pf.write(b"%PDF-1.4 version B")
+
+        run(csv_path, src_dir, output_path)
+
+        with open(output_path, encoding="utf-8") as jf:
+            plan = json.load(jf)
+
+    assert plan["summary"]["logical_documents"] == 0, "Duplicate code'lar documents'a girmemeli"
+    dup_codes = plan.get("duplicate_codes", [])
+    assert len(dup_codes) == 1
+    dup = dup_codes[0]
+    assert dup["doc_code"] == "MYK-DUP-001"
+    assert len(dup["filenames"]) == 2
+    assert plan["summary"]["duplicate_code_documents"] == 2
+
+
+# ── DMS-31: Unicode casefold stem pairing ─────────────────────────────────────
+
+async def test_import_unicode_casefold_stem_pairing() -> None:
+    """DMS-31: Büyük/küçük harf farkı → NFC casefold sonrası stem eşleşir, pair başarılı."""
+    from app.services.document_import import run
+
+    with tempfile.TemporaryDirectory() as tmpdir:
+        csv_path = os.path.join(tmpdir, "manifest.csv")
+        src_dir = os.path.join(tmpdir, "docs")
+        os.makedirs(src_dir)
+        output_path = os.path.join(tmpdir, "plan.json")
+
+        stem = "MYK-TUR-001_Belge_R01"
+
+        with open(csv_path, "w", encoding="utf-8-sig") as f:
+            f.write("kaynak_dosya,belge_kodu_mevcut,belge_adi,dokuman_tipi,içerik_durumu\n")
+            f.write(f"{stem}.pdf,MYK-TUR-001,Türkçe Belge,prosedur,R01-tamamlanmış\n")
+
+        with open(os.path.join(src_dir, f"{stem}.pdf"), "wb") as pf:
+            pf.write(b"%PDF-1.4")
+        # DOCX: aynı stem, farklı büyük/küçük harf yok ama casefold garantisi
+        with open(os.path.join(src_dir, f"{stem}.docx"), "wb") as df:
+            df.write(b"PK\x03\x04")
+
+        run(csv_path, src_dir, output_path)
+
+        with open(output_path, encoding="utf-8") as jf:
+            plan = json.load(jf)
+
+    assert plan["summary"]["pdf_docx_pairs"] == 1
+    assert plan["summary"]["logical_documents"] == 1
+
+
+# ── DMS-32: Auto-paired DOCX SHA-256 hesaplanmış ─────────────────────────────
+
+async def test_import_docx_sha256_computed() -> None:
+    """DMS-32: Diskten auto-paired DOCX'in SHA-256 değeri plan içinde doğru."""
+    from app.services.document_import import run
+
+    with tempfile.TemporaryDirectory() as tmpdir:
+        csv_path = os.path.join(tmpdir, "manifest.csv")
+        src_dir = os.path.join(tmpdir, "docs")
+        os.makedirs(src_dir)
+        output_path = os.path.join(tmpdir, "plan.json")
+
+        docx_content = b"PK\x03\x04 specific docx content for sha256 test"
+        expected_sha = hashlib.sha256(docx_content).hexdigest()
+
+        with open(csv_path, "w", encoding="utf-8-sig") as f:
+            f.write("kaynak_dosya,belge_kodu_mevcut,belge_adi,dokuman_tipi,içerik_durumu\n")
+            f.write("SHA-TST-001_Belge_R01.pdf,SHA-TST-001,SHA Test,prosedur,R01-tamamlanmış\n")
+
+        with open(os.path.join(src_dir, "SHA-TST-001_Belge_R01.pdf"), "wb") as pf:
+            pf.write(b"%PDF-1.4 sha test")
+        with open(os.path.join(src_dir, "SHA-TST-001_Belge_R01.docx"), "wb") as df:
+            df.write(docx_content)
+
+        run(csv_path, src_dir, output_path)
+
+        with open(output_path, encoding="utf-8") as jf:
+            plan = json.load(jf)
+
+    doc = plan["documents"][0]
+    docx_files = [f for f in doc["files"] if f["filename"].endswith(".docx")]
+    assert len(docx_files) == 1
+    fi = docx_files[0]["file_info"]
+    assert fi is not None, "DOCX file_info boş olmamalı"
+    assert fi.get("sha256") == expected_sha, f"SHA yanlış: {fi.get('sha256')}"
+    assert fi.get("auto_paired") is True
+
+
+# ── DMS-33: Backward compat — eski kolon adları hâlâ çalışır ─────────────────
+
+async def test_import_preserves_existing_contract() -> None:
+    """DMS-33: dosya_adi/belge_kodu/baslik/belge_turu/icerik_durumu → hâlâ çalışır."""
+    from app.services.document_import import run
+
+    with tempfile.TemporaryDirectory() as tmpdir:
+        csv_path = os.path.join(tmpdir, "manifest.csv")
+        src_dir = os.path.join(tmpdir, "docs")
+        os.makedirs(src_dir)
+        output_path = os.path.join(tmpdir, "plan.json")
+
+        with open(csv_path, "w", encoding="utf-8") as f:
+            f.write("belge_kodu,baslik,belge_turu,icerik_durumu,dosya_adi\n")
+            f.write("OLD-001,Eski Format Belge,prosedur,tamamlandi,old_format.pdf\n")
+
+        with open(os.path.join(src_dir, "old_format.pdf"), "wb") as pf:
+            pf.write(b"%PDF-1.4 old format")
+
+        run(csv_path, src_dir, output_path)
+
+        with open(output_path, encoding="utf-8") as jf:
+            plan = json.load(jf)
+
+    summary = plan["summary"]
+    assert summary["total_manifest_rows"] == 1
+    assert summary["logical_documents"] == 1
+    doc = plan["documents"][0]
+    assert doc["code"] == "OLD-001"
+    assert doc["title"] == "Eski Format Belge"
+    assert doc["document_type"] == "prosedur"
+    # JSON contract backward compat: mevcut alanlar hepsi var
+    for key in ("summary", "documents", "unmatched_manifest", "unmatched_disk", "conflicts"):
+        assert key in plan, f"Eksik alan: {key}"
+    # Yeni alanlar da var
+    assert "duplicate_codes" in plan
+    assert "ambiguous_pairs" in plan
