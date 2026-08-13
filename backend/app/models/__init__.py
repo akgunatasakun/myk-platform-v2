@@ -30,6 +30,12 @@ from app.models.payment import Payment
 from app.models.equipment import Equipment, EquipmentMaintenanceRecord
 from app.models.athlete_profile import AthleteProfile
 from app.models.events import DomainEvent
+from app.models.documents import (
+    DocumentCategory,
+    Document,
+    DocumentRevision,
+    DocumentRevisionFile,
+)
 
 __all__ = [
     "Club",
@@ -63,4 +69,8 @@ __all__ = [
     "EquipmentMaintenanceRecord",
     "AthleteProfile",
     "DomainEvent",
+    "DocumentCategory",
+    "Document",
+    "DocumentRevision",
+    "DocumentRevisionFile",
 ]

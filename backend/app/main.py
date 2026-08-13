@@ -16,6 +16,7 @@ from app.api.v1.routers.athletes import router as athletes_router
 from app.api.v1.routers.settings import router as settings_router
 from app.api.v1.routers.notifications import router as notifications_router
 from app.api.v1.routers.calendar import router as calendar_router
+from app.api.v1.routers.documents import router as documents_router
 from app.config import get_settings
 from app.core.scheduler import setup_scheduler
 from app.core.security import get_current_user
@@ -92,6 +93,7 @@ app.include_router(athletes_router, prefix=API_PREFIX)
 app.include_router(settings_router, prefix=API_PREFIX)
 app.include_router(notifications_router, prefix=API_PREFIX)
 app.include_router(calendar_router, prefix=API_PREFIX)
+app.include_router(documents_router, prefix=API_PREFIX)
 
 
 # ─── /me endpoint — inject correct dependency ─────────────────────────────────

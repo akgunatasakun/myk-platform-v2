@@ -25,6 +25,7 @@ const NAV_ITEMS: NavItem[] = [
   { path: '/odemeler', label: 'Ödemeler', icon: '💳' },
   { path: '/raporlar', label: 'Raporlar', icon: '📈' },
   { path: '/bildirimler', label: 'Bildirimler', icon: '🔔' },
+  { path: '/belgeler', label: 'Belgeler', icon: '📂' },
   { path: '/takvim', label: 'Takvim', icon: '📅' },
   { path: '/ayarlar', label: 'Ayarlar', icon: '⚙️' },
 ]

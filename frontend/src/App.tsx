@@ -29,6 +29,8 @@ import CoachDetailPage from '@/pages/coaches/CoachDetailPage'
 import SettingsPage from '@/pages/settings/SettingsPage'
 import NotificationsPage from '@/pages/notifications/NotificationsPage'
 import CalendarPage from '@/pages/calendar/CalendarPage'
+import DocumentsPage from '@/pages/documents/DocumentsPage'
+import DocumentDetailPage from '@/pages/documents/DocumentDetailPage'
 import Forbidden from '@/pages/Forbidden'
 import NotFound from '@/pages/NotFound'
 
@@ -290,6 +292,22 @@ export default function App() {
           element={
             <ProtectedRoute>
               <CalendarPage />
+            </ProtectedRoute>
+          }
+        />
+        <Route
+          path="/belgeler"
+          element={
+            <ProtectedRoute>
+              <DocumentsPage />
+            </ProtectedRoute>
+          }
+        />
+        <Route
+          path="/belgeler/:id"
+          element={
+            <ProtectedRoute>
+              <DocumentDetailPage />
             </ProtectedRoute>
           }
         />

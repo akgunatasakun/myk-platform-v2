@@ -53,6 +53,7 @@ class Settings(BaseSettings):
     storage_access_key: str = ""
     storage_secret_key: str = ""
     storage_bucket: str = "myk-person-media"
+    storage_bucket_documents: str = "myk-documents"
     storage_region: str = "us-east-1"
     storage_secure: bool = False
 
