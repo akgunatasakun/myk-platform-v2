@@ -554,11 +554,9 @@ async def test_tenant_isolation_revision(
 
 # ── DMS-19: Import dry-run CSV parse ─────────────────────────────────────────
 
-def test_import_dry_run_parses_manifest() -> None:
-    """DMS-19: import_documents.py CSV parse eder, özet döner (no DB)."""
-    import sys
-    sys.path.insert(0, str(Path(__file__).parent.parent.parent / "scripts"))
-    from import_documents import run  # type: ignore[import]
+async def test_import_dry_run_parses_manifest() -> None:
+    """DMS-19: document_import.run() CSV parse eder, özet döner (no DB)."""
+    from app.services.document_import import run
 
     # Geçici CSV manifest + source-dir oluştur
     with tempfile.TemporaryDirectory() as tmpdir:
@@ -591,11 +589,9 @@ def test_import_dry_run_parses_manifest() -> None:
 
 # ── DMS-20: Import PDF+DOCX pair tespiti ─────────────────────────────────────
 
-def test_import_pairs_pdf_docx() -> None:
+async def test_import_pairs_pdf_docx() -> None:
     """DMS-20: Aynı basename PDF + DOCX → tek mantıksal belge, pair sayılır."""
-    import sys
-    sys.path.insert(0, str(Path(__file__).parent.parent.parent / "scripts"))
-    from import_documents import run  # type: ignore[import]
+    from app.services.document_import import run
 
     with tempfile.TemporaryDirectory() as tmpdir:
         csv_path = os.path.join(tmpdir, "manifest.csv")

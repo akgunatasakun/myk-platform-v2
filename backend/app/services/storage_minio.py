@@ -14,8 +14,10 @@ from __future__ import annotations
 import datetime
 import io
 
+import aiohttp
 from miniopy_async import Minio
 from miniopy_async.deleteobjects import DeleteObject
+from miniopy_async.error import S3Error
 
 from app.services.storage import ObjectStorageService
 
@@ -101,18 +103,30 @@ class MinioStorageService(ObjectStorageService):
         return url
 
     async def download(self, key: str) -> bytes:
-        """key altındaki nesneyi bayt olarak döndür. Nesne yoksa KeyError."""
-        response = None
-        try:
-            response = await self._client.get_object(self._bucket, key)
-            data = await response.read()
-            return data
-        except Exception as exc:
-            raise KeyError(key) from exc
-        finally:
-            if response is not None:
-                try:
-                    response.close()
-                    await response.release()
-                except Exception:
-                    pass
+        """key altındaki nesneyi bayt olarak döndür.
+
+        Nesne yoksa (NoSuchKey / NoSuchBucket) KeyError fırlatır.
+        Diğer I/O veya auth hataları RuntimeError olarak yükselir —
+        bunlar storage servis problemidir, 404 döndürülmemeli.
+        """
+        async with aiohttp.ClientSession() as session:
+            response = None
+            try:
+                response = await self._client.get_object(
+                    self._bucket, key, session
+                )
+                data = await response.read()
+                return data
+            except S3Error as exc:
+                if exc.code in ("NoSuchKey", "NoSuchBucket"):
+                    raise KeyError(key) from exc
+                raise RuntimeError(
+                    f"MinIO S3 error downloading {key!r}: {exc.code}"
+                ) from exc
+            finally:
+                if response is not None:
+                    try:
+                        response.close()
+                        await response.release()
+                    except Exception:
+                        pass
