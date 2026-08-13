@@ -35,6 +35,12 @@ class InMemoryStorageService(ObjectStorageService):
     async def presigned_url(self, key: str, expires: int) -> str:
         return f"http://test-storage/{key}?expires={expires}"
 
+    async def download(self, key: str) -> bytes:
+        if key not in self._store:
+            raise KeyError(key)
+        data, _ = self._store[key]
+        return data
+
 
 # ── Fixture ────────────────────────────────────────────────────────────────
 

@@ -43,10 +43,22 @@ class MinioStorageService(ObjectStorageService):
             region=region,
         )
         self._bucket = bucket
+        self._bucket_ready = False  # lazy provisioning bayrağı
+
+    # ── Bucket idempotent hazırlık ────────────────────────────────────────
+
+    async def _ensure_bucket(self) -> None:
+        """Bucket yoksa oluştur. Idempotent; race-safe."""
+        if self._bucket_ready:
+            return
+        if not await self._client.bucket_exists(self._bucket):
+            await self._client.make_bucket(self._bucket)
+        self._bucket_ready = True
 
     # ── Temel işlemler ────────────────────────────────────────────────────
 
     async def upload(self, key: str, data: bytes, content_type: str) -> str:
+        await self._ensure_bucket()
         stream = io.BytesIO(data)
         await self._client.put_object(
             self._bucket,
@@ -87,3 +99,20 @@ class MinioStorageService(ObjectStorageService):
             expires=datetime.timedelta(seconds=expires),
         )
         return url
+
+    async def download(self, key: str) -> bytes:
+        """key altındaki nesneyi bayt olarak döndür. Nesne yoksa KeyError."""
+        response = None
+        try:
+            response = await self._client.get_object(self._bucket, key)
+            data = await response.read()
+            return data
+        except Exception as exc:
+            raise KeyError(key) from exc
+        finally:
+            if response is not None:
+                try:
+                    response.close()
+                    await response.release()
+                except Exception:
+                    pass

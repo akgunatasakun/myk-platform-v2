@@ -1,11 +1,11 @@
-"""DMS (Belge Yönetim Sistemi) API testleri — DMS-01 .. DMS-20.
+"""DMS (Belge Yönetim Sistemi) API testleri — DMS-01 .. DMS-26.
 
 Test kapsamı:
   - RBAC / kimlik doğrulama
   - Belge CRUD ve soft delete
   - Tenant izolasyonu
   - Revizyon yaşam döngüsü
-  - Dosya yükleme + indir (presigned URL redirect)
+  - Dosya yükleme + backend streaming download (MinIO URL sızmaz)
   - Dry-run importer unit testleri
 
 InMemoryStorageService: test ortamı — MinIO bağlantısı yoktur.
@@ -64,6 +64,12 @@ class InMemoryStorageService(ObjectStorageService):
 
     async def presigned_url(self, key: str, expires: int) -> str:
         return f"http://test-storage/{key}?expires={expires}"
+
+    async def download(self, key: str) -> bytes:
+        if key not in self._store:
+            raise KeyError(key)
+        data, _ = self._store[key]
+        return data
 
 
 # ── Yardımcı fonksiyonlar ─────────────────────────────────────────────────────
@@ -467,19 +473,20 @@ async def test_upload_duplicate_sha256_same_revision(
     assert r2.status_code == 409
 
 
-# ── DMS-17: Download redirect ─────────────────────────────────────────────────
+# ── DMS-17: Download response 200 (backend streaming) ────────────────────────
 
-async def test_download_redirect(
+async def test_download_streams_content(
     client_with_storage: AsyncClient,
     yonetici_token: str,
 ) -> None:
-    """DMS-17: GET .../files/{id}/download → 302 presigned URL'ye yönlendirir."""
+    """DMS-17: GET .../files/{id}/download → 200, body == yüklenen bytes."""
     doc = await _create_doc(client_with_storage, yonetici_token, code=f"DOC-{uuid.uuid4().hex[:4]}")
     rev = await _create_revision(client_with_storage, yonetici_token, doc["id"], "R00")
 
+    content = b"%PDF-1.4 download test content"
     upload_resp = await client_with_storage.post(
         f"{DOCS_URL}/{doc['id']}/revisions/{rev['id']}/files",
-        files={"file": ("dl_test.pdf", b"%PDF-1.4 download", "application/pdf")},
+        files={"file": ("dl_test.pdf", content, "application/pdf")},
         headers=_auth(yonetici_token),
     )
     assert upload_resp.status_code == 201
@@ -488,11 +495,9 @@ async def test_download_redirect(
     dl_resp = await client_with_storage.get(
         f"{DOCS_URL}/{doc['id']}/revisions/{rev['id']}/files/{file_id}/download",
         headers=_auth(yonetici_token),
-        follow_redirects=False,
     )
-    assert dl_resp.status_code == 302
-    location = dl_resp.headers.get("location", "")
-    assert "test-storage" in location or "expires" in location
+    assert dl_resp.status_code == 200
+    assert dl_resp.content == content
 
 
 # ── DMS-18: Tenant izolasyonu (revizyon) ─────────────────────────────────────
@@ -619,3 +624,163 @@ def test_import_pairs_pdf_docx() -> None:
     assert summary["logical_documents"] == 1
     assert summary["pdf_docx_pairs"] == 1
     assert summary["single_files"] == 0
+
+
+# ── DMS-21: Content-Type doğru ───────────────────────────────────────────────
+
+async def test_download_content_type(
+    client_with_storage: AsyncClient,
+    yonetici_token: str,
+) -> None:
+    """DMS-21: download → Content-Type == yüklenen MIME."""
+    doc = await _create_doc(client_with_storage, yonetici_token, code=f"DOC-{uuid.uuid4().hex[:4]}")
+    rev = await _create_revision(client_with_storage, yonetici_token, doc["id"], "R00")
+
+    resp = await client_with_storage.post(
+        f"{DOCS_URL}/{doc['id']}/revisions/{rev['id']}/files",
+        files={"file": ("ct_test.pdf", b"%PDF-1.4 ct", "application/pdf")},
+        headers=_auth(yonetici_token),
+    )
+    assert resp.status_code == 201
+    file_id = resp.json()["id"]
+
+    dl = await client_with_storage.get(
+        f"{DOCS_URL}/{doc['id']}/revisions/{rev['id']}/files/{file_id}/download",
+        headers=_auth(yonetici_token),
+    )
+    assert dl.status_code == 200
+    assert "application/pdf" in dl.headers.get("content-type", "")
+
+
+# ── DMS-22: Content-Disposition orijinal dosya adını içerir ──────────────────
+
+async def test_download_content_disposition(
+    client_with_storage: AsyncClient,
+    yonetici_token: str,
+) -> None:
+    """DMS-22: download → Content-Disposition attachment; filename=<original>."""
+    doc = await _create_doc(client_with_storage, yonetici_token, code=f"DOC-{uuid.uuid4().hex[:4]}")
+    rev = await _create_revision(client_with_storage, yonetici_token, doc["id"], "R00")
+
+    resp = await client_with_storage.post(
+        f"{DOCS_URL}/{doc['id']}/revisions/{rev['id']}/files",
+        files={"file": ("myreport.pdf", b"%PDF-1.4 cd", "application/pdf")},
+        headers=_auth(yonetici_token),
+    )
+    assert resp.status_code == 201
+    file_id = resp.json()["id"]
+
+    dl = await client_with_storage.get(
+        f"{DOCS_URL}/{doc['id']}/revisions/{rev['id']}/files/{file_id}/download",
+        headers=_auth(yonetici_token),
+    )
+    assert dl.status_code == 200
+    cd = dl.headers.get("content-disposition", "")
+    assert "attachment" in cd
+    assert "myreport.pdf" in cd
+
+
+# ── DMS-23: MinIO internal hostname response'a sızmaz ────────────────────────
+
+async def test_download_no_storage_url_leak(
+    client_with_storage: AsyncClient,
+    yonetici_token: str,
+) -> None:
+    """DMS-23: download response header/body'de minio:9000 geçmemeli."""
+    doc = await _create_doc(client_with_storage, yonetici_token, code=f"DOC-{uuid.uuid4().hex[:4]}")
+    rev = await _create_revision(client_with_storage, yonetici_token, doc["id"], "R00")
+
+    resp = await client_with_storage.post(
+        f"{DOCS_URL}/{doc['id']}/revisions/{rev['id']}/files",
+        files={"file": ("leak_test.pdf", b"%PDF-1.4 leak", "application/pdf")},
+        headers=_auth(yonetici_token),
+    )
+    assert resp.status_code == 201
+    file_id = resp.json()["id"]
+
+    dl = await client_with_storage.get(
+        f"{DOCS_URL}/{doc['id']}/revisions/{rev['id']}/files/{file_id}/download",
+        headers=_auth(yonetici_token),
+    )
+    assert dl.status_code == 200
+
+    # Header'larda storage internal hostname veya presigned query param geçmemeli
+    headers_str = " ".join(f"{k}: {v}" for k, v in dl.headers.items()).lower()
+    assert "minio" not in headers_str
+    assert "x-amz" not in headers_str
+    assert "x-amz-signature" not in headers_str
+
+    # Body text değil binary — ama paranoya olarak kontrol et
+    body_str = dl.content.decode("latin-1")
+    assert "minio:9000" not in body_str
+
+
+# ── DMS-24: Depolama nesnesi eksikse 404 ─────────────────────────────────────
+
+async def test_download_missing_storage_object(
+    client_with_storage: AsyncClient,
+    yonetici_token: str,
+    db_session: AsyncSession,
+) -> None:
+    """DMS-24: DB kaydı var ama storage'da nesne yoksa → 404."""
+    from sqlalchemy import select as sa_select
+
+    doc = await _create_doc(client_with_storage, yonetici_token, code=f"DOC-{uuid.uuid4().hex[:4]}")
+    rev = await _create_revision(client_with_storage, yonetici_token, doc["id"], "R00")
+
+    resp = await client_with_storage.post(
+        f"{DOCS_URL}/{doc['id']}/revisions/{rev['id']}/files",
+        files={"file": ("ghost.pdf", b"%PDF-1.4 ghost", "application/pdf")},
+        headers=_auth(yonetici_token),
+    )
+    assert resp.status_code == 201
+    file_id = resp.json()["id"]
+
+    # Storage'daki nesneyi elle sil (InMemory)
+    storage: InMemoryStorageService = app.dependency_overrides[get_dms_storage]()
+    storage_key = resp.json()["storage_key"]
+    await storage.delete(storage_key)
+
+    dl = await client_with_storage.get(
+        f"{DOCS_URL}/{doc['id']}/revisions/{rev['id']}/files/{file_id}/download",
+        headers=_auth(yonetici_token),
+    )
+    assert dl.status_code == 404
+
+
+# ── DMS-25: RBAC — antrenor download yapamaz ─────────────────────────────────
+
+async def test_download_rbac_antrenor_forbidden(
+    client_with_storage: AsyncClient,
+    yonetici_token: str,
+    antrenor_token: str,
+) -> None:
+    """DMS-25: antrenor belge:read yetkisi yok → download 403."""
+    doc = await _create_doc(client_with_storage, yonetici_token, code=f"DOC-{uuid.uuid4().hex[:4]}")
+    rev = await _create_revision(client_with_storage, yonetici_token, doc["id"], "R00")
+
+    resp = await client_with_storage.post(
+        f"{DOCS_URL}/{doc['id']}/revisions/{rev['id']}/files",
+        files={"file": ("rbac_test.pdf", b"%PDF-1.4 rbac", "application/pdf")},
+        headers=_auth(yonetici_token),
+    )
+    assert resp.status_code == 201
+    file_id = resp.json()["id"]
+
+    dl = await client_with_storage.get(
+        f"{DOCS_URL}/{doc['id']}/revisions/{rev['id']}/files/{file_id}/download",
+        headers=_auth(antrenor_token),
+    )
+    assert dl.status_code == 403
+
+
+# ── DMS-26: InMemoryStorage ensure_bucket idempotent ─────────────────────────
+
+async def test_inmemory_storage_download_key_error() -> None:
+    """DMS-26: InMemoryStorageService.download() eksik key → KeyError."""
+    storage = InMemoryStorageService()
+    try:
+        await storage.download("nonexistent/key.pdf")
+        assert False, "KeyError bekleniyor"
+    except KeyError:
+        pass  # beklenen

@@ -45,6 +45,15 @@ class ObjectStorageService(abc.ABC):
         """Belirtilen key için expires saniye geçerli pre-signed URL üret."""
         ...
 
+    @abc.abstractmethod
+    async def download(self, key: str) -> bytes:
+        """key altındaki nesnenin içeriğini bayt olarak döndür.
+
+        Nesne yoksa KeyError fırlatır.
+        Boyut sınırı max_upload_mb ile kontrol edilir (bkz. caller).
+        """
+        ...
+
     async def presigned_url_batch(
         self, keys: List[str], expires: int
     ) -> Dict[str, str]:

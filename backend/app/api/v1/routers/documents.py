@@ -28,7 +28,7 @@ from fastapi import (
     UploadFile,
     status,
 )
-from fastapi.responses import RedirectResponse
+from fastapi.responses import Response
 from sqlalchemy import select, update
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import selectinload
@@ -453,12 +453,10 @@ async def upload_revision_file(
     return RevisionFileOut.model_validate(rev_file)
 
 
-# ── Dosya indir (presigned redirect) ─────────────────────────────────────────
+# ── Dosya indir (backend streaming — MinIO URL client'a sızmaz) ──────────────
 
 @router.get(
     "/{document_id}/revisions/{revision_id}/files/{file_id}/download",
-    status_code=status.HTTP_302_FOUND,
-    response_class=RedirectResponse,
 )
 async def download_revision_file(
     document_id: uuid.UUID,
@@ -468,7 +466,12 @@ async def download_revision_file(
     _: None = Depends(require_permission("belge:read")),
     db: AsyncSession = Depends(get_db),
     storage: ObjectStorageService = Depends(get_dms_storage),
-) -> RedirectResponse:
+) -> Response:
+    """Dosyayı backend üzerinden stream et.
+
+    MinIO endpoint, presigned URL veya storage kimlik bilgileri
+    hiçbir şekilde istemciye dönmez.
+    """
     # Tenant kontrolü
     await _get_document_or_404(document_id, club_id, db)
     await _get_revision_or_404(revision_id, document_id, db)
@@ -483,5 +486,22 @@ async def download_revision_file(
     if rev_file is None:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Dosya bulunamadı.")
 
-    url = await storage.presigned_url(rev_file.storage_key, expires=600)
-    return RedirectResponse(url=url, status_code=status.HTTP_302_FOUND)
+    try:
+        data = await storage.download(rev_file.storage_key)
+    except KeyError:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Depolama nesnesi bulunamadı.",
+        )
+
+    safe_name = _safe_filename(rev_file.original_filename)
+    mime = rev_file.mime_type or "application/octet-stream"
+
+    return Response(
+        content=data,
+        media_type=mime,
+        headers={
+            "Content-Disposition": f'attachment; filename="{safe_name}"',
+            "Content-Length": str(len(data)),
+        },
+    )
