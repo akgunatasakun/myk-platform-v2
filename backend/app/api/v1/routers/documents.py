@@ -11,8 +11,11 @@ Storage: DMS ayrı bucket kullanır (myk-documents).
 from __future__ import annotations
 
 import hashlib
+import logging
 import re
 import uuid
+
+logger = logging.getLogger(__name__)
 from typing import List, Optional
 
 from fastapi import (
@@ -418,23 +421,35 @@ async def upload_revision_file(
     )
     storage_bucket = settings.storage_bucket_documents
 
+    # Storage upload — DB insert sırasında hata olursa orphan nesneyi temizle
     await storage.upload(storage_key, file_bytes, mime)
 
-    rev_file = DocumentRevisionFile(
-        id=file_id,
-        revision_id=revision_id,
-        file_role=file_role,
-        original_filename=original_filename,
-        mime_type=mime,
-        file_size=len(file_bytes),
-        sha256=sha256,
-        storage_bucket=storage_bucket,
-        storage_key=storage_key,
-        is_primary=is_primary,
-    )
-    db.add(rev_file)
-    await db.flush()
-    await db.refresh(rev_file)
+    try:
+        rev_file = DocumentRevisionFile(
+            id=file_id,
+            revision_id=revision_id,
+            file_role=file_role,
+            original_filename=original_filename,
+            mime_type=mime,
+            file_size=len(file_bytes),
+            sha256=sha256,
+            storage_bucket=storage_bucket,
+            storage_key=storage_key,
+            is_primary=is_primary,
+        )
+        db.add(rev_file)
+        await db.flush()
+        await db.refresh(rev_file)
+    except Exception:
+        # DB işlemi başarısız — storage'a yüklenen nesneyi best-effort sil
+        try:
+            await storage.delete(storage_key)
+        except Exception:
+            logger.warning(
+                "Orphan storage nesnesi temizlenemedi: bucket=%s key=%s",
+                storage_bucket, storage_key,
+            )
+        raise
     return RevisionFileOut.model_validate(rev_file)
 
 

@@ -29,6 +29,7 @@ import hashlib
 import json
 import os
 import sys
+import unicodedata
 from collections import defaultdict
 from pathlib import Path
 from typing import Any
@@ -174,9 +175,10 @@ def run(manifest_path: str, source_dir: str, output_path: str) -> None:
             # source-dir yok, disk bilgisi yok
             pass
 
-        # basename gruplama
+        # basename gruplama — case-insensitive + Unicode NFC normalize
         if filename:
-            stem = Path(filename).stem
+            raw_stem = Path(filename).stem
+            stem = unicodedata.normalize("NFC", raw_stem).lower()
             basename_groups[stem].append({
                 "row": i + 2,
                 "filename": filename,
@@ -195,16 +197,36 @@ def run(manifest_path: str, source_dir: str, output_path: str) -> None:
     placeholder_documents = 0
 
     for stem, group in basename_groups.items():
-        extensions = {Path(r["filename"]).suffix.lower() for r in group}
-        is_pair = ".pdf" in extensions and ".docx" in extensions
+        extensions = [Path(r["filename"]).suffix.lower() for r in group]
+        ext_set = set(extensions)
 
-        if is_pair:
+        # Pair tanımı: tam olarak 1 PDF + 1 DOCX — fazlası belirsiz
+        pdf_files = [r for r in group if Path(r["filename"]).suffix.lower() == ".pdf"]
+        docx_files = [r for r in group if Path(r["filename"]).suffix.lower() == ".docx"]
+
+        is_clean_pair = len(pdf_files) == 1 and len(docx_files) == 1
+        is_ambiguous = (
+            (".pdf" in ext_set and ".docx" in ext_set) and not is_clean_pair
+        )
+
+        if is_clean_pair:
             pdf_docx_pairs += 1
         else:
             single_files += 1
 
-        # İlk satırdan metadata al
-        primary = group[0]
+        if is_ambiguous:
+            # Belirsiz çiftleri otomatik pair etme — raporda işaretle
+            for r in group:
+                unmatched_manifest.append({
+                    "row": r.get("row", "?"),
+                    "filename": r["filename"],
+                    "doc_code": r["doc_code"],
+                    "reason": "ambiguous_pair",
+                })
+            continue
+
+        # İlk satırdan (veya PDF tercihli) metadata al
+        primary = pdf_files[0] if pdf_files else group[0]
         if primary["content_status"] == "placeholder":
             placeholder_documents += 1
 
@@ -213,10 +235,11 @@ def run(manifest_path: str, source_dir: str, output_path: str) -> None:
             "title": primary["doc_title"] or stem,
             "document_type": primary["document_type"],
             "content_status": primary["content_status"],
-            "is_pdf_docx_pair": is_pair,
+            "is_pdf_docx_pair": is_clean_pair,
             "files": [
                 {
                     "filename": r["filename"],
+                    "file_role": "published" if Path(r["filename"]).suffix.lower() == ".pdf" else "source",
                     "file_info": r["file_info"],
                 }
                 for r in group
