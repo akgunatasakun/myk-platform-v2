@@ -462,6 +462,7 @@ async def download_revision_file(
     document_id: uuid.UUID,
     revision_id: uuid.UUID,
     file_id: uuid.UUID,
+    inline: bool = Query(False, description="True ise PDF'ler tarayıcıda inline açılır."),
     club_id: uuid.UUID = Depends(get_club_id),
     _: None = Depends(require_permission("belge:read")),
     db: AsyncSession = Depends(get_db),
@@ -471,6 +472,10 @@ async def download_revision_file(
 
     MinIO endpoint, presigned URL veya storage kimlik bilgileri
     hiçbir şekilde istemciye dönmez.
+
+    Query params:
+      inline=true  → PDF'ler Content-Disposition: inline olarak döner (browser içi görüntüleme).
+                     DOCX ve diğer türler her zaman attachment olarak döner.
     """
     # Tenant kontrolü
     await _get_document_or_404(document_id, club_id, db)
@@ -497,11 +502,15 @@ async def download_revision_file(
     safe_name = _safe_filename(rev_file.original_filename)
     mime = rev_file.mime_type or "application/octet-stream"
 
+    # PDF → inline (tarayıcıda görüntüle); diğerleri her zaman attachment
+    is_pdf = mime == "application/pdf"
+    disposition = "inline" if (inline and is_pdf) else "attachment"
+
     return Response(
         content=data,
         media_type=mime,
         headers={
-            "Content-Disposition": f'attachment; filename="{safe_name}"',
+            "Content-Disposition": f'{disposition}; filename="{safe_name}"',
             "Content-Length": str(len(data)),
         },
     )

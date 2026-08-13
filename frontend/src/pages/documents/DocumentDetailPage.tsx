@@ -148,6 +148,82 @@ function NewRevisionModal({ docId, isOpen, onClose, onSaved }: NewRevisionModalP
   )
 }
 
+function FileActions({ file, docId, revId }: {
+  file: DocumentRevisionFile
+  docId: string
+  revId: string
+}) {
+  const [loadingAction, setLoadingAction] = useState<'preview' | 'pdf' | 'word' | null>(null)
+  const [actionError, setActionError] = useState<string | null>(null)
+
+  const isPdf = file.mime_type === 'application/pdf'
+  const isDocx = file.mime_type === 'application/vnd.openxmlformats-officedocument.wordprocessingml.document'
+    || file.original_filename.toLowerCase().endsWith('.docx')
+
+  const run = async (action: 'preview' | 'pdf' | 'word') => {
+    setLoadingAction(action)
+    setActionError(null)
+    try {
+      if (action === 'preview') {
+        await documentsApi.previewPdf(docId, revId, file.id)
+      } else {
+        await documentsApi.downloadFile(docId, revId, file.id)
+      }
+    } catch {
+      setActionError('İşlem başarısız oldu.')
+    } finally {
+      setLoadingAction(null)
+    }
+  }
+
+  return (
+    <div style={{ display: 'flex', gap: 4, flexWrap: 'wrap', alignItems: 'center' }}>
+      {isPdf && (
+        <button
+          className="btn btn-sm btn-primary"
+          disabled={loadingAction !== null}
+          onClick={() => run('preview')}
+          title="Tarayıcıda görüntüle"
+        >
+          {loadingAction === 'preview' ? '…' : '👁 Görüntüle'}
+        </button>
+      )}
+      {isPdf && (
+        <button
+          className="btn btn-sm btn-secondary"
+          disabled={loadingAction !== null}
+          onClick={() => run('pdf')}
+          title="PDF olarak indir"
+        >
+          {loadingAction === 'pdf' ? '…' : '⬇ PDF İndir'}
+        </button>
+      )}
+      {isDocx && (
+        <button
+          className="btn btn-sm btn-secondary"
+          disabled={loadingAction !== null}
+          onClick={() => run('word')}
+          title="Word belgesi olarak indir"
+        >
+          {loadingAction === 'word' ? '…' : '⬇ Word İndir'}
+        </button>
+      )}
+      {!isPdf && !isDocx && (
+        <button
+          className="btn btn-sm btn-secondary"
+          disabled={loadingAction !== null}
+          onClick={() => run('pdf')}
+        >
+          {loadingAction !== null ? '…' : '⬇ İndir'}
+        </button>
+      )}
+      {actionError && (
+        <span style={{ color: 'var(--color-danger)', fontSize: 12 }}>{actionError}</span>
+      )}
+    </div>
+  )
+}
+
 function FileList({ files, docId, revId }: {
   files: DocumentRevisionFile[]
   docId: string
@@ -163,27 +239,31 @@ function FileList({ files, docId, revId }: {
         <tr>
           <th>Dosya Adı</th>
           <th>Rol</th>
-          <th>MIME</th>
           <th>Boyut</th>
-          <th>İndir</th>
+          <th>İşlemler</th>
         </tr>
       </thead>
       <tbody>
         {files.map((f) => (
           <tr key={f.id}>
-            <td>{f.original_filename}</td>
+            <td>
+              {f.mime_type === 'application/pdf' ? (
+                <button
+                  className="btn-link"
+                  style={{ background: 'none', border: 'none', padding: 0, cursor: 'pointer', color: 'var(--color-primary)', textDecoration: 'underline', fontSize: 'inherit' }}
+                  onClick={() => documentsApi.previewPdf(docId, revId, f.id)}
+                  title="Tarayıcıda aç"
+                >
+                  {f.original_filename}
+                </button>
+              ) : (
+                f.original_filename
+              )}
+            </td>
             <td>{f.file_role}</td>
-            <td style={{ fontSize: 12 }}>{f.mime_type}</td>
             <td style={{ fontSize: 12 }}>{fmtBytes(f.file_size)}</td>
             <td>
-              <a
-                href={documentsApi.getDownloadUrl(docId, revId, f.id)}
-                className="btn btn-sm btn-secondary"
-                target="_blank"
-                rel="noreferrer"
-              >
-                İndir
-              </a>
+              <FileActions file={f} docId={docId} revId={revId} />
             </td>
           </tr>
         ))}
