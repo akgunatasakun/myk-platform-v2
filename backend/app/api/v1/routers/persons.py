@@ -63,7 +63,7 @@ async def _get_person_for_club(
 @router.get("", response_model=PersonListOut)
 async def list_persons(
     skip: int = Query(0, ge=0),
-    limit: int = Query(20, ge=1, le=100),
+    limit: int = Query(20, ge=1, le=1000),
     search: Optional[str] = Query(None),
     role_code: Optional[str] = Query(None),
     is_active: Optional[bool] = Query(None),

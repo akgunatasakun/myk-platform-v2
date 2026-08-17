@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react'
 import { equipmentApi } from '@/api/equipment'
 import { personsApi } from '@/api/persons'
+import { PERSON_LIST_LIMIT } from '@/api/constants'
 import type { Equipment, EquipmentCreate, EquipmentStatus, EquipmentUpdate } from '@/types/equipment'
 import type { Person } from '@/types/person'
 
@@ -70,7 +71,9 @@ export default function EquipmentFormModal({ isOpen, onClose, equipment, onSaved
     setError(null)
 
     // Person listesini yükle (zimmet için)
-    personsApi.list({ limit: 200, is_active: true }).then((r) => setPersons(r.data.items)).catch(() => {})
+    personsApi.list({ limit: PERSON_LIST_LIMIT, is_active: true })
+      .then((r) => setPersons(r.data.items))
+      .catch((err) => console.error('Kişi listesi yüklenemedi:', err))
   }, [isOpen, equipment])
 
   const set = (field: string, value: unknown) =>

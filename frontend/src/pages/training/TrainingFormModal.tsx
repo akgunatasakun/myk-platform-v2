@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react'
 import { trainingApi } from '@/api/training'
 import { personsApi } from '@/api/persons'
+import { PERSON_LIST_LIMIT } from '@/api/constants'
 import type { TrainingCourse, TrainingCourseCreate, TrainingCourseUpdate, CourseStatus } from '@/types/training'
 import type { Person } from '@/types/person'
 
@@ -63,7 +64,9 @@ export default function TrainingFormModal({ isOpen, onClose, course, onSaved }: 
 
   useEffect(() => {
     if (!isOpen) return
-    personsApi.list({ limit: 200, is_active: true }).then((r) => setPersons(r.data.items)).catch(() => {})
+    personsApi.list({ limit: PERSON_LIST_LIMIT, is_active: true })
+      .then((r) => setPersons(r.data.items))
+      .catch((err) => console.error('Eğitmen listesi yüklenemedi:', err))
   }, [isOpen])
 
   const set = (field: keyof TrainingCourseCreate, value: unknown) =>

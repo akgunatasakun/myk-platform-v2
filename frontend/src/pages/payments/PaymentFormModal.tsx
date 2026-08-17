@@ -8,6 +8,7 @@
 import { useEffect, useState } from 'react'
 import { paymentsApi } from '@/api/payments'
 import { personsApi } from '@/api/persons'
+import { PERSON_LIST_LIMIT } from '@/api/constants'
 import type { Payment, PaymentCreate, PaymentUpdate, PaymentStatus } from '@/types/payment'
 import type { Person } from '@/types/person'
 
@@ -60,7 +61,9 @@ export default function PaymentFormModal({ isOpen, onClose, payment, onSaved }: 
 
   useEffect(() => {
     if (!isOpen || isEdit) return
-    personsApi.list({ limit: 200, is_active: true }).then((r) => setPersons(r.data.items)).catch(() => {})
+    personsApi.list({ limit: PERSON_LIST_LIMIT, is_active: true })
+      .then((r) => setPersons(r.data.items))
+      .catch((err) => console.error('Kişi listesi yüklenemedi:', err))
   }, [isOpen, isEdit])
 
   const handleSubmit = async (e: React.FormEvent) => {

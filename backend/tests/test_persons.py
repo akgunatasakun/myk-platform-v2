@@ -485,3 +485,28 @@ async def test_member_number_returned_when_set(
     assert resp.status_code == 200
     data = resp.json()
     assert data["member_number"] == "MYK-26-0099"
+
+
+# ─── Test 15: Kişi listesi üst limiti ────────────────────────────────────────
+
+async def test_person_list_accepts_limit_500(
+    client: AsyncClient,
+    yonetici_token: str,
+) -> None:
+    resp = await client.get(
+        f"{PERSONS_URL}?limit=500&is_active=true",
+        headers=_yonetici_headers(yonetici_token),
+    )
+    assert resp.status_code == 200
+    assert resp.json()["limit"] == 500
+
+
+async def test_person_list_rejects_limit_above_1000(
+    client: AsyncClient,
+    yonetici_token: str,
+) -> None:
+    resp = await client.get(
+        f"{PERSONS_URL}?limit=1001",
+        headers=_yonetici_headers(yonetici_token),
+    )
+    assert resp.status_code == 422

@@ -5,6 +5,7 @@ import TrainingFormModal from './TrainingFormModal'
 import SessionFormModal from './SessionFormModal'
 import { trainingApi } from '@/api/training'
 import { personsApi } from '@/api/persons'
+import { PERSON_LIST_LIMIT } from '@/api/constants'
 import type {
   TrainingCourse,
   TrainingEnrollment,
@@ -129,7 +130,9 @@ export default function TrainingDetailPage() {
   useEffect(() => { load() }, [id])
 
   useEffect(() => {
-    personsApi.list({ limit: 200, is_active: true }).then((r) => setPersons(r.data.items)).catch(() => {})
+    personsApi.list({ limit: PERSON_LIST_LIMIT, is_active: true })
+      .then((r) => setPersons(r.data.items))
+      .catch((err) => console.error('Katılımcı listesi yüklenemedi:', err))
   }, [])
 
   const loadReport = async () => {
