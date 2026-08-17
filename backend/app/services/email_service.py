@@ -308,6 +308,57 @@ def _build_event_email(event: "DomainEvent") -> Tuple[str, str]:
         )
         return subject, _wrap(body)
 
+    # ── payment.created ───────────────────────────────────────────────────
+    if et == "payment.created":
+        amount = p.get("amount", "—")
+        ptype = p.get("payment_type", "")
+        pmethod = p.get("payment_method", "")
+        pstatus = p.get("status", "pending")
+        status_tr = "Ödendi" if pstatus == "paid" else "Bekliyor"
+        type_row = f"<tr><td style='padding:6px;font-weight:bold;'>Tür</td><td style='padding:6px;'>{ptype}</td></tr>" if ptype else ""
+        method_row = f"<tr><td style='padding:6px;font-weight:bold;'>Yöntem</td><td style='padding:6px;'>{pmethod}</td></tr>" if pmethod else ""
+        subject = f"💳 Yeni Ödeme Kaydedildi"
+        body = (
+            f"<h3>Ödeme Kaydı</h3>"
+            f"<p>Sisteme yeni bir ödeme kaydı eklendi.</p>"
+            f"<table style='border-collapse:collapse;width:100%;'>"
+            f"<tr><td style='padding:6px;font-weight:bold;'>Tutar</td>"
+            f"<td style='padding:6px;'>{amount} TL</td></tr>"
+            f"{type_row}{method_row}"
+            f"<tr><td style='padding:6px;font-weight:bold;'>Durum</td>"
+            f"<td style='padding:6px;'>{status_tr}</td></tr>"
+            f"</table>"
+        )
+        return subject, _wrap(body)
+
+    # ── training.session.created ──────────────────────────────────────────
+    if et == "training.session.created":
+        course = p.get("course_name", "—")
+        sdate = p.get("session_date", "—")
+        stime = p.get("start_time", "")
+        etime = p.get("end_time", "")
+        instructor = p.get("instructor_name", "")
+        time_range = ""
+        if stime and etime:
+            time_range = f" {stime} – {etime}"
+        elif stime:
+            time_range = f" {stime}"
+        instructor_row = (
+            f"<tr><td style='padding:6px;font-weight:bold;'>Eğitmen</td>"
+            f"<td style='padding:6px;'>{instructor}</td></tr>"
+        ) if instructor else ""
+        subject = f"🗓️ Yeni Oturum Eklendi — {course}"
+        body = (
+            f"<h3>Yeni Eğitim Oturumu</h3>"
+            f"<p><strong>{course}</strong> kursuna yeni bir oturum eklendi.</p>"
+            f"<table style='border-collapse:collapse;width:100%;'>"
+            f"<tr><td style='padding:6px;font-weight:bold;'>Tarih</td>"
+            f"<td style='padding:6px;'>{sdate}{time_range}</td></tr>"
+            f"{instructor_row}"
+            f"</table>"
+        )
+        return subject, _wrap(body)
+
     # ── Genel / bilinmeyen event tipi ─────────────────────────────────────
     subject = f"MYK Bildirim — {et}"
     body = (

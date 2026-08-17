@@ -48,6 +48,11 @@ async def health_check(
         status["components"]["redis"] = f"error: {e}"
         ok = False
 
+    # SMTP yapılandırma durumu — değer değil, yalnızca bool
+    from app.config import get_settings
+    _cfg = get_settings()
+    status["components"]["smtp_configured"] = bool(_cfg.smtp_host)
+
     if not ok:
         status["status"] = "degraded"
         from fastapi.responses import JSONResponse

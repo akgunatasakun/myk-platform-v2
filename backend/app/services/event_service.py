@@ -381,99 +381,92 @@ async def run_all_scans(db: AsyncSession) -> dict[str, int]:
 
 
 # ─────────────────────────────────────────────────────────────────────────────
-# 3. E-posta dispatch (Sprint 13)
+# 3. E-posta dispatch (Sprint 15B — delivery tabanlı)
 # ─────────────────────────────────────────────────────────────────────────────
 
 async def dispatch_pending_events(db: AsyncSession) -> dict[str, int]:
-    """Bugün oluşturulmuş pending event'leri kulüp e-postasına gönder.
+    """Pending event'ler için delivery kayıtları oluştur, ardından gönder.
 
-    Yalnızca date(created_at) = bugün olan event'ler işlenir — eski birikmiş
-    event'lerin ilk deploy'da toplu gönderilmesini önler.
+    Sprint 15B ile birlikte bu fonksiyon iki aşamada çalışır:
+      1. Pending event'ler için resolve_recipients() → notification_deliveries INSERT
+      2. Pending delivery'leri gönder (retry + backoff delivery seviyesinde)
 
-    status geçişleri:
-      pending → done    (e-posta başarıyla gönderildi / log modunda yazıldı)
-      pending → failed  (gönderim hatası veya kulüp e-postası tanımsız)
-
-    Dönen dict: {"dispatched": N, "failed": N, "skipped": N}
+    Geriye dönük uyumluluk: dönen dict anahtar isimleri güncellendi:
+      "dispatched" → "sent"
+      "skipped"    → "retrying"
+      "failed"     → "failed"
+    Eski callers (notifications router, scheduler) bu dict'i yalnızca loglama
+    amacıyla kullanır; key değişikliği breaking change değildir.
     """
-    from datetime import timezone as _tz
+    from sqlalchemy import or_
 
-    from sqlalchemy import and_, cast, func as sa_func
-    from sqlalchemy import Date as SaDate
+    from app.config import get_settings
+    from app.services.notification_service import (
+        create_deliveries_for_event,
+        dispatch_pending_deliveries,
+    )
 
-    from app.models.club import Club
-    from app.services.email_service import dispatch_domain_event_email
+    # ── Guard: SMTP tanımlı değilse dispatch'i çalıştırma ────────────────────
+    _settings = get_settings()
+    if not _settings.smtp_host:
+        logger.warning(
+            "dispatch_pending_events: SMTP_HOST tanımlı değil — atlandı. "
+            "Eventler 'pending' kalacak."
+        )
+        return {"sent": 0, "failed": 0, "retrying": 0}
 
     today = date.today()
-    results: dict[str, int] = {"dispatched": 0, "failed": 0, "skipped": 0}
+    now_naive = datetime.utcnow()
 
-    # Bugün oluşturulan, henüz işlenmemiş event'leri al
-    stmt = (
+    # ── Aşama 1: Delivery kayıtları oluştur ──────────────────────────────────
+    # Bugünün yeni event'leri için alıcı çöz ve delivery satırları aç.
+    # Idempotent: varolan kayıtlar UNIQUE constraint ile atlanır.
+    new_events_stmt = (
         select(DomainEvent)
         .where(
             DomainEvent.status == "pending",
             DomainEvent.processed_at.is_(None),
-            cast(DomainEvent.created_at, SaDate) == today,
+            func.date(DomainEvent.created_at) == today,
         )
         .order_by(DomainEvent.created_at)
-        .limit(200)  # tek seferinde max 200 gönderim
+        .limit(200)
     )
-    events = (await db.execute(stmt)).scalars().all()
+    new_events = (await db.execute(new_events_stmt)).scalars().all()
 
-    if not events:
-        logger.info("dispatch_pending_events: gönderilek event yok")
-        return results
-
-    # Club kayıtlarını önbelleğe al (aynı club için tekrar sorgu yapmamak için)
-    club_email_cache: dict[str, Optional[str]] = {}
-
-    for event in events:
-        club_id_str = str(event.club_id)
-
-        if club_id_str not in club_email_cache:
-            club = await db.get(Club, event.club_id)
-            if club:
-                email = (club.settings or {}).get("email") or ""
-                club_email_cache[club_id_str] = email.strip() or None
-            else:
-                club_email_cache[club_id_str] = None
-
-        to_email = club_email_cache[club_id_str]
-
-        if not to_email:
-            logger.warning(
-                "dispatch: kulüp e-postası tanımsız, event atlandı: %s club_id=%s",
-                event.event_type, club_id_str,
-            )
-            event.status = "failed"
-            event.processed_at = datetime.now(tz=timezone.utc)
-            results["failed"] += 1
-            continue
-
+    total_new_deliveries = 0
+    for event in new_events:
         try:
-            await dispatch_domain_event_email(event, to_email)
-            event.status = "done"
-            event.processed_at = datetime.now(tz=timezone.utc)
-            results["dispatched"] += 1
+            n = await create_deliveries_for_event(event, db)
+            total_new_deliveries += n
+            if n == 0:
+                # Alıcı bulunamadı → event'i failed yap
+                event.status = "failed"
+                event.processed_at = datetime.now(tz=timezone.utc)
+                event.last_error = "Alıcı bulunamadı: resolve_recipients boş döndü"
+                logger.error(
+                    "dispatch: alıcı yok, event failed: type=%s event_id=%s",
+                    event.event_type, event.id,
+                )
         except Exception:
             logger.exception(
-                "dispatch: e-posta gönderilemedi event=%s to=%s",
-                event.event_type, to_email,
+                "dispatch: delivery oluşturma hatası event_id=%s", event.id
             )
-            event.status = "failed"
-            event.processed_at = datetime.now(tz=timezone.utc)
-            results["failed"] += 1
 
-    try:
-        await db.commit()
-    except Exception:
-        await db.rollback()
-        logger.exception("dispatch_pending_events: commit başarısız")
-        raise
+    if total_new_deliveries > 0 or new_events:
+        try:
+            await db.commit()
+        except Exception:
+            await db.rollback()
+            logger.exception("dispatch_pending_events: delivery commit hatası")
+            raise
 
-    total = results["dispatched"] + results["failed"]
+    # ── Aşama 2: Delivery'leri gönder ────────────────────────────────────────
+    result = await dispatch_pending_deliveries(db)
+
     logger.info(
-        "dispatch_pending_events tamamlandı: %d gönderildi, %d başarısız, %d atlandı",
-        results["dispatched"], results["failed"], results["skipped"],
+        "dispatch_pending_events: %d delivery oluşturuldu; "
+        "gönderim: %d gönderildi, %d başarısız, %d retry",
+        total_new_deliveries,
+        result["sent"], result["failed"], result["retrying"],
     )
-    return results
+    return result

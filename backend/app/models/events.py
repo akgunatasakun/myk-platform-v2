@@ -27,7 +27,7 @@ import uuid
 from datetime import datetime
 from typing import Optional
 
-from sqlalchemy import Boolean, DateTime, ForeignKey, JSON, Text, func
+from sqlalchemy import Boolean, DateTime, ForeignKey, Integer, JSON, Text, func
 from sqlalchemy.orm import Mapped, mapped_column
 
 from app.database import Base
@@ -65,6 +65,19 @@ class DomainEvent(Base):
     processed_at: Mapped[Optional[datetime]] = mapped_column(
         DateTime(timezone=True), nullable=True
     )
+
+    # ── Retry alanları (migration 0014) ──────────────────────────────────────
+    # attempt_count : kaç kez denendi (0 = henüz denenmedi)
+    # last_error    : en son hata mesajı
+    # next_attempt_at: bir sonraki deneme zamanı (NULL = hemen uygun)
+    attempt_count: Mapped[int] = mapped_column(
+        Integer(), nullable=False, default=0, server_default="0"
+    )
+    last_error: Mapped[Optional[str]] = mapped_column(Text(), nullable=True)
+    next_attempt_at: Mapped[Optional[datetime]] = mapped_column(
+        DateTime(timezone=True), nullable=True
+    )
+
     created_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), server_default=func.now(), nullable=False
     )

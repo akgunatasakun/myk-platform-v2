@@ -117,3 +117,9 @@ def yonetici_token(test_club: Club, test_user: User) -> str:
 @pytest_asyncio.fixture
 def sporcu_token(test_club: Club, sporcu_user: User) -> str:
     return create_access_token(str(sporcu_user.id), str(test_club.id), sporcu_user.role)
+
+
+@pytest.fixture
+def session_factory():
+    """Test DB session factory — concurrent dispatch testleri için iki ayrı session açar."""
+    return _TestSession
