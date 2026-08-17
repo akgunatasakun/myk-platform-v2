@@ -64,7 +64,7 @@ export default function TrainingFormModal({ isOpen, onClose, course, onSaved }: 
 
   useEffect(() => {
     if (!isOpen) return
-    personsApi.list({ limit: PERSON_LIST_LIMIT, is_active: true })
+    personsApi.list({ limit: PERSON_LIST_LIMIT, is_active: true, role_code: 'antrenor' })
       .then((r) => setPersons(r.data.items))
       .catch((err) => console.error('Eğitmen listesi yüklenemedi:', err))
   }, [isOpen])

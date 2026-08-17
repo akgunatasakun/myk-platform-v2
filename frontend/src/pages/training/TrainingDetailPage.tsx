@@ -130,7 +130,7 @@ export default function TrainingDetailPage() {
   useEffect(() => { load() }, [id])
 
   useEffect(() => {
-    personsApi.list({ limit: PERSON_LIST_LIMIT, is_active: true })
+    personsApi.list({ limit: PERSON_LIST_LIMIT, is_active: true, role_code: 'sporcu' })
       .then((r) => setPersons(r.data.items))
       .catch((err) => console.error('Katılımcı listesi yüklenemedi:', err))
   }, [])
