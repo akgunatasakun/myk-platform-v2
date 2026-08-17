@@ -242,13 +242,13 @@ export default function Dashboard() {
               onClick={() => navigate('/antrenorler')}
             />
             <StatCard
-              label="Aktif Kurs"
+              label="Aktif / Planlanan Kurs"
               value={stats.aktif_kurs_sayisi}
               icon="📚"
               onClick={() => navigate('/egitimler')}
             />
             <StatCard
-              label="Yaklaşan Eğitim"
+              label="Yaklaşan Oturum"
               value={stats.yaklasan_egitim}
               icon="🗓️"
               subtitle="bugün + 7 gün"

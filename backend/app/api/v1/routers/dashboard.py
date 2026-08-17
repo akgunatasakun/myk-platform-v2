@@ -92,7 +92,11 @@ class DashboardStats(BaseModel):
 def _oturum_out(s: TrainingSession) -> OturumOut:
     instructor_name: Optional[str] = None
     if s.instructor is not None:
+        # Oturuma özgü eğitmen varsa onu kullan
         instructor_name = f"{s.instructor.first_name} {s.instructor.last_name}"
+    elif s.course is not None and s.course.instructor is not None:
+        # Yoksa kursun ana eğitmenine geri dön
+        instructor_name = f"{s.course.instructor.first_name} {s.course.instructor.last_name}"
     return OturumOut(
         session_id=s.id,
         course_id=s.course_id,
@@ -198,22 +202,34 @@ async def get_dashboard_stats(
     )
     bakim_bekleyen_ekipman: int = bakim_r.scalar_one()
 
-    # ── Aktif kurs sayısı ─────────────────────────────────────────────────────
+    # ── Aktif / Planlanan kurs sayısı ────────────────────────────────────────
+    # "iptal" ve "tamamlandi" hariç; "aktif" + "planlandi" statüsündeki kurslar
     kurs_r = await db.execute(
         select(func.count(TrainingCourse.id)).where(
             TrainingCourse.club_id == club_id,
             TrainingCourse.is_active.is_(True),
             TrainingCourse.is_deleted.is_(False),
-            TrainingCourse.status != "iptal",
+            TrainingCourse.status.in_(["aktif", "planlandi"]),
         )
     )
     aktif_kurs_sayisi: int = kurs_r.scalar_one()
+
+    # ── Yaklaşan oturum sayısı (bugün + 7 gün, cap yok, gerçek COUNT) ────────
+    yaklasan_count_r = await db.execute(
+        select(func.count(TrainingSession.id)).where(
+            TrainingSession.club_id == club_id,
+            TrainingSession.session_date >= today,
+            TrainingSession.session_date <= next7,
+            TrainingSession.status != "iptal",
+        )
+    )
+    yaklasan_egitim: int = yaklasan_count_r.scalar_one()
 
     # ── Bugünün oturumları ────────────────────────────────────────────────────
     bugun_r = await db.execute(
         select(TrainingSession)
         .options(
-            selectinload(TrainingSession.course),
+            selectinload(TrainingSession.course).selectinload(TrainingCourse.instructor),
             selectinload(TrainingSession.instructor),
         )
         .where(
@@ -226,11 +242,11 @@ async def get_dashboard_stats(
     bugun_sessions = bugun_r.scalars().all()
     bugunun_oturumlari = [_oturum_out(s) for s in bugun_sessions]
 
-    # ── Yaklaşan oturumlar (yarın → +7 gün, max 10) ───────────────────────────
+    # ── Yaklaşan oturumlar (yarın → +7 gün, max 10, tablo için) ─────────────
     yaklasan_r = await db.execute(
         select(TrainingSession)
         .options(
-            selectinload(TrainingSession.course),
+            selectinload(TrainingSession.course).selectinload(TrainingCourse.instructor),
             selectinload(TrainingSession.instructor),
         )
         .where(
@@ -244,8 +260,6 @@ async def get_dashboard_stats(
     )
     yaklasan_sessions = yaklasan_r.scalars().all()
     yaklasan_oturumlar = [_oturum_out(s) for s in yaklasan_sessions]
-
-    yaklasan_egitim = len(bugunun_oturumlari) + len(yaklasan_oturumlar)
 
     # ── Son aktiviteler ───────────────────────────────────────────────────────
     audit_r = await db.execute(
