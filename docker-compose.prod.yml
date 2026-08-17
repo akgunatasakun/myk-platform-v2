@@ -25,6 +25,14 @@ services:
       STORAGE_SECURE: ${STORAGE_SECURE:-false}
       PDF_SERVICE_URL: http://pdf-service:8001
       LOG_LEVEL: ${LOG_LEVEL:-WARNING}
+      # SMTP değerleri production env-file'dan açıkça container'a aktarılır.
+      SMTP_HOST: ${SMTP_HOST:-}
+      SMTP_PORT: ${SMTP_PORT:-587}
+      SMTP_USERNAME: ${SMTP_USERNAME:-}
+      SMTP_PASSWORD: ${SMTP_PASSWORD:-}
+      SMTP_FROM_ADDRESS: ${SMTP_FROM_ADDRESS:-noreply@mersinyelken.org.tr}
+      SMTP_USE_TLS: ${SMTP_USE_TLS:-false}
+      SMTP_START_TLS: ${SMTP_START_TLS:-true}
       # JWT_SECRET_KEY, SECRET_KEY, ALLOW_PUBLIC_SETUP vb. → env_file: .env
     volumes:
       # Production'da kaynak kod mount edilmez — sadece storage kalıcı
