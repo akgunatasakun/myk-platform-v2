@@ -239,6 +239,15 @@ export default function AttendancePage() {
               {sessionLoadError}
             </div>
           )}
+          {/* Seçili kurs varsa ama oturum yoksa yönlendirici mesaj */}
+          {selectedCourseId && !sessionLoadError && sessions.length === 0 && (
+            <div style={{ fontSize: 12, marginTop: 6, color: 'var(--color-text-muted)' }}>
+              Bu eğitimde henüz oturum yok.{' '}
+              <a href={`/egitimler/${selectedCourseId}`} style={{ color: 'var(--color-primary)' }}>
+                Eğitim sayfasından oturum ekleyin →
+              </a>
+            </div>
+          )}
         </div>
       </div>
 

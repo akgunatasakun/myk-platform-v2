@@ -144,11 +144,70 @@ jobs:
         run: npm run build
 
   # ════════════════════════════════════════════════════════════════════════════
+  # Migration Test — izole PostgreSQL üzerinde alembic doğrulaması
+  # Her push ve PR'da çalışır; deploy bu job'ı da bekler.
+  # ════════════════════════════════════════════════════════════════════════════
+  migrate-pg:
+    name: PostgreSQL Migration Check
+    runs-on: ubuntu-latest
+
+    services:
+      postgres:
+        image: postgres:16-alpine
+        env:
+          POSTGRES_DB: myk_test
+          POSTGRES_USER: myk_test_user
+          POSTGRES_PASSWORD: myk_test_pass
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd pg_isready
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+          cache: 'pip'
+
+      - name: Install backend dependencies
+        working-directory: backend
+        run: pip install --quiet -r requirements.txt
+
+      - name: Install test dependencies
+        working-directory: backend
+        run: pip install --quiet pytest pytest-asyncio httpx aiosqlite
+
+      - name: PostgreSQL — myk_app rolü oluştur (migration GRANT için)
+        env:
+          PGPASSWORD: myk_test_pass
+        run: |
+          psql -h 127.0.0.1 -U myk_test_user -d myk_test \
+            -c "DO \$\$ BEGIN IF NOT EXISTS (SELECT FROM pg_roles WHERE rolname='myk_app') THEN CREATE ROLE myk_app; END IF; END \$\$;"
+
+      - name: PostgreSQL migration testleri
+        working-directory: backend
+        env:
+          DATABASE_URL: postgresql+asyncpg://myk_test_user:myk_test_pass@127.0.0.1:5432/myk_test
+          MYK_ENV: test
+          JWT_SECRET_KEY: ci-only-test-secret-key-not-used-in-production
+          SECRET_KEY: ci-only-test-app-secret-not-used-in-production
+          LOG_LEVEL: ERROR
+        run: |
+          python -m pytest tests/test_pg_migrations.py -v --tb=short
+
+  # ════════════════════════════════════════════════════════════════════════════
   # CD — Yalnızca v* tag push'larında, CI başarılı + environment approval sonrası
   # ════════════════════════════════════════════════════════════════════════════
   deploy:
     name: CD — Production Deploy
-    needs: ci
+    needs: [ci, migrate-pg]
     if: startsWith(github.ref, 'refs/tags/v')
     runs-on: ubuntu-latest
     environment: production      # GitHub Environment approval burada devreye girer
