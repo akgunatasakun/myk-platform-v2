@@ -89,12 +89,14 @@ async def _make_course(db: AsyncSession, club: Club, name: str = "Kurs") -> Trai
 async def _make_session(
     db: AsyncSession, club: Club, course: TrainingCourse
 ) -> TrainingSession:
-    from datetime import date
+    from datetime import datetime
+    from zoneinfo import ZoneInfo
+    today_istanbul = datetime.now(ZoneInfo("Europe/Istanbul")).date()
     session = TrainingSession(
         id=uuid.uuid4(),
         club_id=club.id,
         course_id=course.id,
-        session_date=date.today(),
+        session_date=today_istanbul,
         status="planli",
     )
     db.add(session)
