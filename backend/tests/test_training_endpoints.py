@@ -17,7 +17,15 @@ Test kapsamı:
     - Liste/detay çıktılarında instructors alanı
 """
 import uuid
-from datetime import date, time as t, timedelta
+from datetime import date, datetime, time as t, timedelta
+from zoneinfo import ZoneInfo
+
+_ISTANBUL = ZoneInfo("Europe/Istanbul")
+
+
+def _today_ist() -> date:
+    """CI UTC'de çalışır; pencere kontrolü Istanbul saatini kullanır — eşleştir."""
+    return datetime.now(_ISTANBUL).date()
 
 import pytest
 import pytest_asyncio
@@ -89,14 +97,11 @@ async def _make_course(db: AsyncSession, club: Club, name: str = "Kurs") -> Trai
 async def _make_session(
     db: AsyncSession, club: Club, course: TrainingCourse
 ) -> TrainingSession:
-    from datetime import datetime
-    from zoneinfo import ZoneInfo
-    today_istanbul = datetime.now(ZoneInfo("Europe/Istanbul")).date()
     session = TrainingSession(
         id=uuid.uuid4(),
         club_id=club.id,
         course_id=course.id,
-        session_date=today_istanbul,
+        session_date=_today_ist(),
         status="planli",
     )
     db.add(session)
@@ -741,7 +746,7 @@ async def test_self_checkin_window_closed(
     course = await _make_adult_course(db_session, test_club)
 
     # Oturum dün sona erdi (pencere kesinlikle kapalı)
-    yesterday = date.today() - timedelta(days=1)
+    yesterday = _today_ist() - timedelta(days=1)
     session = TrainingSession(
         id=uuid.uuid4(),
         club_id=test_club.id,
@@ -779,7 +784,7 @@ async def test_self_checkin_no_time_window_open_all_day(
         id=uuid.uuid4(),
         club_id=test_club.id,
         course_id=course.id,
-        session_date=date.today(),
+        session_date=_today_ist(),
         status="planli",
     )
     db_session.add(session)
@@ -811,7 +816,7 @@ async def test_self_checkin_no_birth_date_rejected(
         id=uuid.uuid4(),
         club_id=test_club.id,
         course_id=course.id,
-        session_date=date.today(),
+        session_date=_today_ist(),
         status="planli",
     )
     db_session.add(session)
@@ -836,7 +841,7 @@ async def test_self_checkin_same_day_fallback_yesterday_closed(
 ) -> None:
     """Saatsiz oturum dün ise pencere kapalıdır (sadece aynı gün açık)."""
     course = await _make_adult_course(db_session, test_club)
-    yesterday = date.today() - timedelta(days=1)
+    yesterday = _today_ist() - timedelta(days=1)
     session = TrainingSession(
         id=uuid.uuid4(),
         club_id=test_club.id,
@@ -871,7 +876,7 @@ async def test_self_checkin_sessions_me_endpoint(
         id=uuid.uuid4(),
         club_id=test_club.id,
         course_id=course.id,
-        session_date=date.today(),
+        session_date=_today_ist(),
         status="planli",
     )
     db_session.add(session)
@@ -906,7 +911,7 @@ async def test_self_checkin_sessions_coach_daily_excluded(
         id=uuid.uuid4(),
         club_id=test_club.id,
         course_id=course.id,
-        session_date=date.today(),
+        session_date=_today_ist(),
         status="planli",
     )
     db_session.add(session)
