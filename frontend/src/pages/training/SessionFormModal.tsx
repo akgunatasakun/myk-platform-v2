@@ -1,3 +1,8 @@
+/**
+ * Oturum oluşturma/düzenleme modal'ı.
+ *
+ * P0-2: Çoklu antrenör seçimi — antrenor rolüne sahip kişiler checkbox listesi olarak sunulur.
+ */
 import { useEffect, useState } from 'react'
 import { trainingApi } from '@/api/training'
 import { personsApi } from '@/api/persons'
@@ -17,7 +22,7 @@ const EMPTY: TrainingSessionCreate = {
   session_date: '',
   start_time: null,
   end_time: null,
-  instructor_person_id: null,
+  instructor_person_ids: [],
   notes: null,
   status: 'planli',
 }
@@ -31,7 +36,7 @@ const STATUS_OPTIONS: { value: SessionStatus; label: string }[] = [
 export default function SessionFormModal({ isOpen, onClose, courseId, session, onSaved }: Props) {
   const isEdit = !!session
   const [form, setForm] = useState<TrainingSessionCreate>(EMPTY)
-  const [persons, setPersons] = useState<Person[]>([])
+  const [antrenorler, setAntrenorler] = useState<Person[]>([])
   const [saving, setSaving] = useState(false)
   const [error, setError] = useState<string | null>(null)
 
@@ -43,7 +48,8 @@ export default function SessionFormModal({ isOpen, onClose, courseId, session, o
         session_date: session.session_date,
         start_time: session.start_time,
         end_time: session.end_time,
-        instructor_person_id: session.instructor_person_id,
+        // Mevcut oturum antrenörlerini yükle
+        instructor_person_ids: session.instructors.map((i) => i.id),
         notes: session.notes,
         status: session.status,
       })
@@ -52,15 +58,26 @@ export default function SessionFormModal({ isOpen, onClose, courseId, session, o
     }
   }, [isOpen, session])
 
+  // Antrenör rolüne sahip aktif kişileri yükle
   useEffect(() => {
     if (!isOpen) return
     personsApi.list({ limit: PERSON_LIST_LIMIT, is_active: true, role_code: 'antrenor' })
-      .then((r) => setPersons(r.data.items))
-      .catch((err) => console.error('Eğitmen listesi yüklenemedi:', err))
+      .then((r) => setAntrenorler(r.data.items))
+      .catch((err) => console.error('[SessionFormModal] antrenör listesi alınamadı:', err))
   }, [isOpen])
 
   const set = (field: keyof TrainingSessionCreate, value: unknown) =>
-    setForm((f) => ({ ...f, [field]: value || null }))
+    setForm((f) => ({ ...f, [field]: value ?? null }))
+
+  const toggleInstructor = (personId: string) => {
+    setForm((f) => {
+      const ids = f.instructor_person_ids ?? []
+      const next = ids.includes(personId)
+        ? ids.filter((id) => id !== personId)
+        : [...ids, personId]
+      return { ...f, instructor_person_ids: next }
+    })
+  }
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
@@ -70,7 +87,14 @@ export default function SessionFormModal({ isOpen, onClose, courseId, session, o
     try {
       let saved: TrainingSession
       if (isEdit && session) {
-        const body: TrainingSessionUpdate = { ...form }
+        const body: TrainingSessionUpdate = {
+          session_date: form.session_date,
+          start_time: form.start_time,
+          end_time: form.end_time,
+          instructor_person_ids: form.instructor_person_ids ?? [],
+          notes: form.notes,
+          status: form.status,
+        }
         const resp = await trainingApi.updateSession(courseId, session.id, body)
         saved = resp.data
       } else {
@@ -89,9 +113,11 @@ export default function SessionFormModal({ isOpen, onClose, courseId, session, o
 
   if (!isOpen) return null
 
+  const selectedIds = form.instructor_person_ids ?? []
+
   return (
     <div className="modal-overlay" onClick={onClose}>
-      <div className="modal" style={{ maxWidth: 480 }} onClick={(e) => e.stopPropagation()}>
+      <div className="modal" style={{ maxWidth: 500 }} onClick={(e) => e.stopPropagation()}>
         <div className="modal-header">
           <h2 className="modal-title">{isEdit ? 'Oturumu Düzenle' : 'Yeni Oturum'}</h2>
           <button className="modal-close" onClick={onClose}>×</button>
@@ -148,20 +174,53 @@ export default function SessionFormModal({ isOpen, onClose, courseId, session, o
               </select>
             </div>
 
+            {/* P0-2: Çoklu antrenör seçimi (opsiyonel — kurstan farklıysa) */}
             <div className="form-group">
-              <label className="form-label">Eğitmen (opsiyonel — kurstan farklıysa)</label>
-              <select
-                className="form-select"
-                value={form.instructor_person_id ?? ''}
-                onChange={(e) => set('instructor_person_id', e.target.value)}
-              >
-                <option value="">— Kurs eğitmeni —</option>
-                {persons.map((p) => (
-                  <option key={p.id} value={p.id}>
-                    {p.first_name} {p.last_name}
-                  </option>
-                ))}
-              </select>
+              <label className="form-label">
+                Antrenörler (opsiyonel — kurstan farklıysa)
+                {selectedIds.length > 0 && (
+                  <span style={{ marginLeft: 8, fontWeight: 400, color: 'var(--color-text-muted)', fontSize: 12 }}>
+                    ({selectedIds.length} seçildi)
+                  </span>
+                )}
+              </label>
+              {antrenorler.length === 0 ? (
+                <div style={{ color: 'var(--color-text-muted)', fontSize: 13, padding: '6px 0' }}>
+                  Antrenor rolüne sahip aktif kişi bulunamadı.
+                </div>
+              ) : (
+                <div
+                  style={{
+                    border: '1px solid var(--color-border)',
+                    borderRadius: 6,
+                    maxHeight: 140,
+                    overflowY: 'auto',
+                    padding: '4px 0',
+                  }}
+                >
+                  {antrenorler.map((p) => (
+                    <label
+                      key={p.id}
+                      style={{
+                        display: 'flex',
+                        alignItems: 'center',
+                        gap: 8,
+                        padding: '6px 12px',
+                        cursor: 'pointer',
+                        background: selectedIds.includes(p.id) ? 'var(--color-primary-light, rgba(0,100,200,0.08))' : 'transparent',
+                      }}
+                    >
+                      <input
+                        type="checkbox"
+                        checked={selectedIds.includes(p.id)}
+                        onChange={() => toggleInstructor(p.id)}
+                        style={{ accentColor: 'var(--color-primary)' }}
+                      />
+                      <span style={{ fontSize: 14 }}>{p.first_name} {p.last_name}</span>
+                    </label>
+                  ))}
+                </div>
+              )}
             </div>
 
             <div className="form-group">

@@ -63,7 +63,7 @@ export default function PaymentFormModal({ isOpen, onClose, payment, onSaved }: 
     if (!isOpen || isEdit) return
     personsApi.list({ limit: PERSON_LIST_LIMIT, is_active: true })
       .then((r) => setPersons(r.data.items))
-      .catch((err) => console.error('Kişi listesi yüklenemedi:', err))
+      .catch((err) => console.error('[PaymentFormModal] kişi listesi alınamadı:', err))
   }, [isOpen, isEdit])
 
   const handleSubmit = async (e: React.FormEvent) => {

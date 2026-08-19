@@ -9,6 +9,13 @@ export type EnrollmentStatus = 'active' | 'cancelled' | 'completed'
 export type PaymentStatus = 'pending' | 'paid' | 'overdue'
 export type AttendanceStatus = 'var' | 'yok' | 'izinli' | 'gecikti'
 
+// ── Antrenör referansı ────────────────────────────────────────────────────────
+
+export interface InstructorRef {
+  id: string
+  name: string
+}
+
 // ── TrainingCourse ────────────────────────────────────────────────────────────
 
 export interface TrainingCourse {
@@ -23,8 +30,11 @@ export interface TrainingCourse {
   schedule_text: string | null
   capacity: number
   fee: string
+  // Geriye dönük uyumluluk (ilk antrenörden)
   instructor_person_id: string | null
   instructor_name: string | null
+  // Yeni — çoklu antrenör listesi
+  instructors: InstructorRef[]
   status: CourseStatus
   is_active: boolean
   is_deleted: boolean
@@ -50,6 +60,9 @@ export interface TrainingCourseCreate {
   schedule_text?: string | null
   capacity?: number
   fee?: string
+  // Yeni çoklu antrenör
+  instructor_person_ids?: string[]
+  // Geriye dönük uyumluluk
   instructor_person_id?: string | null
   status?: CourseStatus
 }
@@ -64,6 +77,9 @@ export interface TrainingCourseUpdate {
   schedule_text?: string | null
   capacity?: number
   fee?: string
+  // Yeni çoklu antrenör
+  instructor_person_ids?: string[]
+  // Geriye dönük uyumluluk
   instructor_person_id?: string | null
   status?: CourseStatus
   is_active?: boolean
@@ -78,8 +94,11 @@ export interface TrainingSession {
   session_date: string
   start_time: string | null
   end_time: string | null
+  // Geriye dönük uyumluluk
   instructor_person_id: string | null
   instructor_name: string | null
+  // Yeni
+  instructors: InstructorRef[]
   status: SessionStatus
   notes: string | null
   attendance_count: number
@@ -91,6 +110,9 @@ export interface TrainingSessionCreate {
   session_date: string
   start_time?: string | null
   end_time?: string | null
+  // Yeni çoklu antrenör
+  instructor_person_ids?: string[]
+  // Geriye dönük uyumluluk
   instructor_person_id?: string | null
   notes?: string | null
   status?: SessionStatus
@@ -100,6 +122,9 @@ export interface TrainingSessionUpdate {
   session_date?: string
   start_time?: string | null
   end_time?: string | null
+  // Yeni çoklu antrenör
+  instructor_person_ids?: string[]
+  // Geriye dönük uyumluluk
   instructor_person_id?: string | null
   notes?: string | null
   status?: SessionStatus

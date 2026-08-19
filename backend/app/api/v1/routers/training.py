@@ -7,7 +7,7 @@ Endpoint listesi:
   PATCH  /trainings/{course_id}                             → kurs güncelle
   DELETE /trainings/{course_id}                             → kurs soft-delete
 
-  GET    /trainings/{course_id}/participants                → kayıt listesi
+  GET    /trainings/{course_id}/participants                → kayıt listesi (sadece aktif)
   POST   /trainings/{course_id}/participants                → kayıt ekle
   DELETE /trainings/{course_id}/participants/{person_id}    → kayıt iptal
 
@@ -39,12 +39,14 @@ from app.services.event_service import emit_event
 from app.core.security import get_current_user
 from app.core.tenant import get_club_id
 from app.database import get_db
-from app.models.person import Person
+from app.models.person import Person, PersonRole
 from app.models.training import (
     TrainingAttendance,
     TrainingCourse,
+    TrainingCourseInstructor,
     TrainingEnrollment,
     TrainingSession,
+    TrainingSessionInstructor,
 )
 from app.schemas.auth import TokenPayload
 from app.schemas.training import (
@@ -52,6 +54,7 @@ from app.schemas.training import (
     AttendanceBulkUpdate,
     AttendancePersonSummary,
     AttendanceReport,
+    InstructorRef,
     TrainingAttendanceOut,
     TrainingCourseCreate,
     TrainingCourseListOut,
@@ -138,6 +141,185 @@ async def _active_enrollment_count(
     return result.scalar_one()
 
 
+async def _load_course_instructors(
+    course_id: uuid.UUID, club_id: uuid.UUID, db: AsyncSession
+) -> List[InstructorRef]:
+    """Kurs antrenörlerini junction tablosundan yükle."""
+    result = await db.execute(
+        select(TrainingCourseInstructor)
+        .options(selectinload(TrainingCourseInstructor.person))
+        .where(
+            TrainingCourseInstructor.course_id == course_id,
+            TrainingCourseInstructor.club_id == club_id,
+        )
+        .order_by(TrainingCourseInstructor.created_at)
+    )
+    rows = result.scalars().all()
+    return [
+        InstructorRef(id=r.person_id, name=_person_name(r.person) or str(r.person_id))
+        for r in rows
+        if r.person is not None
+    ]
+
+
+async def _load_session_instructors(
+    session_id: uuid.UUID, club_id: uuid.UUID, db: AsyncSession
+) -> List[InstructorRef]:
+    """Oturum antrenörlerini junction tablosundan yükle."""
+    result = await db.execute(
+        select(TrainingSessionInstructor)
+        .options(selectinload(TrainingSessionInstructor.person))
+        .where(
+            TrainingSessionInstructor.session_id == session_id,
+            TrainingSessionInstructor.club_id == club_id,
+        )
+        .order_by(TrainingSessionInstructor.created_at)
+    )
+    rows = result.scalars().all()
+    return [
+        InstructorRef(id=r.person_id, name=_person_name(r.person) or str(r.person_id))
+        for r in rows
+        if r.person is not None
+    ]
+
+
+async def _validate_instructors(
+    instructor_ids: List[uuid.UUID],
+    club_id: uuid.UUID,
+    db: AsyncSession,
+) -> None:
+    """Her person_id: aynı kulüpte aktif + antrenor rolü var mı?
+
+    Raises HTTPException 422 on first violation.
+    """
+    for pid in instructor_ids:
+        person_result = await db.execute(
+            select(Person).where(
+                Person.id == pid,
+                Person.club_id == club_id,
+                Person.is_active.is_(True),
+                Person.is_deleted.is_(False),
+            )
+        )
+        person = person_result.scalar_one_or_none()
+        if person is None:
+            raise HTTPException(
+                status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+                detail=f"Antrenör olarak atanacak kişi bu kulüpte bulunamadı: {pid}",
+            )
+        role_result = await db.execute(
+            select(PersonRole).where(
+                PersonRole.person_id == pid,
+                PersonRole.role_code == "antrenor",
+            )
+        )
+        if role_result.scalar_one_or_none() is None:
+            raise HTTPException(
+                status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+                detail=f"Kişinin 'antrenor' rolü yok: {pid}",
+            )
+
+
+async def _set_course_instructors(
+    course_id: uuid.UUID,
+    club_id: uuid.UUID,
+    instructor_ids: List[uuid.UUID],
+    db: AsyncSession,
+    *,
+    replace: bool = True,
+) -> None:
+    """Junction tablosunu güncelle.
+
+    replace=True: mevcut kayıtları sil, yeniden ekle.
+    replace=False: sadece ekle (duplicate'i yoksay).
+    """
+    if replace:
+        existing = await db.execute(
+            select(TrainingCourseInstructor).where(
+                TrainingCourseInstructor.course_id == course_id,
+                TrainingCourseInstructor.club_id == club_id,
+            )
+        )
+        for row in existing.scalars().all():
+            await db.delete(row)
+        await db.flush()
+
+    for pid in instructor_ids:
+        if not replace:
+            dup = await db.execute(
+                select(TrainingCourseInstructor).where(
+                    TrainingCourseInstructor.course_id == course_id,
+                    TrainingCourseInstructor.person_id == pid,
+                )
+            )
+            if dup.scalar_one_or_none() is not None:
+                continue
+        db.add(TrainingCourseInstructor(
+            club_id=club_id,
+            course_id=course_id,
+            person_id=pid,
+        ))
+    await db.flush()
+
+
+async def _set_session_instructors(
+    session_id: uuid.UUID,
+    club_id: uuid.UUID,
+    instructor_ids: List[uuid.UUID],
+    db: AsyncSession,
+    *,
+    replace: bool = True,
+) -> None:
+    if replace:
+        existing = await db.execute(
+            select(TrainingSessionInstructor).where(
+                TrainingSessionInstructor.session_id == session_id,
+                TrainingSessionInstructor.club_id == club_id,
+            )
+        )
+        for row in existing.scalars().all():
+            await db.delete(row)
+        await db.flush()
+
+    for pid in instructor_ids:
+        if not replace:
+            dup = await db.execute(
+                select(TrainingSessionInstructor).where(
+                    TrainingSessionInstructor.session_id == session_id,
+                    TrainingSessionInstructor.person_id == pid,
+                )
+            )
+            if dup.scalar_one_or_none() is not None:
+                continue
+        db.add(TrainingSessionInstructor(
+            club_id=club_id,
+            session_id=session_id,
+            person_id=pid,
+        ))
+    await db.flush()
+
+
+def _apply_instructors_to_course_out(out: TrainingCourseOut, instructors: List[InstructorRef]) -> None:
+    """Çıktı nesnesine antrenör verilerini yaz (eski + yeni alanlar)."""
+    out.instructors = instructors
+    if instructors:
+        out.instructor_person_id = instructors[0].id
+        out.instructor_name = instructors[0].name
+    else:
+        out.instructor_person_id = None
+        out.instructor_name = None
+
+
+def _apply_instructors_to_session_out(out: TrainingSessionOut, instructors: List[InstructorRef]) -> None:
+    out.instructors = instructors
+    if instructors:
+        out.instructor_person_id = instructors[0].id
+        out.instructor_name = instructors[0].name
+    else:
+        out.instructor_person_id = None
+        out.instructor_name = None
+
+
 # ─── Kurslar ──────────────────────────────────────────────────────────────────
 
 @router.get("", response_model=TrainingCourseListOut)
@@ -173,8 +355,10 @@ async def list_courses(
     items = []
     for c in courses:
         cnt = await _active_enrollment_count(c.id, club_id, db)
+        instructors = await _load_course_instructors(c.id, club_id, db)
         out = TrainingCourseOut.model_validate(c)
         out.enrollment_count = cnt
+        _apply_instructors_to_course_out(out, instructors)
         items.append(out)
 
     return TrainingCourseListOut(items=items, total=total, skip=skip, limit=limit)
@@ -189,20 +373,10 @@ async def create_course(
     _: None = Depends(require_permission("egitim:write")),
     db: AsyncSession = Depends(get_db),
 ) -> TrainingCourseOut:
-    # Eğitmen bu kulübe ait mi?
-    if body.instructor_person_id is not None:
-        p = await db.execute(
-            select(Person).where(
-                Person.id == body.instructor_person_id,
-                Person.club_id == club_id,
-                Person.is_deleted.is_(False),
-            )
-        )
-        if p.scalar_one_or_none() is None:
-            raise HTTPException(
-                status_code=status.HTTP_404_NOT_FOUND,
-                detail="Eğitmen olarak atanacak kişi bu kulüpte bulunamadı.",
-            )
+    instructor_ids = body.effective_instructor_ids()
+
+    if instructor_ids:
+        await _validate_instructors(instructor_ids, club_id, db)
 
     course = TrainingCourse(
         club_id=club_id,
@@ -215,11 +389,16 @@ async def create_course(
         schedule_text=body.schedule_text,
         capacity=body.capacity,
         fee=body.fee,
-        instructor_person_id=body.instructor_person_id,
+        # instructor_person_id legacy sütunu: ilk antrenörden doldur
+        instructor_person_id=instructor_ids[0] if instructor_ids else None,
         status=body.status,
     )
     db.add(course)
     await db.flush()
+
+    # Junction tabloya yaz
+    if instructor_ids:
+        await _set_course_instructors(course.id, club_id, instructor_ids, db, replace=False)
 
     await log_action(
         db,
@@ -232,8 +411,10 @@ async def create_course(
         request=request,
     )
 
+    instructors = await _load_course_instructors(course.id, club_id, db)
     out = TrainingCourseOut.model_validate(course)
     out.enrollment_count = 0
+    _apply_instructors_to_course_out(out, instructors)
     return out
 
 
@@ -246,8 +427,10 @@ async def get_course(
 ) -> TrainingCourseOut:
     course = await _get_course(course_id, club_id, db)
     cnt = await _active_enrollment_count(course_id, club_id, db)
+    instructors = await _load_course_instructors(course_id, club_id, db)
     out = TrainingCourseOut.model_validate(course)
     out.enrollment_count = cnt
+    _apply_instructors_to_course_out(out, instructors)
     return out
 
 
@@ -262,53 +445,49 @@ async def update_course(
     db: AsyncSession = Depends(get_db),
 ) -> TrainingCourseOut:
     course = await _get_course(course_id, club_id, db)
-    update_data = body.model_dump(exclude_unset=True)
 
-    if not update_data:
-        cnt = await _active_enrollment_count(course_id, club_id, db)
-        out = TrainingCourseOut.model_validate(course)
-        out.enrollment_count = cnt
-        return out
+    # Antrenör güncellemesi var mı?
+    if body.has_instructor_update():
+        new_instructor_ids = body.effective_instructor_ids()
+        if new_instructor_ids:
+            await _validate_instructors(new_instructor_ids, club_id, db)
+        await _set_course_instructors(course_id, club_id, new_instructor_ids, db, replace=True)
+        # Legacy sütunu da güncelle
+        course.instructor_person_id = new_instructor_ids[0] if new_instructor_ids else None
 
-    # Eğitmen değişiyorsa bu kulüpte var mı kontrol et
-    new_instructor_id = update_data.get("instructor_person_id")
-    if new_instructor_id is not None:
-        p = await db.execute(
-            select(Person).where(
-                Person.id == new_instructor_id,
-                Person.club_id == club_id,
-                Person.is_deleted.is_(False),
-            )
-        )
-        if p.scalar_one_or_none() is None:
-            raise HTTPException(
-                status_code=status.HTTP_404_NOT_FOUND,
-                detail="Eğitmen olarak atanacak kişi bu kulüpte bulunamadı.",
-            )
-
-    before = {k: str(getattr(course, k)) for k in update_data if hasattr(course, k)}
-    for field, value in update_data.items():
-        setattr(course, field, value)
-    await db.flush()
-    # PostgreSQL onupdate=func.now() ile üretilen updated_at gibi
-    # server-side alanları AsyncSession içinde güvenli şekilde yeniden yükle.
-    await db.refresh(course)
-
-    await log_action(
-        db,
-        action="training_course_updated",
-        resource_type="training_course",
-        club_id=club_id,
-        user_id=uuid.UUID(current_user.sub),
-        resource_id=str(course.id),
-        before=before,
-        after={k: str(v) for k, v in update_data.items()},
-        request=request,
+    # Diğer alanları güncelle (antrenör alanları hariç)
+    update_data = body.model_dump(
+        exclude_unset=True,
+        exclude={"instructor_person_id", "instructor_person_ids"},
     )
 
+    if update_data:
+        before = {k: str(getattr(course, k)) for k in update_data if hasattr(course, k)}
+        for field, value in update_data.items():
+            setattr(course, field, value)
+        await db.flush()
+        await db.refresh(course)
+
+        await log_action(
+            db,
+            action="training_course_updated",
+            resource_type="training_course",
+            club_id=club_id,
+            user_id=uuid.UUID(current_user.sub),
+            resource_id=str(course.id),
+            before=before,
+            after={k: str(v) for k, v in update_data.items()},
+            request=request,
+        )
+    elif body.has_instructor_update():
+        await db.flush()
+        await db.refresh(course)
+
     cnt = await _active_enrollment_count(course_id, club_id, db)
+    instructors = await _load_course_instructors(course_id, club_id, db)
     out = TrainingCourseOut.model_validate(course)
     out.enrollment_count = cnt
+    _apply_instructors_to_course_out(out, instructors)
     return out
 
 
@@ -346,6 +525,10 @@ async def list_participants(
     _: None = Depends(require_permission("egitim:read")),
     db: AsyncSession = Depends(get_db),
 ) -> List[TrainingEnrollmentOut]:
+    """Aktif kayıtlı katılımcıları döndür.
+
+    P0-1 fix: status='active' filtresi eklendi — iptal kayıtlar hariç tutulur.
+    """
     await _get_course(course_id, club_id, db)
 
     result = await db.execute(
@@ -354,6 +537,7 @@ async def list_participants(
         .where(
             TrainingEnrollment.course_id == course_id,
             TrainingEnrollment.club_id == club_id,
+            TrainingEnrollment.status == "active",        # P0-1 fix
             TrainingEnrollment.is_deleted.is_(False),
         )
         .order_by(TrainingEnrollment.enrolled_at)
@@ -527,13 +711,14 @@ async def list_sessions(
 
     items = []
     for s in sessions:
-        # Yoklama sayısı
         att_count_result = await db.execute(
             select(func.count()).where(TrainingAttendance.session_id == s.id)
         )
         att_count = att_count_result.scalar_one()
+        instructors = await _load_session_instructors(s.id, club_id, db)
         out = TrainingSessionOut.model_validate(s)
         out.attendance_count = att_count
+        _apply_instructors_to_session_out(out, instructors)
         items.append(out)
     return items
 
@@ -554,20 +739,9 @@ async def create_session(
 ) -> TrainingSessionOut:
     await _get_course(course_id, club_id, db)
 
-    # Oturuma özel eğitmen bu kulüpte var mı?
-    if body.instructor_person_id is not None:
-        p = await db.execute(
-            select(Person).where(
-                Person.id == body.instructor_person_id,
-                Person.club_id == club_id,
-                Person.is_deleted.is_(False),
-            )
-        )
-        if p.scalar_one_or_none() is None:
-            raise HTTPException(
-                status_code=status.HTTP_404_NOT_FOUND,
-                detail="Eğitmen olarak atanacak kişi bu kulüpte bulunamadı.",
-            )
+    instructor_ids = body.effective_instructor_ids()
+    if instructor_ids:
+        await _validate_instructors(instructor_ids, club_id, db)
 
     session = TrainingSession(
         club_id=club_id,
@@ -575,12 +749,16 @@ async def create_session(
         session_date=body.session_date,
         start_time=body.start_time,
         end_time=body.end_time,
-        instructor_person_id=body.instructor_person_id,
+        # Legacy sütun: ilk antrenörden
+        instructor_person_id=instructor_ids[0] if instructor_ids else None,
         notes=body.notes,
         status=body.status,
     )
     db.add(session)
     await db.flush()
+
+    if instructor_ids:
+        await _set_session_instructors(session.id, club_id, instructor_ids, db, replace=False)
 
     await log_action(
         db,
@@ -606,8 +784,10 @@ async def create_session(
         },
     )
 
+    instructors = await _load_session_instructors(session.id, club_id, db)
     out = TrainingSessionOut.model_validate(session)
     out.attendance_count = 0
+    _apply_instructors_to_session_out(out, instructors)
     return out
 
 
@@ -623,31 +803,47 @@ async def update_session(
     db: AsyncSession = Depends(get_db),
 ) -> TrainingSessionOut:
     session = await _get_session(session_id, course_id, club_id, db)
-    update_data = body.model_dump(exclude_unset=True)
 
-    for field, value in update_data.items():
-        setattr(session, field, value)
-    await db.flush()
-    # Server-side updated_at değerini response serialization öncesi yükle.
-    await db.refresh(session)
+    if body.has_instructor_update():
+        new_instructor_ids = body.effective_instructor_ids()
+        if new_instructor_ids:
+            await _validate_instructors(new_instructor_ids, club_id, db)
+        await _set_session_instructors(session_id, club_id, new_instructor_ids, db, replace=True)
+        session.instructor_person_id = new_instructor_ids[0] if new_instructor_ids else None
 
-    await log_action(
-        db,
-        action="training_session_updated",
-        resource_type="training_session",
-        club_id=club_id,
-        user_id=uuid.UUID(current_user.sub),
-        resource_id=str(session.id),
-        after={k: str(v) for k, v in update_data.items()},
-        request=request,
+    update_data = body.model_dump(
+        exclude_unset=True,
+        exclude={"instructor_person_id", "instructor_person_ids"},
     )
+
+    if update_data:
+        for field, value in update_data.items():
+            setattr(session, field, value)
+        await db.flush()
+        await db.refresh(session)
+
+        await log_action(
+            db,
+            action="training_session_updated",
+            resource_type="training_session",
+            club_id=club_id,
+            user_id=uuid.UUID(current_user.sub),
+            resource_id=str(session.id),
+            after={k: str(v) for k, v in update_data.items()},
+            request=request,
+        )
+    elif body.has_instructor_update():
+        await db.flush()
+        await db.refresh(session)
 
     att_count_result = await db.execute(
         select(func.count()).where(TrainingAttendance.session_id == session.id)
     )
     att_count = att_count_result.scalar_one()
+    instructors = await _load_session_instructors(session.id, club_id, db)
     out = TrainingSessionOut.model_validate(session)
     out.attendance_count = att_count
+    _apply_instructors_to_session_out(out, instructors)
     return out
 
 
@@ -701,10 +897,7 @@ async def bulk_update_attendance(
 ) -> AttendanceBulkResult:
     """Toplu yoklama UPSERT — varsa güncelle, yoksa oluştur.
 
-    Eski Flask davranışı:
-      for k in d.get('kayitlar', []):
-          m = qone(... WHERE kurs_id AND sporcu_id AND tarih AND kulup_id)
-          if m: UPDATE ... else: INSERT ...
+    P0-1 fix: Her person_id'nin bu kursa aktif kayıtlı olduğu doğrulanır.
     """
     session = await _get_session(session_id, course_id, club_id, db)
     user_id = uuid.UUID(current_user.sub)
@@ -713,6 +906,22 @@ async def bulk_update_attendance(
     updated = 0
 
     for rec in body.records:
+        # P0-1: Enrollment doğrulaması — person bu kursa aktif kayıtlı olmalı
+        enrollment_check = await db.execute(
+            select(TrainingEnrollment).where(
+                TrainingEnrollment.course_id == course_id,
+                TrainingEnrollment.club_id == club_id,
+                TrainingEnrollment.person_id == rec.person_id,
+                TrainingEnrollment.status == "active",
+                TrainingEnrollment.is_deleted.is_(False),
+            )
+        )
+        if enrollment_check.scalar_one_or_none() is None:
+            raise HTTPException(
+                status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+                detail=f"Kişi bu kursa aktif kayıtlı değil: {rec.person_id}",
+            )
+
         existing = await db.execute(
             select(TrainingAttendance).where(
                 TrainingAttendance.session_id == session_id,
@@ -776,7 +985,6 @@ async def attendance_report(
     """Kurs bazlı devam raporu — kişi başına var/yok/izinli/gecikti sayıları."""
     course = await _get_course(course_id, club_id, db)
 
-    # Tüm oturumlar
     sessions_result = await db.execute(
         select(TrainingSession).where(
             TrainingSession.course_id == course_id,
@@ -794,7 +1002,6 @@ async def attendance_report(
             katilimcilar=[],
         )
 
-    # Tüm yoklama kayıtları
     att_result = await db.execute(
         select(TrainingAttendance)
         .options(selectinload(TrainingAttendance.person))
@@ -805,7 +1012,6 @@ async def attendance_report(
     )
     records = att_result.scalars().all()
 
-    # Kişi bazlı topla
     summary: dict[uuid.UUID, AttendancePersonSummary] = {}
     for r in records:
         if r.person_id not in summary:
@@ -824,7 +1030,6 @@ async def attendance_report(
         elif r.status == "gecikti":
             s.gecikti += 1
 
-    # Devam yüzdesi = (var + gecikti) / toplam
     toplam_oturum = len(sessions)
     for s in summary.values():
         if s.toplam_oturum > 0:

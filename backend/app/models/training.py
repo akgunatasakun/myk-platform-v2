@@ -22,6 +22,64 @@ if TYPE_CHECKING:
     from app.models.user import User
 
 
+class TrainingCourseInstructor(Base):
+    """Kurs — antrenör junction tablosu (çoklu antrenör desteği)."""
+
+    __tablename__ = "training_course_instructors"
+    __table_args__ = (
+        UniqueConstraint("course_id", "person_id", name="uq_tci_course_person"),
+    )
+
+    id: Mapped[uuid.UUID] = mapped_column(primary_key=True, default=uuid.uuid4)
+    club_id: Mapped[uuid.UUID] = mapped_column(
+        ForeignKey("clubs.id", ondelete="CASCADE"), nullable=False, index=True
+    )
+    course_id: Mapped[uuid.UUID] = mapped_column(
+        ForeignKey("training_courses.id", ondelete="CASCADE"), nullable=False, index=True
+    )
+    person_id: Mapped[uuid.UUID] = mapped_column(
+        ForeignKey("persons.id", ondelete="CASCADE"), nullable=False, index=True
+    )
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), server_default=func.now()
+    )
+
+    course: Mapped["TrainingCourse"] = relationship(back_populates="course_instructors")
+    person: Mapped["Person"] = relationship(foreign_keys=[person_id], lazy="select")
+
+    def __repr__(self) -> str:
+        return f"<TrainingCourseInstructor course={self.course_id!s:.8} person={self.person_id!s:.8}>"
+
+
+class TrainingSessionInstructor(Base):
+    """Oturum — antrenör junction tablosu (çoklu antrenör desteği)."""
+
+    __tablename__ = "training_session_instructors"
+    __table_args__ = (
+        UniqueConstraint("session_id", "person_id", name="uq_tsi_session_person"),
+    )
+
+    id: Mapped[uuid.UUID] = mapped_column(primary_key=True, default=uuid.uuid4)
+    club_id: Mapped[uuid.UUID] = mapped_column(
+        ForeignKey("clubs.id", ondelete="CASCADE"), nullable=False, index=True
+    )
+    session_id: Mapped[uuid.UUID] = mapped_column(
+        ForeignKey("training_sessions.id", ondelete="CASCADE"), nullable=False, index=True
+    )
+    person_id: Mapped[uuid.UUID] = mapped_column(
+        ForeignKey("persons.id", ondelete="CASCADE"), nullable=False, index=True
+    )
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), server_default=func.now()
+    )
+
+    session: Mapped["TrainingSession"] = relationship(back_populates="session_instructors")
+    person: Mapped["Person"] = relationship(foreign_keys=[person_id], lazy="select")
+
+    def __repr__(self) -> str:
+        return f"<TrainingSessionInstructor session={self.session_id!s:.8} person={self.person_id!s:.8}>"
+
+
 class TrainingCourse(Base):
     """Fiziksel yelken kursu."""
 
@@ -56,6 +114,11 @@ class TrainingCourse(Base):
     instructor: Mapped[Optional["Person"]] = relationship(
         foreign_keys=[instructor_person_id],
         lazy="select",
+    )
+    course_instructors: Mapped[List["TrainingCourseInstructor"]] = relationship(
+        back_populates="course",
+        cascade="all, delete-orphan",
+        order_by="TrainingCourseInstructor.created_at",
     )
     sessions: Mapped[List["TrainingSession"]] = relationship(
         back_populates="course",
@@ -113,6 +176,11 @@ class TrainingSession(Base):
     instructor: Mapped[Optional["Person"]] = relationship(
         foreign_keys=[instructor_person_id],
         lazy="select",
+    )
+    session_instructors: Mapped[List["TrainingSessionInstructor"]] = relationship(
+        back_populates="session",
+        cascade="all, delete-orphan",
+        order_by="TrainingSessionInstructor.created_at",
     )
     attendance: Mapped[List["TrainingAttendance"]] = relationship(
         back_populates="session",

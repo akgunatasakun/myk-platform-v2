@@ -26,6 +26,14 @@ class AttendanceStatus(str, Enum):
     gecikti = "gecikti"
 
 
+# ── Yardımcı tipler ───────────────────────────────────────────────────────────
+
+class InstructorRef(BaseModel):
+    """Antrenör referansı — çıktı listesinde kullanılır."""
+    id: uuid.UUID
+    name: str
+
+
 # ── TrainingCourse ────────────────────────────────────────────────────────────
 
 class TrainingCourseCreate(BaseModel):
@@ -40,6 +48,9 @@ class TrainingCourseCreate(BaseModel):
     schedule_text: Optional[str] = None
     capacity: int = Field(default=0, ge=0)
     fee: Decimal = Field(default=Decimal("0"), ge=0)
+    # Çoklu antrenör — yeni alan
+    instructor_person_ids: List[uuid.UUID] = Field(default_factory=list)
+    # Geriye dönük uyumluluk — tek antrenör (junction'a yazılır)
     instructor_person_id: Optional[uuid.UUID] = None
     status: Literal["planlandi", "aktif", "tamamlandi", "iptal"] = "planlandi"
 
@@ -51,11 +62,17 @@ class TrainingCourseCreate(BaseModel):
     @field_validator("end_date")
     @classmethod
     def validate_end_date(cls, v: Optional[date], info: object) -> Optional[date]:
-        # Pydantic v2: values dict info.data
         start = getattr(info, "data", {}).get("start_date") if hasattr(info, "data") else None
         if v is not None and start is not None and v < start:
             raise ValueError("Bitiş tarihi başlangıç tarihinden önce olamaz.")
         return v
+
+    def effective_instructor_ids(self) -> List[uuid.UUID]:
+        """instructor_person_id (eski) ve instructor_person_ids (yeni) birleştir."""
+        ids: List[uuid.UUID] = list(self.instructor_person_ids)
+        if self.instructor_person_id and self.instructor_person_id not in ids:
+            ids.insert(0, self.instructor_person_id)
+        return ids
 
 
 class TrainingCourseUpdate(BaseModel):
@@ -70,6 +87,9 @@ class TrainingCourseUpdate(BaseModel):
     schedule_text: Optional[str] = None
     capacity: Optional[int] = Field(default=None, ge=0)
     fee: Optional[Decimal] = Field(default=None, ge=0)
+    # Çoklu antrenör — yeni alan (None = değiştirme)
+    instructor_person_ids: Optional[List[uuid.UUID]] = None
+    # Geriye dönük uyumluluk
     instructor_person_id: Optional[uuid.UUID] = None
     status: Optional[Literal["planlandi", "aktif", "tamamlandi", "iptal"]] = None
     is_active: Optional[bool] = None
@@ -80,6 +100,20 @@ class TrainingCourseUpdate(BaseModel):
         if v is not None:
             return v.strip()
         return v
+
+    def has_instructor_update(self) -> bool:
+        return self.instructor_person_ids is not None or self.instructor_person_id is not None
+
+    def effective_instructor_ids(self) -> List[uuid.UUID]:
+        """Güncellenecek antrenör listesini döndür."""
+        if self.instructor_person_ids is not None:
+            ids = list(self.instructor_person_ids)
+            if self.instructor_person_id and self.instructor_person_id not in ids:
+                ids.insert(0, self.instructor_person_id)
+            return ids
+        if self.instructor_person_id is not None:
+            return [self.instructor_person_id]
+        return []
 
 
 class TrainingCourseOut(BaseModel):
@@ -96,12 +130,15 @@ class TrainingCourseOut(BaseModel):
     schedule_text: Optional[str] = None
     capacity: int
     fee: Decimal
+    # Geriye dönük uyumluluk (ilk antrenörden doldurulur)
     instructor_person_id: Optional[uuid.UUID] = None
-    instructor_name: Optional[str] = None        # computed — servis katmanında doldurulur
+    instructor_name: Optional[str] = None
+    # Yeni — çoklu antrenör listesi
+    instructors: List[InstructorRef] = Field(default_factory=list)
     status: str
     is_active: bool
     is_deleted: bool
-    enrollment_count: int = 0                    # computed — sorgu ile doldurulur
+    enrollment_count: int = 0
     created_at: datetime
     updated_at: datetime
 
@@ -121,9 +158,18 @@ class TrainingSessionCreate(BaseModel):
     session_date: date
     start_time: Optional[time] = None
     end_time: Optional[time] = None
+    # Çoklu antrenör
+    instructor_person_ids: List[uuid.UUID] = Field(default_factory=list)
+    # Geriye dönük uyumluluk
     instructor_person_id: Optional[uuid.UUID] = None
     notes: Optional[str] = None
     status: Literal["planli", "tamamlandi", "iptal"] = "planli"
+
+    def effective_instructor_ids(self) -> List[uuid.UUID]:
+        ids: List[uuid.UUID] = list(self.instructor_person_ids)
+        if self.instructor_person_id and self.instructor_person_id not in ids:
+            ids.insert(0, self.instructor_person_id)
+        return ids
 
 
 class TrainingSessionUpdate(BaseModel):
@@ -132,9 +178,25 @@ class TrainingSessionUpdate(BaseModel):
     session_date: Optional[date] = None
     start_time: Optional[time] = None
     end_time: Optional[time] = None
+    # Çoklu antrenör
+    instructor_person_ids: Optional[List[uuid.UUID]] = None
+    # Geriye dönük uyumluluk
     instructor_person_id: Optional[uuid.UUID] = None
     notes: Optional[str] = None
     status: Optional[Literal["planli", "tamamlandi", "iptal"]] = None
+
+    def has_instructor_update(self) -> bool:
+        return self.instructor_person_ids is not None or self.instructor_person_id is not None
+
+    def effective_instructor_ids(self) -> List[uuid.UUID]:
+        if self.instructor_person_ids is not None:
+            ids = list(self.instructor_person_ids)
+            if self.instructor_person_id and self.instructor_person_id not in ids:
+                ids.insert(0, self.instructor_person_id)
+            return ids
+        if self.instructor_person_id is not None:
+            return [self.instructor_person_id]
+        return []
 
 
 class TrainingSessionOut(BaseModel):
@@ -146,11 +208,14 @@ class TrainingSessionOut(BaseModel):
     session_date: date
     start_time: Optional[time] = None
     end_time: Optional[time] = None
+    # Geriye dönük uyumluluk
     instructor_person_id: Optional[uuid.UUID] = None
-    instructor_name: Optional[str] = None        # computed
+    instructor_name: Optional[str] = None
+    # Yeni
+    instructors: List[InstructorRef] = Field(default_factory=list)
     status: str
     notes: Optional[str] = None
-    attendance_count: int = 0                    # computed — kaç kişi kayıtlı
+    attendance_count: int = 0
     created_at: datetime
     updated_at: datetime
 

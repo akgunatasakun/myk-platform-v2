@@ -73,7 +73,7 @@ export default function EquipmentFormModal({ isOpen, onClose, equipment, onSaved
     // Person listesini yükle (zimmet için)
     personsApi.list({ limit: PERSON_LIST_LIMIT, is_active: true })
       .then((r) => setPersons(r.data.items))
-      .catch((err) => console.error('Kişi listesi yüklenemedi:', err))
+      .catch((err) => console.error('[EquipmentFormModal] kişi listesi alınamadı:', err))
   }, [isOpen, equipment])
 
   const set = (field: string, value: unknown) =>

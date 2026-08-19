@@ -4,6 +4,11 @@
  * URL: /yoklama?course=<courseId>&session=<sessionId>
  * Oturum detay sayfasından "✅ Yoklama" butonuyla yönlendirilir.
  * Bu sayfada da kurs/oturum manuel seçilebilir.
+ *
+ * P0-1 fix:
+ *  - Backend artık sadece aktif kayıtları döndürüyor (status='active' filtresi)
+ *  - Frontend JS filtresi korundu (savunma amaçlı ikinci kat)
+ *  - Kurs/oturum yükleme hataları kullanıcıya gösteriliyor
  */
 import { useCallback, useEffect, useState } from 'react'
 import { useSearchParams } from 'react-router-dom'
@@ -52,20 +57,31 @@ export default function AttendancePage() {
   const [saving, setSaving] = useState(false)
   const [saveResult, setSaveResult] = useState<string | null>(null)
   const [error, setError] = useState<string | null>(null)
+  // P0-1 fix: kurs/oturum yükleme hataları için ayrı state
+  const [courseLoadError, setCourseLoadError] = useState<string | null>(null)
+  const [sessionLoadError, setSessionLoadError] = useState<string | null>(null)
 
   // Kurs listesi yükle (aktif)
   useEffect(() => {
+    setCourseLoadError(null)
     trainingApi.listCourses({ active_only: false, limit: 100 })
       .then((r) => setCourses(r.data.items))
-      .catch(() => {})
+      .catch(() => {
+        // P0-1 fix: hata sessizce yutulmuyordu; kullanıcıya göster
+        setCourseLoadError('Eğitim listesi yüklenemedi. Sayfayı yenileyin.')
+      })
   }, [])
 
   // Kurs değişince oturum listesi yükle
   useEffect(() => {
     if (!selectedCourseId) { setSessions([]); setSelectedSessionId(''); return }
+    setSessionLoadError(null)
     trainingApi.listSessions(selectedCourseId)
       .then((r) => setSessions(r.data))
-      .catch(() => setSessions([]))
+      .catch(() => {
+        setSessions([])
+        setSessionLoadError('Oturum listesi yüklenemedi.')
+      })
   }, [selectedCourseId])
 
   // Oturum seçince katılımcı + mevcut yoklama yükle
@@ -80,6 +96,8 @@ export default function AttendancePage() {
         trainingApi.getAttendance(selectedCourseId, selectedSessionId),
       ])
 
+      // P0-1: Backend artık sadece aktif kayıtları döndürüyor.
+      // Frontend filtresi savunma amaçlı korunuyor.
       const activeEnrollments: TrainingEnrollment[] = enrollResp.data.filter(
         (e) => e.status === 'active'
       )
@@ -100,8 +118,9 @@ export default function AttendancePage() {
           }
         })
       )
-    } catch {
-      setError('Yoklama verileri yüklenemedi.')
+    } catch (err: unknown) {
+      const detail = (err as { response?: { data?: { detail?: string } } })?.response?.data?.detail
+      setError(detail ?? 'Yoklama verileri yüklenemedi.')
     } finally {
       setLoading(false)
     }
@@ -131,7 +150,6 @@ export default function AttendancePage() {
     )
   }
 
-  // Tümünü aynı duruma çek
   const setAll = (status: AttendanceStatus) => {
     setRows((prev) => prev.map((r) => ({ ...r, status })))
   }
@@ -158,8 +176,9 @@ export default function AttendancePage() {
       setSaveResult(
         `Kaydedildi — ${created > 0 ? `${created} yeni` : ''}${created > 0 && updated > 0 ? ', ' : ''}${updated > 0 ? `${updated} güncellendi` : ''}`
       )
-    } catch {
-      setError('Kayıt sırasında hata oluştu.')
+    } catch (err: unknown) {
+      const detail = (err as { response?: { data?: { detail?: string } } })?.response?.data?.detail
+      setError(detail ?? 'Kayıt sırasında hata oluştu.')
     } finally {
       setSaving(false)
     }
@@ -173,6 +192,13 @@ export default function AttendancePage() {
       <div className="page-header">
         <h1 className="page-title">Yoklama</h1>
       </div>
+
+      {/* P0-1 fix: kurs yükleme hatası */}
+      {courseLoadError && (
+        <div className="alert alert-error" style={{ marginBottom: 16 }}>
+          <span>⚠️</span><span>{courseLoadError}</span>
+        </div>
+      )}
 
       {/* Kurs / Oturum seçici */}
       <div style={{ display: 'flex', gap: 12, marginBottom: 20, flexWrap: 'wrap' }}>
@@ -207,6 +233,12 @@ export default function AttendancePage() {
               </option>
             ))}
           </select>
+          {/* P0-1 fix: oturum yükleme hatası */}
+          {sessionLoadError && (
+            <div style={{ color: 'var(--color-danger)', fontSize: 12, marginTop: 4 }}>
+              {sessionLoadError}
+            </div>
+          )}
         </div>
       </div>
 

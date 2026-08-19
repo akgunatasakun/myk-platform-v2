@@ -21,6 +21,8 @@ from app.models.academy import (
 )
 
 from app.models.training import (
+    TrainingCourseInstructor,
+    TrainingSessionInstructor,
     TrainingCourse,
     TrainingSession,
     TrainingEnrollment,
@@ -62,8 +64,10 @@ __all__ = [
     "AcademyQuizAttempt",
     "AcademyQuizAnswer",
     "TrainingCourse",
-    "TrainingSession",
     "TrainingEnrollment",
+    "TrainingCourseInstructor",
+    "TrainingSession",
+    "TrainingSessionInstructor",
     "TrainingAttendance",
     "Payment",
     "Equipment",
