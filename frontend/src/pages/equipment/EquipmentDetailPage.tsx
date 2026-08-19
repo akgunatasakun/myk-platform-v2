@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react'
+import { useCallback, useEffect, useState } from 'react'
 import { useNavigate, useParams } from 'react-router-dom'
 import AppShell from '@/components/layout/AppShell'
 import MaintenanceFormModal from './MaintenanceFormModal'
@@ -43,7 +43,7 @@ export default function EquipmentDetailPage() {
   const [maintOpen, setMaintOpen] = useState(false)
   const [editRecord, setEditRecord] = useState<MaintenanceRecord | undefined>(undefined)
 
-  const load = async () => {
+  const load = useCallback(async () => {
     if (!id) return
     setLoading(true)
     setError(null)
@@ -59,9 +59,9 @@ export default function EquipmentDetailPage() {
     } finally {
       setLoading(false)
     }
-  }
+  }, [id])
 
-  useEffect(() => { load() }, [id])
+  useEffect(() => { load() }, [load])
 
   const handleDelete = async () => {
     if (!equipment) return

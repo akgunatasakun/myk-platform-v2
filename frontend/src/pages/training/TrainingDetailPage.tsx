@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react'
+import { useCallback, useEffect, useState } from 'react'
 import { useNavigate, useParams } from 'react-router-dom'
 import AppShell from '@/components/layout/AppShell'
 import TrainingFormModal from './TrainingFormModal'
@@ -107,7 +107,7 @@ export default function TrainingDetailPage() {
   const [addError, setAddError] = useState<string | null>(null)
   const [adding, setAdding] = useState(false)
 
-  const load = async () => {
+  const load = useCallback(async () => {
     if (!id) return
     setLoading(true)
     setError(null)
@@ -125,9 +125,9 @@ export default function TrainingDetailPage() {
     } finally {
       setLoading(false)
     }
-  }
+  }, [id])
 
-  useEffect(() => { load() }, [id])
+  useEffect(() => { load() }, [load])
 
   useEffect(() => {
     personsApi.list({ limit: PERSON_LIST_LIMIT, is_active: true })
@@ -135,7 +135,7 @@ export default function TrainingDetailPage() {
       .catch((err) => console.error('[TrainingDetailPage] kişi listesi alınamadı:', err))
   }, [])
 
-  const loadReport = async () => {
+  const loadReport = useCallback(async () => {
     if (!id || report) return
     try {
       const r = await trainingApi.getAttendanceReport(id)
@@ -143,11 +143,11 @@ export default function TrainingDetailPage() {
     } catch {
       setReport({ course_id: id, course_name: course?.name ?? '', toplam_oturum: 0, katilimcilar: [] })
     }
-  }
+  }, [id, report, course?.name])
 
   useEffect(() => {
     if (tab === 'report') loadReport()
-  }, [tab])
+  }, [tab, loadReport])
 
   const handleDelete = async () => {
     if (!course) return

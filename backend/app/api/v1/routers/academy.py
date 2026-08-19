@@ -14,18 +14,14 @@ import hashlib
 import hmac
 import json
 import uuid
-from datetime import datetime, timedelta, timezone
+from datetime import datetime, timezone
 from pathlib import Path
-from typing import Optional
 
 from fastapi import APIRouter, Depends, HTTPException, Request, status
 from sqlalchemy import select
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import selectinload
-
-# KnotPlayer timeline dosyaları bu dizinde: backend/app/assets/knots/{slug}/timeline.json
-_KNOT_ASSETS_DIR = Path(__file__).parents[3] / "assets" / "knots"
 
 from app.config import get_settings
 from app.core.security import get_current_user
@@ -47,7 +43,6 @@ from app.schemas.academy import (
     AcademyLessonOut,
     AcademyProgramListItem,
     AcademyProgramOut,
-    EnrollmentCreate,
     EnrollmentOut,
     ProgressOut,
     QuizAnswerIn,
@@ -58,6 +53,9 @@ from app.schemas.academy import (
     SessionOut,
 )
 from app.schemas.auth import TokenPayload
+
+# KnotPlayer timeline dosyaları bu dizinde: backend/app/assets/knots/{slug}/timeline.json
+_KNOT_ASSETS_DIR = Path(__file__).parents[3] / "assets" / "knots"
 
 settings = get_settings()
 router = APIRouter(tags=["academy"])

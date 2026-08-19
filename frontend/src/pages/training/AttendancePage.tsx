@@ -136,7 +136,7 @@ export default function AttendancePage() {
     if (selectedCourseId) params.course = selectedCourseId
     if (selectedSessionId) params.session = selectedSessionId
     setSearchParams(params, { replace: true })
-  }, [selectedCourseId, selectedSessionId])
+  }, [selectedCourseId, selectedSessionId, setSearchParams])
 
   const setRowStatus = (personId: string, status: AttendanceStatus) => {
     setRows((prev) =>
