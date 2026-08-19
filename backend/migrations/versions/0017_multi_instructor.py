@@ -28,10 +28,10 @@ def upgrade() -> None:
     # ── training_course_instructors ────────────────────────────────────────────
     op.create_table(
         "training_course_instructors",
-        sa.Column("id", sa.Text(), nullable=False),
-        sa.Column("club_id", sa.Text(), nullable=False),
-        sa.Column("course_id", sa.Text(), nullable=False),
-        sa.Column("person_id", sa.Text(), nullable=False),
+        sa.Column("id", sa.UUID(), nullable=False),
+        sa.Column("club_id", sa.UUID(), nullable=False),
+        sa.Column("course_id", sa.UUID(), nullable=False),
+        sa.Column("person_id", sa.UUID(), nullable=False),
         sa.Column(
             "created_at",
             sa.DateTime(timezone=True),
@@ -50,10 +50,10 @@ def upgrade() -> None:
     # ── training_session_instructors ───────────────────────────────────────────
     op.create_table(
         "training_session_instructors",
-        sa.Column("id", sa.Text(), nullable=False),
-        sa.Column("club_id", sa.Text(), nullable=False),
-        sa.Column("session_id", sa.Text(), nullable=False),
-        sa.Column("person_id", sa.Text(), nullable=False),
+        sa.Column("id", sa.UUID(), nullable=False),
+        sa.Column("club_id", sa.UUID(), nullable=False),
+        sa.Column("session_id", sa.UUID(), nullable=False),
+        sa.Column("person_id", sa.UUID(), nullable=False),
         sa.Column(
             "created_at",
             sa.DateTime(timezone=True),
@@ -89,10 +89,10 @@ def upgrade() -> None:
                 "VALUES (:id, :club_id, :course_id, :person_id)"
             ),
             {
-                "id": str(uuid_mod.uuid4()),
-                "club_id": str(row[1]),
-                "course_id": str(row[0]),
-                "person_id": str(row[2]),
+                "id": uuid_mod.uuid4(),
+                "club_id": row[1],
+                "course_id": row[0],
+                "person_id": row[2],
             },
         )
 
@@ -113,10 +113,10 @@ def upgrade() -> None:
                 "VALUES (:id, :club_id, :session_id, :person_id)"
             ),
             {
-                "id": str(uuid_mod.uuid4()),
-                "club_id": str(row[1]),
-                "session_id": str(row[0]),
-                "person_id": str(row[2]),
+                "id": uuid_mod.uuid4(),
+                "club_id": row[1],
+                "session_id": row[0],
+                "person_id": row[2],
             },
         )
 
