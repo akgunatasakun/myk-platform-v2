@@ -251,6 +251,20 @@ export default function AttendancePage() {
         </div>
       </div>
 
+      {/* adult_self_checkin modunda bilgi notu */}
+      {selectedCourse?.attendance_mode === 'adult_self_checkin' && selectedCourseId && (
+        <div className="alert" style={{ background: 'var(--color-primary-light, rgba(0,100,200,0.08))', borderColor: 'var(--color-primary)', color: 'var(--color-primary)', marginBottom: 16 }}>
+          <span>ℹ️</span>
+          <span>
+            Bu eğitim <strong>Yetişkin Self Check-in</strong> modunda. Sporcular oturum saatinde kendi hesaplarından "Katıldım" kaydı oluşturabilir.
+            Antrenör olarak mevcut kayıtları buradan görebilir ve düzeltebilirsiniz.
+            {selectedSession && !selectedSession.start_time && (
+              <> <strong>Oturumda saat girilmemiş</strong> — self check-in tüm gün açık.</>
+            )}
+          </span>
+        </div>
+      )}
+
       {/* İçerik */}
       {!selectedCourseId || !selectedSessionId ? (
         <div className="empty-state">

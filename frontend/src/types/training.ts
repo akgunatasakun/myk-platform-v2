@@ -4,6 +4,7 @@
  */
 
 export type CourseStatus = 'planlandi' | 'aktif' | 'tamamlandi' | 'iptal'
+export type AttendanceMode = 'coach_daily' | 'adult_self_checkin'
 export type SessionStatus = 'planli' | 'tamamlandi' | 'iptal'
 export type EnrollmentStatus = 'active' | 'cancelled' | 'completed'
 export type PaymentStatus = 'pending' | 'paid' | 'overdue'
@@ -36,6 +37,7 @@ export interface TrainingCourse {
   // Yeni — çoklu antrenör listesi
   instructors: InstructorRef[]
   status: CourseStatus
+  attendance_mode: AttendanceMode
   is_active: boolean
   is_deleted: boolean
   enrollment_count: number
@@ -65,6 +67,7 @@ export interface TrainingCourseCreate {
   // Geriye dönük uyumluluk
   instructor_person_id?: string | null
   status?: CourseStatus
+  attendance_mode?: AttendanceMode
 }
 
 export interface TrainingCourseUpdate {
@@ -83,6 +86,7 @@ export interface TrainingCourseUpdate {
   instructor_person_id?: string | null
   status?: CourseStatus
   is_active?: boolean
+  attendance_mode?: AttendanceMode
 }
 
 // ── TrainingSession ───────────────────────────────────────────────────────────
@@ -148,6 +152,20 @@ export interface TrainingEnrollment {
 }
 
 // ── TrainingAttendance ────────────────────────────────────────────────────────
+
+// ── Self Check-in (Sporcu) ────────────────────────────────────────────────────
+
+export interface SelfCheckinSession {
+  session_id: string
+  course_id: string
+  course_name: string
+  session_date: string
+  start_time: string | null
+  end_time: string | null
+  window_open: boolean
+  window_note: string
+  my_status: AttendanceStatus | null
+}
 
 export interface AttendanceRecord {
   person_id: string

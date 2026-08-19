@@ -3,6 +3,7 @@ import type {
   AttendanceBulkResult,
   AttendanceBulkUpdate,
   AttendanceReport,
+  SelfCheckinSession,
   TrainingAttendance,
   TrainingCourse,
   TrainingCourseCreate,
@@ -73,4 +74,14 @@ export const trainingApi = {
   // ── Devam Raporu ───────────────────────────────────────────────────────────
   getAttendanceReport: (courseId: string) =>
     apiClient.get<AttendanceReport>(`/trainings/${courseId}/attendance/report`),
+
+  // ── Self Check-in (Yetişkin Sporcu) ────────────────────────────────────────
+  getSelfCheckinSessions: () =>
+    apiClient.get<SelfCheckinSession[]>('/trainings/me/self-checkin-sessions'),
+
+  selfCheckin: (courseId: string, sessionId: string) =>
+    apiClient.post<TrainingAttendance>(
+      `/trainings/${courseId}/sessions/${sessionId}/self-checkin`,
+      {}
+    ),
 }

@@ -7,7 +7,7 @@ import { useEffect, useState } from 'react'
 import { trainingApi } from '@/api/training'
 import { personsApi } from '@/api/persons'
 import { PERSON_LIST_LIMIT } from '@/api/constants'
-import type { TrainingCourse, TrainingCourseCreate, TrainingCourseUpdate, CourseStatus } from '@/types/training'
+import type { TrainingCourse, TrainingCourseCreate, TrainingCourseUpdate, CourseStatus, AttendanceMode } from '@/types/training'
 import type { Person } from '@/types/person'
 
 interface Props {
@@ -29,7 +29,21 @@ const EMPTY: TrainingCourseCreate = {
   fee: '0',
   instructor_person_ids: [],
   status: 'planlandi',
+  attendance_mode: 'coach_daily',
 }
+
+const ATTENDANCE_MODE_OPTIONS: { value: AttendanceMode; label: string; description: string }[] = [
+  {
+    value: 'coach_daily',
+    label: 'Antrenör Yoklaması',
+    description: 'Antrenör tarih ve eğitimi seçerek tüm sporcular için toplu yoklama girer.',
+  },
+  {
+    value: 'adult_self_checkin',
+    label: 'Yetişkin Self Check-in (+18)',
+    description: 'Sporcu kendi hesabıyla oturum saatinde katıldım kaydı oluşturur.',
+  },
+]
 
 const STATUS_OPTIONS: { value: CourseStatus; label: string }[] = [
   { value: 'planlandi', label: 'Planlandı' },
@@ -62,6 +76,7 @@ export default function TrainingFormModal({ isOpen, onClose, course, onSaved }: 
         // Mevcut antrenörleri yükle
         instructor_person_ids: course.instructors.map((i) => i.id),
         status: course.status,
+        attendance_mode: course.attendance_mode ?? 'coach_daily',
       })
     } else {
       setForm(EMPTY)
@@ -109,6 +124,7 @@ export default function TrainingFormModal({ isOpen, onClose, course, onSaved }: 
           fee: form.fee,
           instructor_person_ids: form.instructor_person_ids ?? [],
           status: form.status,
+          attendance_mode: form.attendance_mode,
         }
         const resp = await trainingApi.updateCourse(course.id, body)
         saved = resp.data
@@ -291,6 +307,40 @@ export default function TrainingFormModal({ isOpen, onClose, course, onSaved }: 
                   <option key={o.value} value={o.value}>{o.label}</option>
                 ))}
               </select>
+            </div>
+
+            <div className="form-group">
+              <label className="form-label">Yoklama Modu</label>
+              <div style={{ display: 'flex', flexDirection: 'column', gap: 8, marginTop: 4 }}>
+                {ATTENDANCE_MODE_OPTIONS.map((o) => (
+                  <label
+                    key={o.value}
+                    style={{
+                      display: 'flex',
+                      alignItems: 'flex-start',
+                      gap: 10,
+                      padding: '10px 12px',
+                      border: `1px solid ${form.attendance_mode === o.value ? 'var(--color-primary)' : 'var(--color-border)'}`,
+                      borderRadius: 6,
+                      cursor: 'pointer',
+                      background: form.attendance_mode === o.value ? 'var(--color-primary-light, rgba(0,100,200,0.06))' : 'transparent',
+                    }}
+                  >
+                    <input
+                      type="radio"
+                      name="attendance_mode"
+                      value={o.value}
+                      checked={form.attendance_mode === o.value}
+                      onChange={() => setForm((f) => ({ ...f, attendance_mode: o.value }))}
+                      style={{ marginTop: 2, accentColor: 'var(--color-primary)' }}
+                    />
+                    <div>
+                      <div style={{ fontSize: 14, fontWeight: 500 }}>{o.label}</div>
+                      <div style={{ fontSize: 12, color: 'var(--color-text-muted)', marginTop: 2 }}>{o.description}</div>
+                    </div>
+                  </label>
+                ))}
+              </div>
             </div>
 
             <div className="form-group">

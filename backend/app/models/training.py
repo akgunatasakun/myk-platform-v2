@@ -102,6 +102,7 @@ class TrainingCourse(Base):
         ForeignKey("persons.id", ondelete="SET NULL"), nullable=True, index=True
     )
     status: Mapped[str] = mapped_column(Text(), nullable=False, default="planlandi")
+    attendance_mode: Mapped[str] = mapped_column(Text(), nullable=False, default="coach_daily")
     is_active: Mapped[bool] = mapped_column(Boolean, nullable=False, default=True)
     is_deleted: Mapped[bool] = mapped_column(Boolean, nullable=False, default=False)
     created_at: Mapped[datetime] = mapped_column(

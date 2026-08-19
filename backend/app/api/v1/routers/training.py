@@ -24,8 +24,9 @@ Tenant isolation: club_id JWT'den gelir, body'den asla kabul edilmez.
 RBAC: egitim:read/write, yoklama:read/write (mevcut RBAC matrisi kullanılır).
 """
 import uuid
-from datetime import datetime, timezone
+from datetime import date, datetime, time, timedelta, timezone
 from typing import List, Optional
+from zoneinfo import ZoneInfo
 
 from fastapi import APIRouter, Depends, HTTPException, Query, Request, status
 from sqlalchemy import func, select
@@ -40,6 +41,7 @@ from app.core.security import get_current_user
 from app.core.tenant import get_club_id
 from app.database import get_db
 from app.models.person import Person, PersonRole
+from app.models.user import User
 from app.models.training import (
     TrainingAttendance,
     TrainingCourse,
@@ -52,9 +54,12 @@ from app.schemas.auth import TokenPayload
 from app.schemas.training import (
     AttendanceBulkResult,
     AttendanceBulkUpdate,
+    AttendanceMode,
     AttendancePersonSummary,
     AttendanceReport,
+    AttendanceStatus,
     InstructorRef,
+    SelfCheckinSessionOut,
     TrainingAttendanceOut,
     TrainingCourseCreate,
     TrainingCourseListOut,
@@ -68,6 +73,7 @@ from app.schemas.training import (
 )
 
 router = APIRouter(prefix="/trainings", tags=["training"])
+_ISTANBUL = ZoneInfo("Europe/Istanbul")
 
 
 # ─── Yardımcı fonksiyonlar ────────────────────────────────────────────────────
@@ -320,6 +326,136 @@ def _apply_instructors_to_session_out(out: TrainingSessionOut, instructors: List
         out.instructor_name = None
 
 
+# ─── Sporcu Self Check-in Oturumları ──────────────────────────────────────────
+# NOT: Bu endpoint /me/... path'i kullanır ve /{course_id}/... önünde tanımlanmalı.
+
+@router.get("/me/self-checkin-sessions", response_model=List[SelfCheckinSessionOut])
+async def get_self_checkin_sessions(
+    club_id: uuid.UUID = Depends(get_club_id),
+    current_user: TokenPayload = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db),
+) -> List[SelfCheckinSessionOut]:
+    """Sporcunun adult_self_checkin modlu kurslarındaki oturumları döndürür.
+
+    Sadece bugün ve sonraki 14 günü kapsar (geçmiş oturumlar gösterilmez).
+    Her oturum için pencere durumu ve kişinin mevcut attendance kaydı da döner.
+    Sporcu rolü gerektirir (egitim:read:own).
+    """
+    user_id = uuid.UUID(current_user.sub)
+
+    # Kullanıcı → person
+    user_q = await db.execute(
+        select(User).where(
+            User.id == user_id,
+            User.club_id == club_id,
+            User.is_active.is_(True),
+            User.is_deleted.is_(False),
+        )
+    )
+    user_obj = user_q.scalar_one_or_none()
+    if user_obj is None or user_obj.person_id is None or user_obj.role != "sporcu":
+        return []
+    person_id = user_obj.person_id
+
+    person_q = await db.execute(
+        select(Person).where(
+            Person.id == person_id,
+            Person.club_id == club_id,
+            Person.is_active.is_(True),
+            Person.is_deleted.is_(False),
+        )
+    )
+    if person_q.scalar_one_or_none() is None:
+        return []
+
+    today = datetime.now(_ISTANBUL).date()
+    horizon = today + timedelta(days=14)
+
+    # Aktif enrollments → adult_self_checkin kursları
+    enr_q = await db.execute(
+        select(TrainingEnrollment, TrainingCourse)
+        .join(TrainingCourse, TrainingEnrollment.course_id == TrainingCourse.id)
+        .where(
+            TrainingEnrollment.person_id == person_id,
+            TrainingEnrollment.club_id == club_id,
+            TrainingEnrollment.status == "active",
+            TrainingEnrollment.is_deleted.is_(False),
+            TrainingCourse.attendance_mode == AttendanceMode.adult_self_checkin.value,
+            TrainingCourse.status == "aktif",
+            TrainingCourse.is_active.is_(True),
+            TrainingCourse.is_deleted.is_(False),
+        )
+    )
+    enrollments = enr_q.all()
+
+    if not enrollments:
+        return []
+
+    course_ids = [row.TrainingCourse.id for row in enrollments]
+    course_map = {row.TrainingCourse.id: row.TrainingCourse for row in enrollments}
+
+    # Oturumlar — bugün + 14 gün
+    sessions_q = await db.execute(
+        select(TrainingSession).where(
+            TrainingSession.course_id.in_(course_ids),
+            TrainingSession.club_id == club_id,
+            TrainingSession.session_date >= today,
+            TrainingSession.session_date <= horizon,
+            TrainingSession.status != "iptal",
+        ).order_by(TrainingSession.session_date, TrainingSession.start_time)
+    )
+    sessions = sessions_q.scalars().all()
+
+    if not sessions:
+        return []
+
+    session_ids = [s.id for s in sessions]
+
+    # Mevcut attendance kayıtları
+    att_q = await db.execute(
+        select(TrainingAttendance).where(
+            TrainingAttendance.session_id.in_(session_ids),
+            TrainingAttendance.person_id == person_id,
+            TrainingAttendance.club_id == club_id,
+        )
+    )
+    att_map: dict[uuid.UUID, TrainingAttendance] = {
+        a.session_id: a for a in att_q.scalars()
+    }
+
+    result: List[SelfCheckinSessionOut] = []
+    for s in sessions:
+        course = course_map.get(s.course_id)
+        if course is None:
+            continue
+
+        open_flag = _check_in_window_open(s)
+
+        if s.start_time and s.end_time:
+            window_note = (
+                f"{s.start_time.strftime('%H:%M')} – {s.end_time.strftime('%H:%M')} "
+                "arasında açık (±30/60 dk)"
+            )
+        else:
+            window_note = "Tüm gün açık (yalnızca oturum günü)"
+
+        existing_att = att_map.get(s.id)
+
+        result.append(SelfCheckinSessionOut(
+            session_id=s.id,
+            course_id=course.id,
+            course_name=course.name,
+            session_date=s.session_date,
+            start_time=s.start_time,
+            end_time=s.end_time,
+            window_open=open_flag,
+            window_note=window_note,
+            my_status=existing_att.status if existing_att else None,
+        ))
+
+    return result
+
+
 # ─── Kurslar ──────────────────────────────────────────────────────────────────
 
 @router.get("", response_model=TrainingCourseListOut)
@@ -392,6 +528,7 @@ async def create_course(
         # instructor_person_id legacy sütunu: ilk antrenörden doldur
         instructor_person_id=instructor_ids[0] if instructor_ids else None,
         status=body.status,
+        attendance_mode=body.attendance_mode.value,
     )
     db.add(course)
     await db.flush()
@@ -464,6 +601,9 @@ async def update_course(
     if update_data:
         before = {k: str(getattr(course, k)) for k in update_data if hasattr(course, k)}
         for field, value in update_data.items():
+            # Enum değerlerini str'e çevir (ORM Text sütunları için)
+            if hasattr(value, "value"):
+                value = value.value
             setattr(course, field, value)
         await db.flush()
         await db.refresh(course)
@@ -904,6 +1044,8 @@ async def bulk_update_attendance(
 
     created = 0
     updated = 0
+    # Override kayıtları — önceki/yeni değer audit log için
+    overrides: list[dict] = []
 
     for rec in body.records:
         # P0-1: Enrollment doğrulaması — person bu kursa aktif kayıtlı olmalı
@@ -932,12 +1074,20 @@ async def bulk_update_attendance(
         att = existing.scalar_one_or_none()
 
         if att is not None:
+            prev_status = att.status
             att.status = rec.status.value
             att.check_in_time = rec.check_in_time
             att.check_out_time = rec.check_out_time
             att.notes = rec.notes
             att.recorded_by_user_id = user_id
             updated += 1
+            # Override varsa kaydet (durum değiştiyse)
+            if prev_status != rec.status.value:
+                overrides.append({
+                    "person_id": str(rec.person_id),
+                    "before": prev_status,
+                    "after": rec.status.value,
+                })
         else:
             att = TrainingAttendance(
                 club_id=club_id,
@@ -954,9 +1104,15 @@ async def bulk_update_attendance(
 
     await db.flush()
 
+    if overrides:
+        action = "training_attendance_coach_overridden"
+    elif updated > 0:
+        action = "training_attendance_coach_updated"
+    else:
+        action = "training_attendance_coach_created"
     await log_action(
         db,
-        action="training_attendance_bulk_update",
+        action=action,
         resource_type="training_attendance",
         club_id=club_id,
         user_id=user_id,
@@ -966,11 +1122,247 @@ async def bulk_update_attendance(
             "created": created,
             "updated": updated,
             "session_date": str(session.session_date),
+            **({"overrides": overrides} if overrides else {}),
         },
         request=request,
     )
 
     return AttendanceBulkResult(created=created, updated=updated)
+
+
+# ─── Self Check-in (Yetişkin) ─────────────────────────────────────────────────
+
+def _check_in_window_open(session: TrainingSession) -> bool:
+    """Oturum self-check-in penceresi açık mı? (Europe/Istanbul saati kullanılır)
+
+    Kural:
+      - start_time ve end_time ikisi de varsa:
+          start_time - 30dk ≤ now_istanbul ≤ end_time + 60dk
+      - Herhangi biri yoksa:
+          Yalnızca oturum tarihinde (İstanbul saatiyle aynı gün) açık — geçmiş/gelecek günler kapalı.
+    """
+    now_istanbul = datetime.now(_ISTANBUL)
+
+    if session.start_time is None or session.end_time is None:
+        # Saatsiz fallback: yalnızca oturum tarihinde açık
+        return now_istanbul.date() == session.session_date
+
+    # Oturum start/end'i İstanbul saat dilimiyle oluştur
+    session_start = datetime(
+        session.session_date.year,
+        session.session_date.month,
+        session.session_date.day,
+        session.start_time.hour,
+        session.start_time.minute,
+        tzinfo=_ISTANBUL,
+    )
+    session_end = datetime(
+        session.session_date.year,
+        session.session_date.month,
+        session.session_date.day,
+        session.end_time.hour,
+        session.end_time.minute,
+        tzinfo=_ISTANBUL,
+    )
+    window_open = session_start - timedelta(minutes=30)
+    window_close = session_end + timedelta(minutes=60)
+    return window_open <= now_istanbul <= window_close
+
+
+def _calculate_age_on_date(birth_date: date, on_date: date) -> int:
+    """on_date tarihindeki yaşı hesaplar."""
+    return on_date.year - birth_date.year - (
+        (on_date.month, on_date.day) < (birth_date.month, birth_date.day)
+    )
+
+
+@router.post(
+    "/{course_id}/sessions/{session_id}/self-checkin",
+    response_model=TrainingAttendanceOut,
+    status_code=status.HTTP_200_OK,
+)
+async def self_checkin(
+    course_id: uuid.UUID,
+    session_id: uuid.UUID,
+    request: Request,
+    club_id: uuid.UUID = Depends(get_club_id),
+    current_user: TokenPayload = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db),
+) -> TrainingAttendanceOut:
+    """Yetişkin sporcu kendi check-in kaydını oluşturur (idempotent).
+
+    Doğrulamalar:
+      1. JWT kullanıcısının user.person_id bağlantısı olmalı.
+      2. Kişi aynı kulüpte olmalı.
+      3. Eğitim modu adult_self_checkin olmalı.
+      4. Oturum bu kursa ait olmalı.
+      5. Kişi bu kursa aktif kayıtlı olmalı.
+      6. Sporcu oturum tarihinde en az 18 yaşında olmalı.
+      7. start_time/end_time varsa zaman penceresi: -30 / +60 dk.
+      8. Aynı (session_id, person_id) için kayıt zaten varsa — mevcut kayıt döner (idempotent).
+    """
+    user_id = uuid.UUID(current_user.sub)
+
+    # 1. Kullanıcı → person bağlantısı
+    user_q = await db.execute(
+        select(User).where(
+            User.id == user_id,
+            User.club_id == club_id,
+            User.is_active.is_(True),
+            User.is_deleted.is_(False),
+        )
+    )
+    user_obj = user_q.scalar_one_or_none()
+    if user_obj is None or user_obj.person_id is None or user_obj.role != "sporcu":
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Hesabınız bir sporcu kaydına bağlı değil. Yöneticinizle iletişime geçin.",
+        )
+    person_id = user_obj.person_id
+
+    # 2. Person — kulüp doğrulaması
+    person_q = await db.execute(
+        select(Person).where(
+            Person.id == person_id,
+            Person.club_id == club_id,
+            Person.is_active.is_(True),
+            Person.is_deleted.is_(False),
+        )
+    )
+    person = person_q.scalar_one_or_none()
+    if person is None:
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Bu kulübün üyesi değilsiniz.",
+        )
+
+    # 3. Kurs — attendance_mode doğrulaması
+    course_q = await db.execute(
+        select(TrainingCourse).where(
+            TrainingCourse.id == course_id,
+            TrainingCourse.club_id == club_id,
+            TrainingCourse.status == "aktif",
+            TrainingCourse.is_active.is_(True),
+            TrainingCourse.is_deleted.is_(False),
+        )
+    )
+    course = course_q.scalar_one_or_none()
+    if course is None:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Eğitim bulunamadı.")
+    if course.attendance_mode != AttendanceMode.adult_self_checkin.value:
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Bu eğitim self check-in modunda değil.",
+        )
+
+    # 4. Oturum — kursa ait olduğunu doğrula
+    session = await _get_session(session_id, course_id, club_id, db)
+
+    # 5. Aktif enrollment
+    enr_q = await db.execute(
+        select(TrainingEnrollment).where(
+            TrainingEnrollment.course_id == course_id,
+            TrainingEnrollment.club_id == club_id,
+            TrainingEnrollment.person_id == person_id,
+            TrainingEnrollment.status == "active",
+            TrainingEnrollment.is_deleted.is_(False),
+        )
+    )
+    if enr_q.scalar_one_or_none() is None:
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Bu eğitime kayıtlı değilsiniz.",
+        )
+
+    # 6. +18 yaş kontrolü (oturum tarihinde)
+    # Doğum tarihi zorunlu — kayıtsız kişi check-in yapamaz
+    if person.birth_date is None:
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Doğum tarihi kayıtlı olmayan kişiler self check-in yapamaz. Yöneticinizle iletişime geçin.",
+        )
+    age = _calculate_age_on_date(person.birth_date, session.session_date)
+    if age < 18:
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Bu özellik yalnızca 18 yaş ve üzeri sporcular içindir.",
+        )
+
+    # 7. Zaman penceresi
+    if not _check_in_window_open(session):
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail=(
+                "Check-in penceresi henüz açılmadı veya kapandı. "
+                "Oturum başlangıcından 30 dakika önce ile bitişinden 60 dakika sonrasına kadar giriş yapabilirsiniz."
+            ),
+        )
+
+    # 8. Idempotency — aynı kayıt zaten varsa döndür
+    existing_q = await db.execute(
+        select(TrainingAttendance).where(
+            TrainingAttendance.session_id == session_id,
+            TrainingAttendance.person_id == person_id,
+            TrainingAttendance.club_id == club_id,
+        )
+    )
+    att = existing_q.scalar_one_or_none()
+
+    if att is not None:
+        # Mevcut kayıt — "var" değilse güncelle (antrenör başka bir şey girmişse dokunma)
+        # Self-check-in idempotent: kayıt zaten varsa olduğu gibi döner
+        out = TrainingAttendanceOut.model_validate(att)
+        out.person_name = f"{person.first_name} {person.last_name}".strip()
+        return out
+
+    # Yeni kayıt oluştur — eşzamanlı insert yarışı IntegrityError üretebilir
+    att = TrainingAttendance(
+        club_id=club_id,
+        session_id=session_id,
+        person_id=person_id,
+        status=AttendanceStatus.var.value,
+        recorded_by_user_id=user_id,
+    )
+    try:
+        async with db.begin_nested():
+            db.add(att)
+            await db.flush()
+    except IntegrityError:
+        # Eşzamanlı başka bir istek aynı kaydı oluşturdu — mevcut kaydı dön (idempotent)
+        race_q = await db.execute(
+            select(TrainingAttendance).where(
+                TrainingAttendance.session_id == session_id,
+                TrainingAttendance.person_id == person_id,
+                TrainingAttendance.club_id == club_id,
+            )
+        )
+        att = race_q.scalar_one()
+        out = TrainingAttendanceOut.model_validate(att)
+        out.person_name = f"{person.first_name} {person.last_name}".strip()
+        return out
+
+    await db.refresh(att)
+
+    await log_action(
+        db,
+        action="training_attendance_self_checkin",
+        resource_type="training_attendance",
+        club_id=club_id,
+        user_id=user_id,
+        resource_id=str(att.id),
+        after={
+            "session_id": str(session_id),
+            "course_id": str(course_id),
+            "person_id": str(person_id),
+            "status": att.status,
+            "session_date": str(session.session_date),
+        },
+        request=request,
+    )
+
+    out = TrainingAttendanceOut.model_validate(att)
+    out.person_name = f"{person.first_name} {person.last_name}".strip()
+    return out
 
 
 # ─── Devam Raporu ─────────────────────────────────────────────────────────────

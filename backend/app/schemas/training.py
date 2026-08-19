@@ -26,6 +26,11 @@ class AttendanceStatus(str, Enum):
     gecikti = "gecikti"
 
 
+class AttendanceMode(str, Enum):
+    coach_daily = "coach_daily"
+    adult_self_checkin = "adult_self_checkin"
+
+
 # ── Yardımcı tipler ───────────────────────────────────────────────────────────
 
 class InstructorRef(BaseModel):
@@ -53,6 +58,7 @@ class TrainingCourseCreate(BaseModel):
     # Geriye dönük uyumluluk — tek antrenör (junction'a yazılır)
     instructor_person_id: Optional[uuid.UUID] = None
     status: Literal["planlandi", "aktif", "tamamlandi", "iptal"] = "planlandi"
+    attendance_mode: AttendanceMode = AttendanceMode.coach_daily
 
     @field_validator("name")
     @classmethod
@@ -93,6 +99,7 @@ class TrainingCourseUpdate(BaseModel):
     instructor_person_id: Optional[uuid.UUID] = None
     status: Optional[Literal["planlandi", "aktif", "tamamlandi", "iptal"]] = None
     is_active: Optional[bool] = None
+    attendance_mode: Optional[AttendanceMode] = None
 
     @field_validator("name")
     @classmethod
@@ -136,6 +143,7 @@ class TrainingCourseOut(BaseModel):
     # Yeni — çoklu antrenör listesi
     instructors: List[InstructorRef] = Field(default_factory=list)
     status: str
+    attendance_mode: str = "coach_daily"
     is_active: bool
     is_deleted: bool
     enrollment_count: int = 0
@@ -307,3 +315,18 @@ class AttendanceReport(BaseModel):
     course_name: str
     toplam_oturum: int
     katilimcilar: List[AttendancePersonSummary]
+
+
+# ── Self Check-in (Sporcu) ────────────────────────────────────────────────────
+
+class SelfCheckinSessionOut(BaseModel):
+    """Sporcu kendi yaklaşan adult_self_checkin oturumlarını bu şemayla alır."""
+    session_id: uuid.UUID
+    course_id: uuid.UUID
+    course_name: str
+    session_date: date
+    start_time: Optional[time] = None
+    end_time: Optional[time] = None
+    window_open: bool
+    window_note: str   # örn. "09:00 – 10:00 arasında açık" veya "Tüm gün açık (aynı gün)"
+    my_status: Optional[str] = None  # 'var', 'yok', 'izinli', 'gecikti' veya None

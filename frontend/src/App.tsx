@@ -16,6 +16,7 @@ import EquipmentDetailPage from '@/pages/equipment/EquipmentDetailPage'
 import TrainingPage from '@/pages/training/TrainingPage'
 import TrainingDetailPage from '@/pages/training/TrainingDetailPage'
 import AttendancePage from '@/pages/training/AttendancePage'
+import SelfCheckinPage from '@/pages/training/SelfCheckinPage'
 import PaymentsPage from '@/pages/payments/PaymentsPage'
 import ReportsPage from '@/pages/payments/ReportsPage'
 import AthletesPage from '@/pages/athletes/AthletesPage'
@@ -236,6 +237,14 @@ export default function App() {
           element={
             <ProtectedRoute>
               <AttendancePage />
+            </ProtectedRoute>
+          }
+        />
+        <Route
+          path="/katilim"
+          element={
+            <ProtectedRoute>
+              <SelfCheckinPage />
             </ProtectedRoute>
           }
         />

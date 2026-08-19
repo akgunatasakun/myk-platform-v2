@@ -82,11 +82,11 @@ def test_fresh_upgrade_head():
 
 @pytest.mark.asyncio
 async def test_current_revision_is_head(engine):
-    """Migration sonrası alembic_version = '0017' (head) olmalı."""
+    """Migration sonrası alembic_version = '0018' (head) olmalı."""
     async with engine.connect() as conn:
         r = await conn.execute(text("SELECT version_num FROM alembic_version"))
         rev = r.scalar_one()
-    assert rev == "0017", f"Beklenen '0017', alınan '{rev!r}'"
+    assert rev == "0018", f"Beklenen '0018', alınan '{rev!r}'"
 
 
 # ── 2. Şema doğrulama ─────────────────────────────────────────────────────────
@@ -236,7 +236,61 @@ async def test_data_migration_instructor_to_junction(engine):
     )
 
 
-# ── 4. Downgrade/upgrade döngüsü ─────────────────────────────────────────────
+# ── 4. Migration 0017 → 0018: attendance_mode ────────────────────────────────
+
+@pytest.mark.asyncio
+async def test_0018_attendance_mode_column_exists(engine):
+    """0018 migration sonrası training_courses.attendance_mode kolonu var olmalı."""
+    async with engine.connect() as conn:
+        r = await conn.execute(text("""
+            SELECT column_name, column_default, is_nullable
+            FROM information_schema.columns
+            WHERE table_name = 'training_courses'
+              AND column_name = 'attendance_mode'
+        """))
+        row = r.fetchone()
+    assert row is not None, "training_courses.attendance_mode kolonu bulunamadı (0018 migration çalışmadı?)"
+    assert row[2] == "NO", "attendance_mode nullable olmamalı"
+    assert "coach_daily" in (row[1] or ""), f"Varsayılan değer 'coach_daily' olmalı, alınan: {row[1]!r}"
+
+
+@pytest.mark.asyncio
+async def test_0018_attendance_mode_enum_type_exists(engine):
+    """PostgreSQL'de 'attendancemodeenum' tip tanımlı olmalı."""
+    async with engine.connect() as conn:
+        r = await conn.execute(text("""
+            SELECT typname FROM pg_type WHERE typname = 'attendancemodeenum'
+        """))
+        row = r.fetchone()
+    assert row is not None, "attendancemodeenum enum tipi bulunamadı"
+
+
+@pytest.mark.asyncio
+async def test_0018_downgrade_removes_column(engine):
+    """0018 downgrade → attendance_mode kolonu ve enum tipi kaldırılmalı."""
+    run_alembic("downgrade", "0017")
+    try:
+        async with engine.connect() as conn:
+            r = await conn.execute(text("""
+                SELECT column_name FROM information_schema.columns
+                WHERE table_name = 'training_courses'
+                  AND column_name = 'attendance_mode'
+            """))
+            row = r.fetchone()
+        assert row is None, "Downgrade sonrası attendance_mode kolonu hâlâ var"
+
+        async with engine.connect() as conn:
+            r2 = await conn.execute(text("""
+                SELECT typname FROM pg_type WHERE typname = 'attendancemodeenum'
+            """))
+            row2 = r2.fetchone()
+        assert row2 is None, "Downgrade sonrası attendancemodeenum tipi hâlâ var"
+    finally:
+        # Testler için head'e geri dön
+        run_alembic("upgrade", "head")
+
+
+# ── 5. Downgrade/upgrade döngüsü ─────────────────────────────────────────────
 
 def test_downgrade_then_upgrade_idempotent():
     """Downgrade 0016 → upgrade head tekrar sorunsuz çalışmalı (idempotency)."""

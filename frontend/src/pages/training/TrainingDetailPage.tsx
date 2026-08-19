@@ -249,6 +249,14 @@ export default function TrainingDetailPage() {
                   : (course.instructor_name ?? '—')
               }
             />
+            <Row
+              label="Yoklama Modu"
+              value={
+                course.attendance_mode === 'adult_self_checkin'
+                  ? 'Yetişkin Self Check-in (+18)'
+                  : 'Antrenör Yoklaması'
+              }
+            />
           </div>
         </div>
         <div className="card">

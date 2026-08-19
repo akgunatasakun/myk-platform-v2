@@ -8,6 +8,7 @@ interface NavItem {
   path: string
   label: string
   icon: string
+  roles?: string[]
 }
 
 const NAV_ITEMS: NavItem[] = [
@@ -21,6 +22,7 @@ const NAV_ITEMS: NavItem[] = [
   { path: '/akademi', label: 'Deniz Akademisi', icon: '🪢' },
   { path: '/egitimler', label: 'Eğitimler', icon: '📚' },
   { path: '/yoklama', label: 'Yoklama', icon: '✅' },
+  { path: '/katilim', label: 'Katılım', icon: '🙋', roles: ['sporcu'] },
   { path: '/tekneler', label: 'Ekipmanlar', icon: '🛟' },
   { path: '/odemeler', label: 'Ödemeler', icon: '💳' },
   { path: '/raporlar', label: 'Raporlar', icon: '📈' },
@@ -85,7 +87,7 @@ export default function AppShell({ children, title }: AppShellProps) {
 
         <nav>
           <ul className="sidebar-nav">
-            {NAV_ITEMS.map((item) => {
+            {NAV_ITEMS.filter((item) => !item.roles || (user?.role && item.roles.includes(user.role))).map((item) => {
               const showAppBadge =
                 item.path === '/admin/applications' && pendingApplications > 0
               const showNotifBadge =

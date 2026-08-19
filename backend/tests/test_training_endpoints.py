@@ -17,6 +17,7 @@ Test kapsamı:
     - Liste/detay çıktılarında instructors alanı
 """
 import uuid
+from datetime import date, time as t, timedelta
 
 import pytest
 import pytest_asyncio
@@ -485,3 +486,573 @@ async def test_p02_legacy_instructor_person_id_compat(
     assert data["instructor_name"] is not None
     assert len(data["instructors"]) == 1
     assert data["instructors"][0]["id"] == str(a1.id)
+
+
+# ─── Self Check-in Testleri ───────────────────────────────────────────────────
+
+async def _make_adult_course(db: AsyncSession, club: Club) -> TrainingCourse:
+    """adult_self_checkin modlu aktif kurs."""
+    course = TrainingCourse(
+        id=uuid.uuid4(),
+        club_id=club.id,
+        name="Yetişkin Self-Check-in Kursu",
+        capacity=20,
+        fee=0,
+        status="aktif",
+        attendance_mode="adult_self_checkin",
+    )
+    db.add(course)
+    await db.flush()
+    return course
+
+
+async def _make_adult_sporcu(
+    db: AsyncSession,
+    club: Club,
+    *,
+    birth_date: date | None = None,
+) -> tuple[Person, User]:
+    """Person oluştur + person_id bağlı sporcu User döndür."""
+    person = Person(
+        id=uuid.uuid4(),
+        club_id=club.id,
+        first_name="Self",
+        last_name="Sporcu",
+        email=f"self-{uuid.uuid4().hex[:8]}@test.com",
+        birth_date=birth_date,
+        is_active=True,
+        is_deleted=False,
+    )
+    db.add(person)
+    await db.flush()
+
+    user = User(
+        id=uuid.uuid4(),
+        club_id=club.id,
+        email=f"self-u-{uuid.uuid4().hex[:8]}@test.com",
+        password_hash="x",
+        full_name="Self Sporcu",
+        role="sporcu",
+        is_active=True,
+        is_deleted=False,
+        person_id=person.id,
+    )
+    db.add(user)
+    await db.flush()
+    return person, user
+
+
+async def test_self_checkin_success(
+    client: AsyncClient,
+    db_session: AsyncSession,
+    test_club: Club,
+) -> None:
+    """Geçerli self-check-in 200 döner ve 'var' kaydı oluşturulur."""
+    course = await _make_adult_course(db_session, test_club)
+    session = await _make_session(db_session, test_club, course)
+    person, user = await _make_adult_sporcu(
+        db_session, test_club, birth_date=date(2000, 1, 1)
+    )
+    await _enroll(db_session, test_club, course, person)
+
+    token = create_access_token(str(user.id), str(test_club.id), user.role)
+    url = f"{TRAININGS_URL}/{course.id}/sessions/{session.id}/self-checkin"
+
+    resp = await client.post(url, headers=_headers(token))
+    assert resp.status_code == 200, resp.text
+    data = resp.json()
+    assert data["status"] == "var"
+    assert data["person_id"] == str(person.id)
+    assert data["session_id"] == str(session.id)
+
+
+async def test_self_checkin_idempotent(
+    client: AsyncClient,
+    db_session: AsyncSession,
+    test_club: Club,
+) -> None:
+    """Aynı sporcu aynı oturuma iki kez check-in yaparsa mevcut kayıt döner (idempotent)."""
+    course = await _make_adult_course(db_session, test_club)
+    session = await _make_session(db_session, test_club, course)
+    person, user = await _make_adult_sporcu(
+        db_session, test_club, birth_date=date(2000, 1, 1)
+    )
+    await _enroll(db_session, test_club, course, person)
+
+    token = create_access_token(str(user.id), str(test_club.id), user.role)
+    url = f"{TRAININGS_URL}/{course.id}/sessions/{session.id}/self-checkin"
+
+    r1 = await client.post(url, headers=_headers(token))
+    r2 = await client.post(url, headers=_headers(token))
+    assert r1.status_code == 200
+    assert r2.status_code == 200
+    # Aynı kayıt dönmeli
+    assert r1.json()["id"] == r2.json()["id"]
+
+
+async def test_self_checkin_under_18_rejected(
+    client: AsyncClient,
+    db_session: AsyncSession,
+    test_club: Club,
+) -> None:
+    """18 yaş altı sporcu self-check-in yapamaz (403)."""
+    course = await _make_adult_course(db_session, test_club)
+    session = await _make_session(db_session, test_club, course)
+    # Oturum tarihi 2026-08-19; 2010-01-01 doğumlu → 16 yaşında
+    person, user = await _make_adult_sporcu(
+        db_session, test_club, birth_date=date(2010, 1, 1)
+    )
+    await _enroll(db_session, test_club, course, person)
+
+    token = create_access_token(str(user.id), str(test_club.id), user.role)
+    url = f"{TRAININGS_URL}/{course.id}/sessions/{session.id}/self-checkin"
+
+    resp = await client.post(url, headers=_headers(token))
+    assert resp.status_code == 403
+    assert "18" in resp.json()["detail"]
+
+
+async def test_self_checkin_wrong_mode_rejected(
+    client: AsyncClient,
+    db_session: AsyncSession,
+    test_club: Club,
+) -> None:
+    """coach_daily modlu kursa self-check-in 403 döner."""
+    course = await _make_course(db_session, test_club, name="Antrenör Modu Kurs")
+    # attendance_mode varsayılan: coach_daily
+    session = await _make_session(db_session, test_club, course)
+    person, user = await _make_adult_sporcu(
+        db_session, test_club, birth_date=date(1995, 1, 1)
+    )
+    await _enroll(db_session, test_club, course, person)
+
+    token = create_access_token(str(user.id), str(test_club.id), user.role)
+    url = f"{TRAININGS_URL}/{course.id}/sessions/{session.id}/self-checkin"
+
+    resp = await client.post(url, headers=_headers(token))
+    assert resp.status_code == 403
+    assert "self check-in" in resp.json()["detail"].lower()
+
+
+async def test_self_checkin_not_enrolled_rejected(
+    client: AsyncClient,
+    db_session: AsyncSession,
+    test_club: Club,
+) -> None:
+    """Kayıtlı olmayan sporcu self-check-in yapamaz (403)."""
+    course = await _make_adult_course(db_session, test_club)
+    session = await _make_session(db_session, test_club, course)
+    person, user = await _make_adult_sporcu(
+        db_session, test_club, birth_date=date(1995, 1, 1)
+    )
+    # Enrollment yok — enroll() çağrılmadı
+
+    token = create_access_token(str(user.id), str(test_club.id), user.role)
+    url = f"{TRAININGS_URL}/{course.id}/sessions/{session.id}/self-checkin"
+
+    resp = await client.post(url, headers=_headers(token))
+    assert resp.status_code == 403
+    assert "kayıtlı" in resp.json()["detail"]
+
+
+async def test_self_checkin_user_without_person_id_rejected(
+    client: AsyncClient,
+    db_session: AsyncSession,
+    test_club: Club,
+    sporcu_user: User,
+    sporcu_token: str,
+) -> None:
+    """person_id bağlantısı olmayan kullanıcı self-check-in yapamaz (403)."""
+    # sporcu_user'ın person_id'si None (conftest'te set edilmiyor)
+    course = await _make_adult_course(db_session, test_club)
+    session = await _make_session(db_session, test_club, course)
+
+    url = f"{TRAININGS_URL}/{course.id}/sessions/{session.id}/self-checkin"
+    resp = await client.post(url, headers=_headers(sporcu_token))
+    assert resp.status_code == 403
+    assert "sporcu kaydına bağlı" in resp.json()["detail"]
+
+
+async def test_self_checkin_tenant_isolation(
+    client: AsyncClient,
+    db_session: AsyncSession,
+    test_club: Club,
+) -> None:
+    """Başka kulübün sporcusu self-check-in yapamaz (403)."""
+    # Farklı kulüp
+    other_club = Club(
+        id=uuid.uuid4(),
+        slug=f"other-{uuid.uuid4().hex[:8]}",
+        name="Diğer Kulüp",
+        plan="starter",
+        is_active=True,
+        settings={},
+    )
+    db_session.add(other_club)
+    await db_session.flush()
+
+    # Ana kulüp kursu
+    course = await _make_adult_course(db_session, test_club)
+    session = await _make_session(db_session, test_club, course)
+
+    # Diğer kulübün kişisi
+    other_person = Person(
+        id=uuid.uuid4(),
+        club_id=other_club.id,
+        first_name="Diğer",
+        last_name="Sporcu",
+        email=f"other-{uuid.uuid4().hex[:8]}@test.com",
+        birth_date=date(1995, 1, 1),
+        is_active=True,
+        is_deleted=False,
+    )
+    db_session.add(other_person)
+    await db_session.flush()
+
+    other_user = User(
+        id=uuid.uuid4(),
+        club_id=test_club.id,   # JWT kulübü ana kulüp (tenant doğru)
+        email=f"other-u-{uuid.uuid4().hex[:8]}@test.com",
+        password_hash="x",
+        full_name="Diğer Sporcu",
+        role="sporcu",
+        is_active=True,
+        is_deleted=False,
+        person_id=other_person.id,  # Ama person başka kulüpte
+    )
+    db_session.add(other_user)
+    await db_session.flush()
+
+    token = create_access_token(str(other_user.id), str(test_club.id), other_user.role)
+    url = f"{TRAININGS_URL}/{course.id}/sessions/{session.id}/self-checkin"
+
+    resp = await client.post(url, headers=_headers(token))
+    assert resp.status_code == 403
+
+
+async def test_self_checkin_window_closed(
+    client: AsyncClient,
+    db_session: AsyncSession,
+    test_club: Club,
+) -> None:
+    """start_time/end_time set edilmiş ve pencere kapalıysa 403 döner."""
+    course = await _make_adult_course(db_session, test_club)
+
+    # Oturum dün sona erdi (pencere kesinlikle kapalı)
+    yesterday = date.today() - timedelta(days=1)
+    session = TrainingSession(
+        id=uuid.uuid4(),
+        club_id=test_club.id,
+        course_id=course.id,
+        session_date=yesterday,
+        start_time=t(9, 0),
+        end_time=t(10, 0),
+        status="tamamlandi",
+    )
+    db_session.add(session)
+    await db_session.flush()
+
+    person, user = await _make_adult_sporcu(
+        db_session, test_club, birth_date=date(1995, 1, 1)
+    )
+    await _enroll(db_session, test_club, course, person)
+
+    token = create_access_token(str(user.id), str(test_club.id), user.role)
+    url = f"{TRAININGS_URL}/{course.id}/sessions/{session.id}/self-checkin"
+
+    resp = await client.post(url, headers=_headers(token))
+    assert resp.status_code == 403
+    assert "pencere" in resp.json()["detail"].lower()
+
+
+async def test_self_checkin_no_time_window_open_all_day(
+    client: AsyncClient,
+    db_session: AsyncSession,
+    test_club: Club,
+) -> None:
+    """start_time/end_time yoksa tüm gün açık — bugünkü oturum başarılı check-in yapar."""
+    course = await _make_adult_course(db_session, test_club)
+    # start_time/end_time yok (tüm gün fallback)
+    session = TrainingSession(
+        id=uuid.uuid4(),
+        club_id=test_club.id,
+        course_id=course.id,
+        session_date=date.today(),
+        status="planli",
+    )
+    db_session.add(session)
+    await db_session.flush()
+
+    person, user = await _make_adult_sporcu(
+        db_session, test_club, birth_date=date(1995, 1, 1)
+    )
+    await _enroll(db_session, test_club, course, person)
+
+    token = create_access_token(str(user.id), str(test_club.id), user.role)
+    url = f"{TRAININGS_URL}/{course.id}/sessions/{session.id}/self-checkin"
+
+    resp = await client.post(url, headers=_headers(token))
+    assert resp.status_code == 200, resp.text
+
+
+# ─── Ek Sprint-17 Testleri (critical review) ─────────────────────────────────
+
+
+async def test_self_checkin_no_birth_date_rejected(
+    client: AsyncClient,
+    db_session: AsyncSession,
+    test_club: Club,
+) -> None:
+    """birth_date=None → 403, hata mesajı 'doğum tarihi' içermeli."""
+    course = await _make_adult_course(db_session, test_club)
+    session = TrainingSession(
+        id=uuid.uuid4(),
+        club_id=test_club.id,
+        course_id=course.id,
+        session_date=date.today(),
+        status="planli",
+    )
+    db_session.add(session)
+    await db_session.flush()
+
+    # birth_date=None (varsayılan) → 403 bekleniyor
+    person, user = await _make_adult_sporcu(db_session, test_club)
+    await _enroll(db_session, test_club, course, person)
+
+    token = create_access_token(str(user.id), str(test_club.id), user.role)
+    url = f"{TRAININGS_URL}/{course.id}/sessions/{session.id}/self-checkin"
+
+    resp = await client.post(url, headers=_headers(token))
+    assert resp.status_code == 403, resp.text
+    assert "doğum tarihi" in resp.json()["detail"].lower()
+
+
+async def test_self_checkin_same_day_fallback_yesterday_closed(
+    client: AsyncClient,
+    db_session: AsyncSession,
+    test_club: Club,
+) -> None:
+    """Saatsiz oturum dün ise pencere kapalıdır (sadece aynı gün açık)."""
+    course = await _make_adult_course(db_session, test_club)
+    yesterday = date.today() - timedelta(days=1)
+    session = TrainingSession(
+        id=uuid.uuid4(),
+        club_id=test_club.id,
+        course_id=course.id,
+        session_date=yesterday,
+        status="tamamlandi",
+    )
+    db_session.add(session)
+    await db_session.flush()
+
+    person, user = await _make_adult_sporcu(
+        db_session, test_club, birth_date=date(1995, 1, 1)
+    )
+    await _enroll(db_session, test_club, course, person)
+
+    token = create_access_token(str(user.id), str(test_club.id), user.role)
+    url = f"{TRAININGS_URL}/{course.id}/sessions/{session.id}/self-checkin"
+
+    resp = await client.post(url, headers=_headers(token))
+    assert resp.status_code == 403, resp.text
+    assert "pencere" in resp.json()["detail"].lower()
+
+
+async def test_self_checkin_sessions_me_endpoint(
+    client: AsyncClient,
+    db_session: AsyncSession,
+    test_club: Club,
+) -> None:
+    """Sporcu /me/self-checkin-sessions ile kendi adult_self_checkin oturumlarını görür."""
+    course = await _make_adult_course(db_session, test_club)
+    session = TrainingSession(
+        id=uuid.uuid4(),
+        club_id=test_club.id,
+        course_id=course.id,
+        session_date=date.today(),
+        status="planli",
+    )
+    db_session.add(session)
+    await db_session.flush()
+
+    person, user = await _make_adult_sporcu(
+        db_session, test_club, birth_date=date(1995, 1, 1)
+    )
+    await _enroll(db_session, test_club, course, person)
+
+    token = create_access_token(str(user.id), str(test_club.id), user.role)
+    resp = await client.get(
+        f"{TRAININGS_URL}/me/self-checkin-sessions",
+        headers=_headers(token),
+    )
+    assert resp.status_code == 200, resp.text
+    data = resp.json()
+    assert isinstance(data, list)
+    session_ids = [s["session_id"] for s in data]
+    assert str(session.id) in session_ids
+
+
+async def test_self_checkin_sessions_coach_daily_excluded(
+    client: AsyncClient,
+    db_session: AsyncSession,
+    test_club: Club,
+) -> None:
+    """coach_daily modlu kurs /me/self-checkin-sessions listesinde görünmez."""
+    course = await _make_course(db_session, test_club, name="Antrenör Modu Kursu")
+    # attendance_mode varsayılan coach_daily
+    session = TrainingSession(
+        id=uuid.uuid4(),
+        club_id=test_club.id,
+        course_id=course.id,
+        session_date=date.today(),
+        status="planli",
+    )
+    db_session.add(session)
+    await db_session.flush()
+
+    person, user = await _make_adult_sporcu(
+        db_session, test_club, birth_date=date(1995, 1, 1)
+    )
+    await _enroll(db_session, test_club, course, person)
+
+    token = create_access_token(str(user.id), str(test_club.id), user.role)
+    resp = await client.get(
+        f"{TRAININGS_URL}/me/self-checkin-sessions",
+        headers=_headers(token),
+    )
+    assert resp.status_code == 200, resp.text
+    session_ids = [s["session_id"] for s in resp.json()]
+    assert str(session.id) not in session_ids
+
+
+async def test_audit_action_coach_created_on_first_record(
+    client: AsyncClient,
+    db_session: AsyncSession,
+    test_club: Club,
+    test_user: User,
+    yonetici_token: str,
+) -> None:
+    """İlk bulk kayıt → action='training_attendance_coach_created'."""
+    import sqlalchemy as sa
+    from app.models.audit import AuditLog
+
+    course = await _make_course(db_session, test_club)
+    session = await _make_session(db_session, test_club, course)
+    person = await _make_person(db_session, test_club, first_name="Audit", last_name="C")
+    await _enroll(db_session, test_club, course, person)
+
+    url = f"{TRAININGS_URL}/{course.id}/sessions/{session.id}/attendance"
+    resp = await client.put(
+        url,
+        json={"records": [{"person_id": str(person.id), "status": "var"}]},
+        headers=_headers(yonetici_token),
+    )
+    assert resp.status_code == 200, resp.text
+    assert resp.json()["created"] == 1
+    assert resp.json()["updated"] == 0
+
+    q = await db_session.execute(
+        sa.select(AuditLog)
+        .where(
+            AuditLog.club_id == test_club.id,
+            AuditLog.resource_type == "training_attendance",
+        )
+        .order_by(AuditLog.created_at.desc())
+        .limit(1)
+    )
+    log = q.scalar_one_or_none()
+    assert log is not None
+    assert log.action == "training_attendance_coach_created"
+
+
+async def test_audit_action_coach_overridden_on_status_change(
+    client: AsyncClient,
+    db_session: AsyncSession,
+    test_club: Club,
+    test_user: User,
+    yonetici_token: str,
+) -> None:
+    """Durum değişikliği → action='training_attendance_coach_overridden', changes.after.overrides dolu."""
+    import sqlalchemy as sa
+    from app.models.audit import AuditLog
+
+    course = await _make_course(db_session, test_club)
+    session = await _make_session(db_session, test_club, course)
+    person = await _make_person(db_session, test_club, first_name="Audit", last_name="O")
+    await _enroll(db_session, test_club, course, person)
+
+    url = f"{TRAININGS_URL}/{course.id}/sessions/{session.id}/attendance"
+    # İlk kayıt: var
+    await client.put(
+        url,
+        json={"records": [{"person_id": str(person.id), "status": "var"}]},
+        headers=_headers(yonetici_token),
+    )
+    # Durum değişikliği: yok (override)
+    resp = await client.put(
+        url,
+        json={"records": [{"person_id": str(person.id), "status": "yok"}]},
+        headers=_headers(yonetici_token),
+    )
+    assert resp.status_code == 200, resp.text
+
+    q = await db_session.execute(
+        sa.select(AuditLog)
+        .where(
+            AuditLog.club_id == test_club.id,
+            AuditLog.resource_type == "training_attendance",
+            AuditLog.action == "training_attendance_coach_overridden",
+        )
+        .order_by(AuditLog.created_at.desc())
+        .limit(1)
+    )
+    log = q.scalar_one_or_none()
+    assert log is not None
+    assert log.changes is not None
+    assert "overrides" in log.changes.get("after", {})
+
+
+async def test_audit_action_coach_updated_on_notes_change(
+    client: AsyncClient,
+    db_session: AsyncSession,
+    test_club: Club,
+    test_user: User,
+    yonetici_token: str,
+) -> None:
+    """Aynı durum, farklı not → action='training_attendance_coach_updated' (override değil)."""
+    import sqlalchemy as sa
+    from app.models.audit import AuditLog
+
+    course = await _make_course(db_session, test_club)
+    session = await _make_session(db_session, test_club, course)
+    person = await _make_person(db_session, test_club, first_name="Audit", last_name="U")
+    await _enroll(db_session, test_club, course, person)
+
+    url = f"{TRAININGS_URL}/{course.id}/sessions/{session.id}/attendance"
+    # İlk kayıt
+    await client.put(
+        url,
+        json={"records": [{"person_id": str(person.id), "status": "var", "notes": "not1"}]},
+        headers=_headers(yonetici_token),
+    )
+    # Aynı durum, not değişikliği
+    resp = await client.put(
+        url,
+        json={"records": [{"person_id": str(person.id), "status": "var", "notes": "not2"}]},
+        headers=_headers(yonetici_token),
+    )
+    assert resp.status_code == 200, resp.text
+    assert resp.json()["updated"] == 1
+
+    q = await db_session.execute(
+        sa.select(AuditLog)
+        .where(
+            AuditLog.club_id == test_club.id,
+            AuditLog.resource_type == "training_attendance",
+            AuditLog.action == "training_attendance_coach_updated",
+        )
+        .order_by(AuditLog.created_at.desc())
+        .limit(1)
+    )
+    log = q.scalar_one_or_none()
+    assert log is not None
