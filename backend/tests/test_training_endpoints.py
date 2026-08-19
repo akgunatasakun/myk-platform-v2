@@ -94,7 +94,7 @@ async def _make_session(
         id=uuid.uuid4(),
         club_id=club.id,
         course_id=course.id,
-        session_date=date(2026, 8, 19),
+        session_date=date.today(),
         status="planli",
     )
     db.add(session)

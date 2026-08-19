@@ -11,7 +11,7 @@ from decimal import Decimal
 from typing import TYPE_CHECKING, List, Optional
 
 from sqlalchemy import (
-    Boolean, Date, DateTime, ForeignKey, Numeric, Text, Time, UniqueConstraint, func
+    Boolean, Date, DateTime, Enum, ForeignKey, Numeric, Text, Time, UniqueConstraint, func
 )
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
@@ -102,7 +102,10 @@ class TrainingCourse(Base):
         ForeignKey("persons.id", ondelete="SET NULL"), nullable=True, index=True
     )
     status: Mapped[str] = mapped_column(Text(), nullable=False, default="planlandi")
-    attendance_mode: Mapped[str] = mapped_column(Text(), nullable=False, default="coach_daily")
+    attendance_mode: Mapped[str] = mapped_column(
+        Enum("coach_daily", "adult_self_checkin", name="attendancemodeenum", create_constraint=False),
+        nullable=False, default="coach_daily"
+    )
     is_active: Mapped[bool] = mapped_column(Boolean, nullable=False, default=True)
     is_deleted: Mapped[bool] = mapped_column(Boolean, nullable=False, default=False)
     created_at: Mapped[datetime] = mapped_column(
