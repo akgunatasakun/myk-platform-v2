@@ -245,7 +245,7 @@ export default function TrainingDetailPage() {
               label="Eğitmen"
               value={
                 course.instructors && course.instructors.length > 0
-                  ? course.instructors.map((i) => i.full_name).join(', ')
+                  ? course.instructors.map((i) => i.name).join(', ')
                   : (course.instructor_name ?? '—')
               }
             />
