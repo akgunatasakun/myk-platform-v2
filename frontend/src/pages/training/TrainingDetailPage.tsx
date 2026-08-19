@@ -241,7 +241,14 @@ export default function TrainingDetailPage() {
             <Row label="Sınıf" value={course.class_name} />
             <Row label="Seviye" value={course.level} />
             <Row label="Program" value={course.schedule_text} />
-            <Row label="Eğitmen" value={course.instructor_name} />
+            <Row
+              label="Eğitmen"
+              value={
+                course.instructors && course.instructors.length > 0
+                  ? course.instructors.map((i) => i.full_name).join(', ')
+                  : (course.instructor_name ?? '—')
+              }
+            />
           </div>
         </div>
         <div className="card">
