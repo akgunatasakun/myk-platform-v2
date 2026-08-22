@@ -5,6 +5,9 @@
  * - Access token bellek içinde (memory) tutulur. localStorage'a yazılmaz.
  * - Refresh token HttpOnly cookie olarak backend tarafından yönetilir.
  * - 401 alındığında /auth/refresh çağrısı yapılır; başarısızsa login'e yönlendir.
+ *
+ * Not: Refresh token HTTP üzerinde Secure=True cookie nedeniyle çalışmaz.
+ * Kalıcı çözüm: HTTPS + Let's Encrypt (alan adı hazır olduğunda).
  */
 import axios, {
   AxiosError,
@@ -43,7 +46,15 @@ apiClient.interceptors.request.use((config: InternalAxiosRequestConfig) => {
 
 // Yanıt interceptor'ı — 401 → token yenile
 let _isRefreshing = false
-let _pendingRequests: Array<(token: string) => void> = []
+
+// Pending entry: resolve yeni token ile, reject orijinal hata ile çağrılır.
+// Önceki tek-callback tasarımı refresh başarısız olduğunda promise'ları
+// ne resolve ne de reject ediyordu — bu sızıntıyı giderir.
+type PendingEntry = {
+  resolve: (token: string) => void
+  reject: (reason: unknown) => void
+}
+let _pendingRequests: PendingEntry[] = []
 
 apiClient.interceptors.response.use(
   (response) => response,
@@ -59,10 +70,15 @@ apiClient.interceptors.response.use(
       !originalRequest.url?.includes('/auth/login')
     ) {
       if (_isRefreshing) {
-        return new Promise((resolve) => {
-          _pendingRequests.push((token: string) => {
-            originalRequest.headers.Authorization = `Bearer ${token}`
-            resolve(apiClient(originalRequest))
+        // Yenileme sürerken gelen istekleri kuyruğa al.
+        originalRequest._retry = true
+        return new Promise((resolve, reject) => {
+          _pendingRequests.push({
+            resolve: (token) => {
+              originalRequest.headers.Authorization = `Bearer ${token}`
+              resolve(apiClient(originalRequest))
+            },
+            reject,
           })
         })
       }
@@ -73,14 +89,21 @@ apiClient.interceptors.response.use(
       try {
         const { data } = await apiClient.post<{ access_token: string }>('/auth/refresh')
         setAccessToken(data.access_token)
-        _pendingRequests.forEach((cb) => cb(data.access_token))
+
+        // Kuyruktaki tüm istekleri yeni token ile devam ettir.
+        _pendingRequests.forEach(({ resolve }) => resolve(data.access_token))
         _pendingRequests = []
+
         originalRequest.headers.Authorization = `Bearer ${data.access_token}`
         return apiClient(originalRequest)
-      } catch {
+      } catch (refreshError) {
         setAccessToken(null)
+
+        // Kuyruktaki tüm istekleri reject et — promise sızıntısını önler.
+        _pendingRequests.forEach(({ reject }) => reject(refreshError))
         _pendingRequests = []
-        // Çağıran hook login sayfasına yönlendirmeyi yönetir
+
+        // Çağıran hook login sayfasına yönlendirmeyi yönetir.
         window.dispatchEvent(new CustomEvent('myk:session-expired'))
         return Promise.reject(error)
       } finally {
