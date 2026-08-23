@@ -32,6 +32,7 @@ import NotificationsPage from '@/pages/notifications/NotificationsPage'
 import CalendarPage from '@/pages/calendar/CalendarPage'
 import DocumentsPage from '@/pages/documents/DocumentsPage'
 import DocumentDetailPage from '@/pages/documents/DocumentDetailPage'
+import UsersPage from '@/pages/users/UsersPage'
 import Forbidden from '@/pages/Forbidden'
 import NotFound from '@/pages/NotFound'
 
@@ -107,6 +108,15 @@ export default function App() {
           element={
             <ProtectedRoute>
               <PersonDetailPage />
+            </ProtectedRoute>
+          }
+        />
+        {/* Sprint 18: Kullanıcı yönetimi */}
+        <Route
+          path="/users"
+          element={
+            <ProtectedRoute>
+              <UsersPage />
             </ProtectedRoute>
           }
         />

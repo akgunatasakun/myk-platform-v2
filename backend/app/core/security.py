@@ -10,8 +10,11 @@ from argon2.exceptions import VerifyMismatchError, VerificationError, InvalidHas
 from fastapi import Depends, HTTPException, Request, status
 from fastapi.security import HTTPAuthorizationCredentials, HTTPBearer
 import jwt
+from sqlalchemy import select
+from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.config import get_settings
+from app.database import get_db
 from app.schemas.auth import TokenPayload
 
 settings = get_settings()
@@ -94,8 +97,22 @@ def hash_refresh_token(raw: str) -> str:
 async def get_current_user(
     request: Request,
     credentials: Annotated[HTTPAuthorizationCredentials | None, Depends(_bearer)] = None,
+    db: AsyncSession = Depends(get_db),
 ) -> TokenPayload:
-    """Access token'ı Authorization header veya HttpOnly cookie'den alır."""
+    """Access token'ı Authorization header veya HttpOnly cookie'den alır.
+
+    Sprint 18 — DB doğrulaması (G2):
+    JWT imzası geçerli olsa bile DB'deki User durumu kontrol edilir:
+      - is_active=False   → 401 (pasifleştirilmiş hesap)
+      - is_deleted=True   → 401 (silinmiş hesap)
+      - club_id uyuşmuyor → 401 (tenant tutarsızlığı)
+      - DB role ≠ JWT role → 401 (rol değişti; yeniden login gerekiyor)
+
+    Bu sayede rol/pasiflik değişikliği mevcut JWT'de anında etkili olur;
+    token_version olmadan 60 dakikalık staleness sorunu giderilir.
+    """
+    from app.models.user import User  # circular import önlemi
+
     token: str | None = None
 
     # 1. Authorization: Bearer <token>
@@ -113,4 +130,37 @@ async def get_current_user(
             headers={"WWW-Authenticate": "Bearer"},
         )
 
-    return decode_access_token(token)
+    payload = decode_access_token(token)
+
+    # DB doğrulaması
+    result = await db.execute(
+        select(User).where(User.id == uuid.UUID(payload.sub))
+    )
+    user = result.scalar_one_or_none()
+
+    if user is None or user.is_deleted:
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail="Hesap bulunamadı veya silinmiş.",
+        )
+
+    if not user.is_active:
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail="Hesap pasifleştirilmiş. Lütfen yöneticinizle iletişime geçin.",
+        )
+
+    if str(user.club_id) != payload.club_id:
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail="Token geçersiz.",
+        )
+
+    if user.role != payload.role:
+        # Rol değişti — frontend yeniden login yaptırmalı
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail="Yetki değişikliği algılandı. Lütfen yeniden giriş yapın.",
+        )
+
+    return payload

@@ -17,10 +17,10 @@ from app.api.v1.routers.settings import router as settings_router
 from app.api.v1.routers.notifications import router as notifications_router
 from app.api.v1.routers.calendar import router as calendar_router
 from app.api.v1.routers.documents import router as documents_router
+from app.api.v1.routers.users import router as users_router
 from app.config import get_settings
 from app.core.scheduler import setup_scheduler
 from app.core.security import get_current_user
-from app.core.tenant import get_club_id
 from app.database import get_db
 from app.schemas.auth import TokenPayload, UserResponse
 
@@ -94,6 +94,7 @@ app.include_router(settings_router, prefix=API_PREFIX)
 app.include_router(notifications_router, prefix=API_PREFIX)
 app.include_router(calendar_router, prefix=API_PREFIX)
 app.include_router(documents_router, prefix=API_PREFIX)
+app.include_router(users_router, prefix=API_PREFIX)  # Sprint 18: kullanıcı yönetimi
 
 
 # ─── /me endpoint — inject correct dependency ─────────────────────────────────
@@ -104,7 +105,6 @@ async def get_me(
 ) -> UserResponse:
     from sqlalchemy import select
     from app.core.tenant import assert_same_club
-    from app.models.person import Person
     from app.models.user import User
     import uuid
 
@@ -120,18 +120,10 @@ async def get_me(
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Kullanıcı bulunamadı.")
     assert_same_club(user.club_id, uuid.UUID(current_user.club_id))
 
-    # must_change_password: User modelinde değil, bağlı Person'da tutulur.
-    must_change_password = False
-    if user.person_id is not None:
-        person_result = await db.execute(
-            select(Person).where(Person.id == user.person_id)
-        )
-        person = person_result.scalar_one_or_none()
-        if person is not None:
-            must_change_password = person.must_change_password
-
+    # must_change_password: Sprint 18 / Migration 0019 sonrası User modelinde tutuluyor.
+    # Person.must_change_password artık okunmuyor; 0021'de kaldırılacak.
     base = UserResponse.model_validate(user)
-    return base.model_copy(update={"must_change_password": must_change_password})
+    return base.model_copy(update={"must_change_password": user.must_change_password})
 
 
 # ─── Root ─────────────────────────────────────────────────────────────────────

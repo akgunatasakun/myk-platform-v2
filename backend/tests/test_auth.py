@@ -298,24 +298,28 @@ async def test_login_must_change_password_true_for_linked_person(
     db_session,
     test_club: Club,
 ) -> None:
-    """Person'ı must_change_password=True olan bağlantılı kullanıcı login'de flag True döner."""
+    """User.must_change_password=True olan kullanıcı login'de flag True döner.
+
+    Sprint 18 / Migration 0019: must_change_password tek kaynağı User'dır.
+    Person.must_change_password artık login yanıtını etkilemez.
+    """
     import uuid
     from app.core.security import hash_password
     from app.models.person import Person
     from app.models.user import User as UserModel
 
-    # must_change_password=True olan Person oluştur
+    # Person oluştur (must_change_password'u artık login okumaz)
     person = Person(
         club_id=test_club.id,
         first_name="İlk",
         last_name="Giriş",
         member_number="MYK-26-9999",
-        must_change_password=True,
+        must_change_password=True,  # backfill senaryosu için bırakıldı
     )
     db_session.add(person)
     await db_session.flush()
 
-    # Bu Person'a bağlı kullanıcı
+    # User.must_change_password=True — tek kaynak burası
     unique_email = f"firstlogin-{uuid.uuid4().hex[:8]}@test.com"
     user = UserModel(
         club_id=test_club.id,
@@ -326,6 +330,7 @@ async def test_login_must_change_password_true_for_linked_person(
         is_active=True,
         is_deleted=False,
         person_id=person.id,
+        must_change_password=True,  # Migration 0019 sonrası bu alanı login okur
     )
     db_session.add(user)
     await db_session.flush()
@@ -547,6 +552,7 @@ async def test_change_password_clears_must_change_password(
         is_active=True,
         is_deleted=False,
         person_id=person.id,
+        must_change_password=True,  # Sprint 18: tek kaynak User (0019)
     )
     db_session.add(user)
     await db_session.flush()
@@ -572,9 +578,10 @@ async def test_change_password_clears_must_change_password(
     )
     assert change_resp.status_code == 204
 
-    # Person.must_change_password şimdi False olmalı
-    await db_session.refresh(person)
-    assert person.must_change_password is False
+    # Sprint 18: tek kaynak User — User.must_change_password False olmalı.
+    # Person.must_change_password artık change-password tarafından yazılmıyor.
+    await db_session.refresh(user)
+    assert user.must_change_password is False
 
     # /auth/me de artık must_change_password=False döndürmeli
     me_resp = await client.get(

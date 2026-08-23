@@ -13,7 +13,6 @@ Hata halinde tüm değişiklikler rollback edilir — çağıran kendi transacti
 from __future__ import annotations
 
 import logging
-import secrets
 import uuid
 from datetime import datetime, timezone
 from typing import Optional
@@ -21,15 +20,12 @@ from typing import Optional
 from sqlalchemy import select, text
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.core.security import hash_password
 from app.models.membership_application import MembershipApplication
 from app.models.person import Person, PersonRole
 from app.models.user import User
+from app.services.user_account_service import find_or_create_user_for_approval
 
 logger = logging.getLogger(__name__)
-
-# Geçici parola uzunluğu (kullanıcı ilk girişte değiştirmek zorunda)
-_TEMP_PASSWORD_BYTES = 16
 
 
 async def _generate_member_number(club_id: uuid.UUID, year: int, db: AsyncSession) -> str:
@@ -157,54 +153,21 @@ async def _find_or_create_user(
 ) -> tuple[Optional[User], Optional[str]]:
     """Kullanıcı hesabı oluştur — e-posta varsa.
 
+    Sprint 18: user_account_service.find_or_create_user_for_approval'e delege edildi.
+    must_change_password artık User modelinde tutuluyor (Migration 0019).
+
     Returns:
         (user, temp_password)  — user=None e-posta yoksa
         temp_password — kullanıcıya e-posta ile iletilecek geçici şifre
     """
-    if not app.email:
-        return None, None
-
-    club_id = app.club_id
-
-    # E-posta bu kulüpte zaten kullanılıyor mu?
-    result = await db.execute(
-        select(User).where(
-            User.club_id == club_id,
-            User.email == app.email,
-            User.is_deleted.is_(False),
-        )
-    )
-    existing_user = result.scalar_one_or_none()
-    if existing_user:
-        # Mevcut kullanıcıyı person'a bağla (henüz bağlı değilse)
-        if existing_user.person_id is None:
-            existing_user.person_id = person.id
-            await db.flush()
-        logger.info(
-            "Onay servisi: mevcut User kullanıldı (id=%s)", existing_user.id
-        )
-        return existing_user, None  # Parola değiştirilmiyor
-
-    # Geçici parola üret
-    temp_password = secrets.token_urlsafe(_TEMP_PASSWORD_BYTES)
-    full_name = f"{app.first_name or ''} {app.last_name or ''}".strip() or app.email
-
-    user = User(
-        club_id=club_id,
+    full_name = f"{app.first_name or ''} {app.last_name or ''}".strip() or (app.email or "")
+    return await find_or_create_user_for_approval(
+        club_id=app.club_id,
         email=app.email,
-        password_hash=hash_password(temp_password),
         full_name=full_name,
-        role="uye",
-        is_active=True,
         person_id=person.id,
+        db=db,
     )
-    db.add(user)
-
-    # Yeni kullanıcı geçici parola ile oluşturuldu; ilk girişte parola değiştirmesi zorunlu.
-    person.must_change_password = True
-    await db.flush()
-    logger.info("Onay servisi: yeni User oluşturuldu (id=%s)", user.id)
-    return user, temp_password
 
 
 async def process_approval(

@@ -6,7 +6,7 @@ from typing import Annotated
 
 import redis.asyncio as aioredis
 from fastapi import APIRouter, Cookie, Depends, HTTPException, Request, Response, status
-from fastapi.security import HTTPAuthorizationCredentials, HTTPBearer
+from fastapi.security import HTTPBearer
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -16,15 +16,12 @@ from app.core.ratelimit import check_rate_limit, get_redis, reset_rate_limit
 from app.core.security import (
     create_access_token,
     create_refresh_token,
-    decode_access_token,
     get_current_user,
     hash_password,
     verify_password,
 )
-from app.core.tenant import get_club_id
 from app.database import get_db
 from app.models.club import Club
-from app.models.person import Person
 from app.models.user import RefreshToken, User
 from app.schemas.auth import (
     ChangePasswordRequest,
@@ -135,21 +132,12 @@ async def login(
 
     _set_auth_cookies(response, access_token, raw_refresh)
 
-    # must_change_password: person'a bağlı kullanıcılarda Person'dan okunur.
-    # Doğrudan oluşturulmuş kullanıcılarda (yönetici vb.) person_id yoktur → False.
-    must_change_password = False
-    if user.person_id is not None:
-        person_result = await db.execute(
-            select(Person).where(Person.id == user.person_id)
-        )
-        person = person_result.scalar_one_or_none()
-        if person is not None:
-            must_change_password = person.must_change_password
-
+    # must_change_password: Sprint 18 / Migration 0019 sonrası User modelinde tutuluyor.
+    # Person.must_change_password artık okunmuyor; 0021'de kaldırılacak.
     return TokenResponse(
         access_token=access_token,
         expires_in=settings.jwt_access_token_expire_minutes * 60,
-        must_change_password=must_change_password,
+        must_change_password=user.must_change_password,
     )
 
 
@@ -221,7 +209,7 @@ async def change_password(
 
     - `current_password` yanlışsa 400 döner.
     - `new_password` ile `confirm_password` eşleşmezse 422 döner (Pydantic validator).
-    - Başarı durumunda Person.must_change_password=False yapılır.
+    - Başarı durumunda User.must_change_password=False yapılır.
     """
     result = await db.execute(
         select(User).where(
@@ -242,14 +230,9 @@ async def change_password(
 
     user.password_hash = hash_password(body.new_password)
 
-    # Person.must_change_password sıfırla (person_id olmayan yöneticilerde atla)
-    if user.person_id is not None:
-        person_result = await db.execute(
-            select(Person).where(Person.id == user.person_id)
-        )
-        person = person_result.scalar_one_or_none()
-        if person is not None:
-            person.must_change_password = False
+    # Sprint 18: must_change_password tek kaynağı User — direkt sıfırla.
+    # Person.must_change_password artık yazılmıyor; 0021'de kaldırılacak.
+    user.must_change_password = False
 
     await log_action(
         db,

@@ -9,7 +9,6 @@ from sqlalchemy.orm import Mapped, mapped_column, relationship
 from app.database import Base
 
 if TYPE_CHECKING:
-    from app.models.person import Person
     from app.models.academy import AcademySession
 
 
@@ -28,6 +27,11 @@ class User(Base):
     is_deleted: Mapped[bool] = mapped_column(Boolean, default=False)
     person_id: Mapped[Optional[uuid.UUID]] = mapped_column(
         ForeignKey("persons.id", ondelete="SET NULL"), nullable=True, index=True
+    )
+    # Sprint 18: must_change_password tek kaynağı User'a taşındı (0019 migration).
+    # Person.must_change_password uyumluluk için bırakıldı; 0021'de kaldırılacak.
+    must_change_password: Mapped[bool] = mapped_column(
+        Boolean, nullable=False, default=False, server_default="false"
     )
     last_login_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
     created_at: Mapped[datetime] = mapped_column(
