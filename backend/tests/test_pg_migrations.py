@@ -82,11 +82,11 @@ def test_fresh_upgrade_head():
 
 @pytest.mark.asyncio
 async def test_current_revision_is_head(engine):
-    """Migration sonrası alembic_version = '0019' (head) olmalı."""
+    """Migration sonrası alembic_version = '0020' (head) olmalı."""
     async with engine.connect() as conn:
         r = await conn.execute(text("SELECT version_num FROM alembic_version"))
         rev = r.scalar_one()
-    assert rev == "0019", f"Beklenen '0019', alınan '{rev!r}'"
+    assert rev == "0020", f"Beklenen '0020', alınan '{rev!r}'"
 
 
 # ── 2. Şema doğrulama ─────────────────────────────────────────────────────────
