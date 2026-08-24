@@ -24,7 +24,7 @@ Tenant isolation: club_id JWT'den gelir, body'den asla kabul edilmez.
 RBAC: egitim:read/write, yoklama:read/write (mevcut RBAC matrisi kullanılır).
 """
 import uuid
-from datetime import date, datetime, time, timedelta, timezone
+from datetime import date, datetime, timedelta, timezone
 from typing import List, Optional
 from zoneinfo import ZoneInfo
 
@@ -35,12 +35,13 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import selectinload
 
 from app.core.audit import log_action
-from app.core.rbac import require_permission
+from app.core.rbac import require_permission, is_own_scope_only
 from app.services.event_service import emit_event
 from app.core.security import get_current_user
 from app.core.tenant import get_club_id
 from app.database import get_db
 from app.models.person import Person, PersonRole
+from app.models.person_guardian import PersonGuardian
 from app.models.user import User
 from app.models.training import (
     TrainingAttendance,
@@ -123,6 +124,38 @@ def _person_name(person: Optional[Person]) -> Optional[str]:
     if person is None:
         return None
     return f"{person.first_name} {person.last_name}"
+
+
+async def _get_own_person_ids(
+    user_id: uuid.UUID,
+    club_id: uuid.UUID,
+    db: AsyncSession,
+    role: str,
+) -> list[uuid.UUID]:
+    """Own-scope için erişilebilir person_id listesi döndür.
+
+    - sporcu: [kendi person_id]
+    - veli: [ward'larının person_id listesi]
+    - diğer: [] (own-scope beklenmiyor)
+    """
+    result = await db.execute(select(User.person_id).where(User.id == user_id))
+    person_id: uuid.UUID | None = result.scalar_one_or_none()
+    if not person_id:
+        return []
+
+    if role == "sporcu":
+        return [person_id]
+
+    if role == "veli":
+        result = await db.execute(
+            select(PersonGuardian.athlete_person_id).where(
+                PersonGuardian.guardian_person_id == person_id,
+                PersonGuardian.club_id == club_id,
+            )
+        )
+        return list(result.scalars().all())
+
+    return []
 
 
 def _enrollment_count(course: TrainingCourse) -> int:
@@ -478,6 +511,22 @@ async def list_courses(
     if status_filter:
         q = q.where(TrainingCourse.status == status_filter)
 
+    # Own-scope: sporcu/veli sadece kayıtlı oldukları kursları görür
+    if is_own_scope_only(current_user.role, "egitim:read"):
+        person_ids = await _get_own_person_ids(
+            uuid.UUID(current_user.sub), club_id, db, current_user.role
+        )
+        if not person_ids:
+            from app.schemas.training import TrainingCourseListOut
+            return TrainingCourseListOut(items=[], total=0, skip=skip, limit=limit)
+        enrolled_course_ids = select(TrainingEnrollment.course_id).where(
+            TrainingEnrollment.person_id.in_(person_ids),
+            TrainingEnrollment.club_id == club_id,
+            TrainingEnrollment.status == "active",
+            TrainingEnrollment.is_deleted.is_(False),
+        )
+        q = q.where(TrainingCourse.id.in_(enrolled_course_ids))
+
     count_result = await db.execute(select(func.count()).select_from(q.subquery()))
     total = count_result.scalar_one()
 
@@ -662,16 +711,18 @@ async def delete_course(
 async def list_participants(
     course_id: uuid.UUID,
     club_id: uuid.UUID = Depends(get_club_id),
+    current_user: TokenPayload = Depends(get_current_user),
     _: None = Depends(require_permission("egitim:read")),
     db: AsyncSession = Depends(get_db),
 ) -> List[TrainingEnrollmentOut]:
     """Aktif kayıtlı katılımcıları döndür.
 
     P0-1 fix: status='active' filtresi eklendi — iptal kayıtlar hariç tutulur.
+    RBAC Phase 3: sporcu/veli yalnızca kendi kaydını görür.
     """
     await _get_course(course_id, club_id, db)
 
-    result = await db.execute(
+    enrollment_q = (
         select(TrainingEnrollment)
         .options(selectinload(TrainingEnrollment.person))
         .where(
@@ -682,6 +733,16 @@ async def list_participants(
         )
         .order_by(TrainingEnrollment.enrolled_at)
     )
+    # Own-scope: sporcu/veli yalnızca kendi (veya ward) kaydını görür
+    if is_own_scope_only(current_user.role, "egitim:read"):
+        person_ids = await _get_own_person_ids(
+            uuid.UUID(current_user.sub), club_id, db, current_user.role
+        )
+        if not person_ids:
+            return []
+        enrollment_q = enrollment_q.where(TrainingEnrollment.person_id.in_(person_ids))
+
+    result = await db.execute(enrollment_q)
     enrollments = result.scalars().all()
 
     items = []
@@ -997,12 +1058,13 @@ async def get_attendance(
     course_id: uuid.UUID,
     session_id: uuid.UUID,
     club_id: uuid.UUID = Depends(get_club_id),
+    current_user: TokenPayload = Depends(get_current_user),
     _: None = Depends(require_permission("yoklama:read")),
     db: AsyncSession = Depends(get_db),
 ) -> List[TrainingAttendanceOut]:
     await _get_session(session_id, course_id, club_id, db)
 
-    result = await db.execute(
+    att_q = (
         select(TrainingAttendance)
         .options(selectinload(TrainingAttendance.person))
         .where(
@@ -1011,6 +1073,16 @@ async def get_attendance(
         )
         .order_by(TrainingAttendance.created_at)
     )
+    # Own-scope: sporcu/veli yalnızca kendi (veya ward) yoklama kaydını görür
+    if is_own_scope_only(current_user.role, "yoklama:read"):
+        person_ids = await _get_own_person_ids(
+            uuid.UUID(current_user.sub), club_id, db, current_user.role
+        )
+        if not person_ids:
+            return []
+        att_q = att_q.where(TrainingAttendance.person_id.in_(person_ids))
+
+    result = await db.execute(att_q)
     records = result.scalars().all()
 
     items = []
@@ -1371,6 +1443,7 @@ async def self_checkin(
 async def attendance_report(
     course_id: uuid.UUID,
     club_id: uuid.UUID = Depends(get_club_id),
+    current_user: TokenPayload = Depends(get_current_user),
     _: None = Depends(require_permission("yoklama:read")),
     db: AsyncSession = Depends(get_db),
 ) -> AttendanceReport:
@@ -1394,7 +1467,7 @@ async def attendance_report(
             katilimcilar=[],
         )
 
-    att_result = await db.execute(
+    att_q = (
         select(TrainingAttendance)
         .options(selectinload(TrainingAttendance.person))
         .where(
@@ -1402,6 +1475,20 @@ async def attendance_report(
             TrainingAttendance.club_id == club_id,
         )
     )
+    # Own-scope: sporcu/veli yalnızca kendi (veya ward) satırlarını görür
+    if is_own_scope_only(current_user.role, "yoklama:read"):
+        person_ids = await _get_own_person_ids(
+            uuid.UUID(current_user.sub), club_id, db, current_user.role
+        )
+        if not person_ids:
+            return AttendanceReport(
+                course_id=course_id,
+                course_name=course.name,
+                toplam_oturum=len(session_ids),
+                katilimcilar=[],
+            )
+        att_q = att_q.where(TrainingAttendance.person_id.in_(person_ids))
+    att_result = await db.execute(att_q)
     records = att_result.scalars().all()
 
     summary: dict[uuid.UUID, AttendancePersonSummary] = {}
