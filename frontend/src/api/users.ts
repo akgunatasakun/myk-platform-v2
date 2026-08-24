@@ -17,6 +17,7 @@ export interface UserListParams {
   limit?: number;
   role?: string;
   is_active?: boolean;
+  is_deleted?: boolean;
   search?: string;
 }
 

@@ -54,7 +54,7 @@ export default function UsersPage() {
         if (searchVal) params.search = searchVal
         if (role) params.role = role
         if (active !== '') params.is_active = active === 'true'
-        if (deleted) params.include_deleted = true
+        if (deleted) params.is_deleted = true
 
         const resp = await usersApi.list(params)
         setData(resp.data)

@@ -92,13 +92,19 @@ async def list_users(
     limit: int = Query(20, ge=1, le=100),
     role: Optional[str] = Query(None),
     is_active: Optional[bool] = Query(None),
+    is_deleted: Optional[bool] = Query(None, description="True=yalnızca silinmişler, False/None=yalnızca aktifler"),
     search: Optional[str] = Query(None, min_length=1),
     current_user: TokenPayload = Depends(get_current_user),
     club_id: uuid.UUID = Depends(get_club_id),
     db: AsyncSession = Depends(get_db),
     _: None = Depends(require_permission("kullanici:read")),
 ) -> UserListOut:
-    where = [User.club_id == club_id, User.is_deleted.is_(False)]
+    where = [User.club_id == club_id]
+    # is_deleted=True → yalnızca silinmişler; None veya False → yalnızca silinmemişler
+    if is_deleted is True:
+        where.append(User.is_deleted.is_(True))
+    else:
+        where.append(User.is_deleted.is_(False))
     if role is not None:
         where.append(User.role == role)
     if is_active is not None:
