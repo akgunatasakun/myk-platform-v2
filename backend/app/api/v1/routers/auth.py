@@ -249,9 +249,12 @@ async def change_password(
 @router.post("/logout", status_code=status.HTTP_204_NO_CONTENT)
 async def logout(
     response: Response,
+    request: Request,
     refresh_token_cookie: Annotated[str | None, Cookie(alias=_REFRESH_COOKIE)] = None,
     db: AsyncSession = Depends(get_db),
 ) -> None:
+    user_id = None
+    club_id = None
     if refresh_token_cookie:
         token_hash = hashlib.sha256(refresh_token_cookie.encode()).hexdigest()
         result = await db.execute(
@@ -260,6 +263,21 @@ async def logout(
         rt = result.scalar_one_or_none()
         if rt and rt.revoked_at is None:
             rt.revoked_at = datetime.now(timezone.utc)
+            # Kullanıcı bilgilerini audit için al
+            user_result = await db.execute(select(User).where(User.id == rt.user_id))
+            user = user_result.scalar_one_or_none()
+            if user:
+                user_id = user.id
+                club_id = user.club_id
+    await log_action(
+        db,
+        action="logout",
+        resource_type="user",
+        club_id=club_id,
+        user_id=user_id,
+        request=request,
+        success=True,
+    )
     _clear_auth_cookies(response)
 
 

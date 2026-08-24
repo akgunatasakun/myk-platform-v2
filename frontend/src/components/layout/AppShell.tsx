@@ -16,6 +16,7 @@ const NAV_ITEMS: NavItem[] = [
   { path: '/admin/applications', label: 'Başvurular', icon: '📋' },
   { path: '/persons', label: 'Kişiler', icon: '👥' },
   { path: '/users', label: 'Kullanıcılar', icon: '🔐', roles: ['kulup_yonetici', 'genel_sekreter', 'super_admin'] },
+  { path: '/audit', label: 'Denetim Kayıtları', icon: '🛡️', roles: ['kulup_yonetici', 'super_admin'] },
   { path: '/sporcular', label: 'Sporcular', icon: '⛵' },
   { path: '/veliler', label: 'Veliler', icon: '👨‍👩‍👧' },
   { path: '/uyeler', label: 'Üyeler', icon: '🏅' },

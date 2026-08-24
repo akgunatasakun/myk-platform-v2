@@ -33,6 +33,7 @@ import CalendarPage from '@/pages/calendar/CalendarPage'
 import DocumentsPage from '@/pages/documents/DocumentsPage'
 import DocumentDetailPage from '@/pages/documents/DocumentDetailPage'
 import UsersPage from '@/pages/users/UsersPage'
+import AuditPage from '@/pages/audit/AuditPage'
 import Forbidden from '@/pages/Forbidden'
 import NotFound from '@/pages/NotFound'
 
@@ -117,6 +118,15 @@ export default function App() {
           element={
             <ProtectedRoute>
               <UsersPage />
+            </ProtectedRoute>
+          }
+        />
+        {/* Sprint 19: Denetim kayıtları */}
+        <Route
+          path="/audit"
+          element={
+            <ProtectedRoute>
+              <AuditPage />
             </ProtectedRoute>
           }
         />
