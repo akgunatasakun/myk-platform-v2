@@ -25,6 +25,7 @@ export interface UserListItem {
   full_name: string;
   role: Role;
   is_active: boolean;
+  is_deleted: boolean;
   person_id: string | null;
   last_login_at: string | null;
   created_at: string;
