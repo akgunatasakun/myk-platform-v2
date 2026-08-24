@@ -14,6 +14,9 @@ import { useCallback, useEffect, useState } from 'react'
 import { useSearchParams } from 'react-router-dom'
 import AppShell from '@/components/layout/AppShell'
 import { trainingApi } from '@/api/training'
+import { useAuth } from '@/hooks/useAuth'
+
+const CAN_TAKE_ATTENDANCE = new Set(['super_admin', 'kulup_yonetici', 'sportif_direktor', 'basantrenor', 'antrenor', 'personel'])
 import type {
   TrainingCourse,
   TrainingSession,
@@ -44,6 +47,8 @@ function fmt(date: string) {
 
 export default function AttendancePage() {
   const [searchParams, setSearchParams] = useSearchParams()
+  const { user } = useAuth()
+  const canTakeAttendance = CAN_TAKE_ATTENDANCE.has(user?.role ?? '')
 
   // Seçimler
   const [courses, setCourses] = useState<TrainingCourse[]>([])
@@ -390,11 +395,13 @@ export default function AttendancePage() {
             </div>
           )}
 
-          <div style={{ display: 'flex', justifyContent: 'flex-end' }}>
-            <button className="btn btn-primary" onClick={handleSave} disabled={saving}>
-              {saving ? 'Kaydediliyor…' : '💾 Yoklamayı Kaydet'}
-            </button>
-          </div>
+          {canTakeAttendance && (
+            <div style={{ display: 'flex', justifyContent: 'flex-end' }}>
+              <button className="btn btn-primary" onClick={handleSave} disabled={saving}>
+                {saving ? 'Kaydediliyor…' : '💾 Yoklamayı Kaydet'}
+              </button>
+            </div>
+          )}
         </>
       )}
     </AppShell>

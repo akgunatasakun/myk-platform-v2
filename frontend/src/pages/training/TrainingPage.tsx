@@ -4,6 +4,9 @@ import AppShell from '@/components/layout/AppShell'
 import TrainingFormModal from './TrainingFormModal'
 import { trainingApi } from '@/api/training'
 import type { TrainingCourse, TrainingCourseListResponse, CourseStatus } from '@/types/training'
+import { useAuth } from '@/hooks/useAuth'
+
+const READ_ONLY_ROLES = new Set(['sporcu', 'veli', 'uye', 'misafir'])
 
 const STATUS_LABEL: Record<string, string> = {
   planlandi: 'Planlandı',
@@ -42,6 +45,8 @@ const PAGE_SIZE = 20
 
 export default function TrainingPage() {
   const navigate = useNavigate()
+  const { user } = useAuth()
+  const canWrite = !READ_ONLY_ROLES.has(user?.role ?? '')
 
   const [data, setData] = useState<TrainingCourseListResponse | null>(null)
   const [loading, setLoading] = useState(true)
@@ -117,9 +122,11 @@ export default function TrainingPage() {
     <AppShell title="Eğitimler">
       <div className="page-header">
         <h1 className="page-title">Eğitimler</h1>
-        <button className="btn btn-primary" onClick={openCreate}>
-          + Yeni Eğitim
-        </button>
+        {canWrite && (
+          <button className="btn btn-primary" onClick={openCreate}>
+            + Yeni Eğitim
+          </button>
+        )}
       </div>
 
       <div className="filter-bar">
@@ -175,7 +182,7 @@ export default function TrainingPage() {
                   <th>Katılımcı</th>
                   <th>Ücret</th>
                   <th>Durum</th>
-                  <th>İşlemler</th>
+                  {canWrite && <th>İşlemler</th>}
                 </tr>
               </thead>
               <tbody>
@@ -215,16 +222,18 @@ export default function TrainingPage() {
                         {STATUS_LABEL[c.status] ?? c.status}
                       </span>
                     </td>
-                    <td>
-                      <div style={{ display: 'flex', gap: 6 }} onClick={(e) => e.stopPropagation()}>
-                        <button className="btn btn-sm btn-secondary" onClick={(e) => openEdit(c, e)}>
-                          Düzenle
-                        </button>
-                        <button className="btn btn-sm btn-danger" onClick={(e) => handleDelete(c, e)}>
-                          🗑
-                        </button>
-                      </div>
-                    </td>
+                    {canWrite && (
+                      <td>
+                        <div style={{ display: 'flex', gap: 6 }} onClick={(e) => e.stopPropagation()}>
+                          <button className="btn btn-sm btn-secondary" onClick={(e) => openEdit(c, e)}>
+                            Düzenle
+                          </button>
+                          <button className="btn btn-sm btn-danger" onClick={(e) => handleDelete(c, e)}>
+                            🗑
+                          </button>
+                        </div>
+                      </td>
+                    )}
                   </tr>
                 ))}
               </tbody>

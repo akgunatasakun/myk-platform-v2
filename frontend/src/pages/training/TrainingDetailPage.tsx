@@ -14,6 +14,12 @@ import type {
   SessionStatus,
 } from '@/types/training'
 import type { Person } from '@/types/person'
+import { useAuth } from '@/hooks/useAuth'
+
+// Kurs/oturum oluşturma-düzenleme-silme yetkisi olan roller
+const CAN_WRITE_COURSE = new Set(['super_admin', 'kulup_yonetici', 'sportif_direktor', 'basantrenor'])
+// Yoklama alma yetkisi olan roller
+const CAN_TAKE_ATTENDANCE = new Set(['super_admin', 'kulup_yonetici', 'sportif_direktor', 'basantrenor', 'antrenor', 'personel'])
 
 // ── Sabitler ──────────────────────────────────────────────────────────────────
 
@@ -86,6 +92,9 @@ type Tab = 'participants' | 'sessions' | 'report'
 export default function TrainingDetailPage() {
   const { id } = useParams<{ id: string }>()
   const navigate = useNavigate()
+  const { user } = useAuth()
+  const canWriteCourse = CAN_WRITE_COURSE.has(user?.role ?? '')
+  const canTakeAttendance = CAN_TAKE_ATTENDANCE.has(user?.role ?? '')
 
   const [course, setCourse] = useState<TrainingCourse | null>(null)
   const [enrollments, setEnrollments] = useState<TrainingEnrollment[]>([])
@@ -227,10 +236,12 @@ export default function TrainingDetailPage() {
           </span>
           {!course.is_active && <span className="badge badge-pasif">Pasif</span>}
         </div>
-        <div style={{ display: 'flex', gap: 8 }}>
-          <button className="btn btn-secondary" onClick={() => setEditOpen(true)}>Düzenle</button>
-          <button className="btn btn-danger" onClick={handleDelete}>Sil</button>
-        </div>
+        {canWriteCourse && (
+          <div style={{ display: 'flex', gap: 8 }}>
+            <button className="btn btn-secondary" onClick={() => setEditOpen(true)}>Düzenle</button>
+            <button className="btn btn-danger" onClick={handleDelete}>Sil</button>
+          </div>
+        )}
       </div>
 
       {/* Kurs bilgileri */}
@@ -304,7 +315,9 @@ export default function TrainingDetailPage() {
         <>
           <div className="page-header" style={{ marginBottom: 12 }}>
             <span />
-            <button className="btn btn-primary btn-sm" onClick={openNewSession}>+ Yeni Oturum</button>
+            {canWriteCourse && (
+              <button className="btn btn-primary btn-sm" onClick={openNewSession}>+ Yeni Oturum</button>
+            )}
           </div>
           <div className="table-container">
             {sessions.length === 0 ? (
@@ -322,7 +335,7 @@ export default function TrainingDetailPage() {
                     <th>Durum</th>
                     <th>Yoklama</th>
                     <th>Notlar</th>
-                    <th>İşlemler</th>
+                    {(canTakeAttendance || canWriteCourse) && <th>İşlemler</th>}
                   </tr>
                 </thead>
                 <tbody>
@@ -343,19 +356,25 @@ export default function TrainingDetailPage() {
                       <td style={{ fontSize: 12, maxWidth: 180, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
                         {s.notes ?? '—'}
                       </td>
-                      <td>
-                        <div style={{ display: 'flex', gap: 6 }}>
-                          <button
-                            className="btn btn-sm btn-primary"
-                            onClick={() => navigate(`/yoklama?course=${course.id}&session=${s.id}`)}
-                          >
-                            ✅ Yoklama
-                          </button>
-                          <button className="btn btn-sm btn-secondary" onClick={() => openEditSession(s)}>
-                            Düzenle
-                          </button>
-                        </div>
-                      </td>
+                      {(canTakeAttendance || canWriteCourse) && (
+                        <td>
+                          <div style={{ display: 'flex', gap: 6 }}>
+                            {canTakeAttendance && (
+                              <button
+                                className="btn btn-sm btn-primary"
+                                onClick={() => navigate(`/yoklama?course=${course.id}&session=${s.id}`)}
+                              >
+                                ✅ Yoklama
+                              </button>
+                            )}
+                            {canWriteCourse && (
+                              <button className="btn btn-sm btn-secondary" onClick={() => openEditSession(s)}>
+                                Düzenle
+                              </button>
+                            )}
+                          </div>
+                        </td>
+                      )}
                     </tr>
                   ))}
                 </tbody>

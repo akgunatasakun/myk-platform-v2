@@ -3,6 +3,9 @@ import AppShell from '@/components/layout/AppShell'
 import PaymentFormModal from './PaymentFormModal'
 import { paymentsApi } from '@/api/payments'
 import type { OverduePayment, Payment, PaymentListResponse, PaymentStatus } from '@/types/payment'
+import { useAuth } from '@/hooks/useAuth'
+
+const READ_ONLY_ROLES = new Set(['sporcu', 'veli', 'uye', 'misafir'])
 
 // ── Sabitler ──────────────────────────────────────────────────────────────────
 
@@ -37,6 +40,9 @@ const PAGE_SIZE = 50
 // ── Component ─────────────────────────────────────────────────────────────────
 
 export default function PaymentsPage() {
+  const { user } = useAuth()
+  const canWrite = !READ_ONLY_ROLES.has(user?.role ?? '')
+
   const [tab, setTab] = useState<Tab>('all')
 
   const [data, setData] = useState<PaymentListResponse | null>(null)
@@ -131,7 +137,9 @@ export default function PaymentsPage() {
     <AppShell title="Ödemeler">
       <div className="page-header">
         <h1 className="page-title">Ödemeler</h1>
-        <button className="btn btn-primary" onClick={openCreate}>+ Yeni Ödeme</button>
+        {canWrite && (
+          <button className="btn btn-primary" onClick={openCreate}>+ Yeni Ödeme</button>
+        )}
       </div>
 
       {/* Tabs */}
@@ -215,7 +223,7 @@ export default function PaymentsPage() {
                   <th>Ödeme Tarihi</th>
                   {tab === 'overdue' && <th>Gecikme</th>}
                   <th>Durum</th>
-                  <th>İşlemler</th>
+                  {canWrite && <th>İşlemler</th>}
                 </tr>
               </thead>
               <tbody>
@@ -257,22 +265,24 @@ export default function PaymentsPage() {
                           {STATUS_LABEL[p.status] ?? p.status}
                         </span>
                       </td>
-                      <td>
-                        <div style={{ display: 'flex', gap: 6 }}>
-                          <button
-                            className="btn btn-sm btn-secondary"
-                            onClick={(e) => openEdit(p as Payment, e)}
-                          >
-                            Düzenle
-                          </button>
-                          <button
-                            className="btn btn-sm btn-danger"
-                            onClick={(e) => handleDelete(p as Payment, e)}
-                          >
-                            🗑
-                          </button>
-                        </div>
-                      </td>
+                      {canWrite && (
+                        <td>
+                          <div style={{ display: 'flex', gap: 6 }}>
+                            <button
+                              className="btn btn-sm btn-secondary"
+                              onClick={(e) => openEdit(p as Payment, e)}
+                            >
+                              Düzenle
+                            </button>
+                            <button
+                              className="btn btn-sm btn-danger"
+                              onClick={(e) => handleDelete(p as Payment, e)}
+                            >
+                              🗑
+                            </button>
+                          </div>
+                        </td>
+                      )}
                     </tr>
                   )
                 })}
