@@ -177,7 +177,8 @@ async def get_user(
     db: AsyncSession = Depends(get_db),
     _: None = Depends(require_permission("kullanici:read")),
 ) -> UserOut:
-    user = await _get_user_for_club(user_id, club_id, db)
+    # include_deleted=True: silinmiş kullanıcı detayı da görülebilsin (restore UI için)
+    user = await _get_user_for_club(user_id, club_id, db, include_deleted=True)
     return UserOut.model_validate(user)
 
 
