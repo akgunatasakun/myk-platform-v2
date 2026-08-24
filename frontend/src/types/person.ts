@@ -31,6 +31,8 @@ export interface Person {
   updated_at: string;
   roles: PersonRole[];
   role_codes: PersonRoleCode[];
+  linked_user_id?: string | null;
+  linked_user_email?: string | null;
 }
 
 export interface PersonListResponse {

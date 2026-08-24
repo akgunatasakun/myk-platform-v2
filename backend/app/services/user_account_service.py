@@ -429,6 +429,97 @@ async def reset_password(
     return temp_password  # G5: yalnızca yanıtta döner
 
 
+# ── Person'dan User oluşturma ─────────────────────────────────────────────────
+
+# PersonRole kodu → User rolü (1:1 eşleşme; yönetici rolleri UsersPage'den atanır)
+_PERSON_ROLE_TO_USER_ROLE: dict[str, str] = {
+    "sporcu":   "sporcu",
+    "veli":     "veli",
+    "antrenor": "antrenor",
+    "uye":      "uye",
+    "personel": "personel",
+    "misafir":  "misafir",
+}
+
+
+async def create_user_for_person(
+    *,
+    person: "Person",
+    role_code: str,
+    assigner_user_id: uuid.UUID,
+    assigner_role: str,
+    db: AsyncSession,
+) -> tuple["User", str]:
+    """Person kaydından User hesabı oluşturur.
+
+    Kurallar:
+    - Person.email zorunlu; yoksa HTTPException 422.
+    - role_code → User.role eşlemesi _PERSON_ROLE_TO_USER_ROLE üzerinden.
+    - G10: aynı person_id'ye bağlı aktif User varsa HTTPException 409.
+    - G9: aynı e-posta ile silinmiş User varsa HTTPException 409 (restore önerir).
+    - must_change_password=True, temp_password bir kez döner (G5).
+    - Caller commit yapmakla yükümlüdür.
+    """
+    if not person.email:
+        raise HTTPException(
+            status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+            detail="Hesap oluşturmak için kişi kaydında e-posta zorunludur.",
+        )
+
+    user_role = _PERSON_ROLE_TO_USER_ROLE.get(role_code)
+    if user_role is None:
+        raise HTTPException(
+            status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+            detail=f"'{role_code}' rolü için otomatik hesap oluşturma desteklenmiyor.",
+        )
+
+    # G10: aynı person_id ile aktif hesap var mı?
+    existing_person_user = await db.execute(
+        select(User).where(
+            User.person_id == person.id,
+            User.club_id == person.club_id,
+            User.is_deleted.is_(False),
+        )
+    )
+    if existing_person_user.scalar_one_or_none() is not None:
+        raise HTTPException(
+            status_code=status.HTTP_409_CONFLICT,
+            detail="Bu kişiye bağlı aktif bir hesap zaten mevcut.",
+        )
+
+    # G9: aynı e-posta ile silinmiş hesap var mı?
+    existing_email_user = await db.execute(
+        select(User).where(
+            User.email == person.email,
+            User.club_id == person.club_id,
+        )
+    )
+    ex = existing_email_user.scalar_one_or_none()
+    if ex is not None:
+        if ex.is_deleted:
+            raise HTTPException(
+                status_code=status.HTTP_409_CONFLICT,
+                detail="Bu e-posta ile silinmiş bir hesap var. Önce hesabı geri yükleyin.",
+            )
+        # Aktif + aynı e-posta (farklı person_id): G9
+        raise HTTPException(
+            status_code=status.HTTP_409_CONFLICT,
+            detail="Bu e-posta adresi başka bir hesapta kullanılıyor.",
+        )
+
+    user, temp_password = await create_user(
+        club_id=person.club_id,
+        email=person.email,
+        full_name=f"{person.first_name} {person.last_name}",
+        role=user_role,
+        person_id=person.id,
+        assigner_role=assigner_role,
+        assigner_user_id=assigner_user_id,
+        db=db,
+    )
+    return user, temp_password
+
+
 # ── membership_approval uyumluluğu ────────────────────────────────────────────
 
 async def find_or_create_user_for_approval(

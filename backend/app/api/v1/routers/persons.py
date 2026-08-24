@@ -17,7 +17,16 @@ from app.dependencies.storage import get_storage
 from app.models.person import Person, PersonRole
 from app.models.person_guardian import PersonGuardian
 from app.schemas.auth import TokenPayload
-from app.schemas.person import PersonCreate, PersonListOut, PersonOut, PersonUpdate
+from app.models.user import User
+from app.schemas.person import (
+    PersonCreate,
+    PersonCreateAccountRequest,
+    PersonCreateAccountResponse,
+    PersonListOut,
+    PersonOut,
+    PersonUpdate,
+)
+from app.services.user_account_service import create_user_for_person
 from app.schemas.person_guardian import (
     GuardianAthleteOut,
     PersonGuardianCreate,
@@ -196,6 +205,27 @@ async def create_person(
         request=request,
     )
 
+    # Sprint 20: e-posta + rol varsa otomatik hesap aç
+    if body.create_account and person.email and body.role_codes:
+        try:
+            await create_user_for_person(
+                person=person,
+                role_code=body.role_codes[0],
+                assigner_user_id=uuid.UUID(current_user.sub),
+                assigner_role=current_user.role,
+                db=db,
+            )
+        except HTTPException:
+            pass  # G10/G9: hesap zaten var veya çakışma — kişi yine de oluşturuldu
+
+    await db.commit()
+    await db.refresh(person)
+    # roles ilişkisini yeniden yükle
+    result2 = await db.execute(
+        select(Person).options(selectinload(Person.roles)).where(Person.id == person.id)
+    )
+    person = result2.scalar_one()
+
     mask = _should_mask(current_user.role)
     return _build_person_out(person, mask=mask)
 
@@ -208,10 +238,86 @@ async def get_person(
     _: None = Depends(require_permission("kisi:read")),
     db: AsyncSession = Depends(get_db),
 ) -> PersonOut:
-    # FIX: club_id WHERE koşulunda — assert_same_club'a gerek yok
     person = await _get_person_for_club(person_id, club_id, db)
     mask = _should_mask(current_user.role)
-    return _build_person_out(person, mask=mask)
+    out = _build_person_out(person, mask=mask)
+
+    # Sprint 20: bağlı kullanıcı hesabı bilgisini doldur
+    linked = await db.execute(
+        select(User).where(
+            User.person_id == person.id,
+            User.club_id == club_id,
+            User.is_deleted.is_(False),
+        )
+    )
+    linked_user = linked.scalar_one_or_none()
+    if linked_user:
+        out.linked_user_id = linked_user.id
+        out.linked_user_email = linked_user.email
+
+    return out
+
+
+@router.post(
+    "/{person_id}/create-account",
+    response_model=PersonCreateAccountResponse,
+    status_code=status.HTTP_201_CREATED,
+    summary="Kişi kaydından kullanıcı hesabı oluştur",
+)
+async def create_account_for_person(
+    person_id: uuid.UUID,
+    body: PersonCreateAccountRequest,
+    request: Request,
+    club_id: uuid.UUID = Depends(get_club_id),
+    current_user: TokenPayload = Depends(get_current_user),
+    _: None = Depends(require_permission("kullanici:write")),
+    db: AsyncSession = Depends(get_db),
+) -> PersonCreateAccountResponse:
+    """Mevcut kişi kaydına bağlı bir giriş hesabı açar.
+
+    - E-posta zorunlu (Person.email boşsa 422).
+    - role_code: kişinin role_codes listesinden biri olmalı.
+    - Aktif hesap zaten varsa 409.
+    - Geçici parola bir kez döner (G5).
+    """
+    person = await _get_person_for_club(person_id, club_id, db)
+
+    # Seçilen rol kişide tanımlı mı?
+    person_role_codes = [r.role_code for r in person.roles]
+    if body.role_code not in person_role_codes:
+        raise HTTPException(
+            status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+            detail=f"'{body.role_code}' bu kişiye atanmış değil. Kişinin rolleri: {person_role_codes}",
+        )
+
+    user, temp_password = await create_user_for_person(
+        person=person,
+        role_code=body.role_code,
+        assigner_user_id=uuid.UUID(current_user.sub),
+        assigner_role=current_user.role,
+        db=db,
+    )
+
+    await db.commit()
+    await db.refresh(user)
+
+    await log_action(
+        db,
+        action="user_created_for_person",
+        resource_type="user",
+        club_id=club_id,
+        user_id=uuid.UUID(current_user.sub),
+        resource_id=str(user.id),
+        after={"person_id": str(person.id), "role": user.role},
+        request=request,
+    )
+
+    return PersonCreateAccountResponse(
+        user_id=user.id,
+        email=user.email,
+        role=user.role,
+        temp_password=temp_password,
+    )
 
 
 @router.patch("/{person_id}", response_model=PersonOut)

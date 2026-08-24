@@ -38,6 +38,34 @@ export default function PersonDetailPage() {
   const [error, setError] = useState<string | null>(null)
   const [editOpen, setEditOpen] = useState(false)
   const [deleting, setDeleting] = useState(false)
+  const [creatingAccount, setCreatingAccount] = useState(false)
+  const [accountTempPassword, setAccountTempPassword] = useState<string | null>(null)
+  const [selectedRoleCode, setSelectedRoleCode] = useState<string>('')
+
+  const handleCreateAccount = async () => {
+    if (!person) return
+    const roleCode = person.role_codes.length === 1
+      ? person.role_codes[0]
+      : selectedRoleCode
+    if (!roleCode) {
+      alert('Lütfen bir rol seçin.')
+      return
+    }
+    setCreatingAccount(true)
+    try {
+      const res = await personsApi.createAccount(person.id, roleCode)
+      setAccountTempPassword(res.data.temp_password)
+      // Reload person to get linked_user_id
+      const updated = await personsApi.get(person.id)
+      setPerson(updated.data)
+    } catch (err: unknown) {
+      const detail =
+        (err as { response?: { data?: { detail?: string } } })?.response?.data?.detail
+      alert(detail || 'Hesap oluşturulurken hata oluştu.')
+    } finally {
+      setCreatingAccount(false)
+    }
+  }
 
   useEffect(() => {
     if (!id) return
@@ -227,6 +255,126 @@ export default function PersonDetailPage() {
               </div>
             </div>
           )}
+
+          {/* Hesap Durumu */}
+          <div className="card" style={{ marginBottom: 20 }}>
+            <div className="card-header">Hesap Durumu</div>
+            <div className="card-body">
+              {person.linked_user_id ? (
+                <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
+                  <span
+                    style={{
+                      display: 'inline-flex',
+                      alignItems: 'center',
+                      gap: 6,
+                      padding: '4px 12px',
+                      borderRadius: 20,
+                      background: '#d1fae5',
+                      color: '#065f46',
+                      fontWeight: 600,
+                      fontSize: 14,
+                    }}
+                  >
+                    ✓ Hesap Mevcut
+                  </span>
+                  {person.linked_user_email && (
+                    <span style={{ fontSize: 14, color: 'var(--color-text-secondary)' }}>
+                      {person.linked_user_email}
+                    </span>
+                  )}
+                </div>
+              ) : (
+                <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
+                  <div style={{ display: 'flex', alignItems: 'center', gap: 12, flexWrap: 'wrap' }}>
+                    <span
+                      style={{
+                        display: 'inline-flex',
+                        alignItems: 'center',
+                        gap: 6,
+                        padding: '4px 12px',
+                        borderRadius: 20,
+                        background: '#fee2e2',
+                        color: '#991b1b',
+                        fontWeight: 600,
+                        fontSize: 14,
+                      }}
+                    >
+                      Hesap Yok
+                    </span>
+                    {!person.email && (
+                      <span style={{ fontSize: 13, color: 'var(--color-text-secondary)' }}>
+                        (Hesap oluşturmak için önce e-posta ekleyin)
+                      </span>
+                    )}
+                  </div>
+
+                  {person.email && (
+                    <div style={{ display: 'flex', alignItems: 'center', gap: 10, flexWrap: 'wrap' }}>
+                      {person.role_codes.length > 1 && (
+                        <select
+                          className="form-select"
+                          style={{ maxWidth: 200 }}
+                          value={selectedRoleCode}
+                          onChange={(e) => setSelectedRoleCode(e.target.value)}
+                        >
+                          <option value="">Rol seçin…</option>
+                          {person.role_codes.map((code) => (
+                            <option key={code} value={code}>
+                              {ROLE_LABELS[code] ?? code}
+                            </option>
+                          ))}
+                        </select>
+                      )}
+                      <button
+                        className="btn btn-primary"
+                        onClick={handleCreateAccount}
+                        disabled={creatingAccount}
+                      >
+                        {creatingAccount ? 'Oluşturuluyor…' : 'Hesap Oluştur'}
+                      </button>
+                    </div>
+                  )}
+                </div>
+              )}
+
+              {/* Geçici parola — tek seferlik gösterim (G5) */}
+              {accountTempPassword && (
+                <div
+                  style={{
+                    marginTop: 16,
+                    padding: 12,
+                    background: '#fffbeb',
+                    border: '1px solid #fcd34d',
+                    borderRadius: 8,
+                  }}
+                >
+                  <div style={{ fontWeight: 600, marginBottom: 4, fontSize: 14 }}>
+                    ⚠️ Geçici Parola — Yalnızca Bir Kez Görüntülenir
+                  </div>
+                  <code
+                    style={{
+                      fontFamily: 'monospace',
+                      fontSize: 16,
+                      letterSpacing: 1,
+                      color: '#92400e',
+                    }}
+                  >
+                    {accountTempPassword}
+                  </code>
+                  <div style={{ marginTop: 8, fontSize: 13, color: '#78350f' }}>
+                    Bu parolayı kullanıcıya güvenli kanaldan iletin. Sayfa kapatıldıktan sonra tekrar görüntülenemez.
+                  </div>
+                  <button
+                    className="btn btn-sm btn-ghost"
+                    style={{ marginTop: 8 }}
+                    onClick={() => setAccountTempPassword(null)}
+                  >
+                    Kapat
+                  </button>
+                </div>
+              )}
+            </div>
+          </div>
 
           {/* Veliler / Vasiler bölümü */}
           <PersonGuardiansSection personId={person.id} />

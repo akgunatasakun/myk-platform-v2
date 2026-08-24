@@ -27,6 +27,13 @@ export const personsApi = {
   delete: (id: string) =>
     apiClient.delete(`/persons/${id}`),
 
+  // ── Hesap oluşturma ───────────────────────────────────────────────────────
+  createAccount: (personId: string, roleCode: string) =>
+    apiClient.post<{ user_id: string; email: string; role: string; temp_password: string }>(
+      `/persons/${personId}/create-account`,
+      { role_code: roleCode }
+    ),
+
   // ── Guardian reverse lookup ───────────────────────────────────────────────
   getAthletes: (guardianPersonId: string) =>
     apiClient.get<GuardianAthlete[]>(`/persons/${guardianPersonId}/athletes`),

@@ -3,7 +3,7 @@ import uuid
 from datetime import date, datetime
 from typing import List, Optional
 
-from pydantic import BaseModel, EmailStr, field_validator, model_serializer
+from pydantic import BaseModel, EmailStr, field_validator
 
 PERSON_ROLE_CODES = ["sporcu", "uye", "veli", "antrenor", "personel", "misafir"]
 BLOOD_TYPES = ["A+", "A-", "B+", "B-", "AB+", "AB-", "0+", "0-"]
@@ -106,7 +106,28 @@ class PersonBase(BaseModel):
 
 
 class PersonCreate(PersonBase):
-    pass
+    # Sprint 20: e-posta ve rol varsa otomatik hesap aç
+    create_account: bool = True
+
+
+class PersonCreateAccountRequest(BaseModel):
+    """Manuel hesap oluşturma isteği — POST /persons/{id}/create-account."""
+    role_code: str
+
+    @field_validator("role_code")
+    @classmethod
+    def role_valid(cls, v: str) -> str:
+        if v not in PERSON_ROLE_CODES:
+            raise ValueError(f"Geçersiz rol kodu: {v}. Geçerli: {PERSON_ROLE_CODES}")
+        return v
+
+
+class PersonCreateAccountResponse(BaseModel):
+    """Hesap oluşturma yanıtı — temp_password yalnızca bir kez döner (G5)."""
+    user_id: uuid.UUID
+    email: str
+    role: str
+    temp_password: str
 
 
 class PersonUpdate(BaseModel):
@@ -198,6 +219,9 @@ class PersonOut(BaseModel):
     updated_at: datetime
     roles: List[PersonRoleOut] = []
     role_codes: List[str] = []
+    # Sprint 20: bağlı kullanıcı hesabı bilgisi (detail endpoint'te doldurulur)
+    linked_user_id: Optional[uuid.UUID] = None
+    linked_user_email: Optional[str] = None
 
     model_config = {"from_attributes": True}
 
