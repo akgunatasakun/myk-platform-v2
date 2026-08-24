@@ -34,12 +34,14 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import selectinload
 
 from app.config import get_settings
-from app.core.rbac import require_permission
+from app.core.rbac import require_permission, is_own_scope_only
 from app.core.security import get_current_user
 from app.core.tenant import get_club_id
 from app.database import get_db
 from app.dependencies.documents_storage import get_dms_storage
 from app.models.documents import Document, DocumentRevision, DocumentRevisionFile
+from app.models.person_guardian import PersonGuardian
+from app.models.user import User
 from app.schemas.auth import TokenPayload
 from app.schemas.documents import (
     DocumentCreate,
@@ -54,6 +56,30 @@ from app.schemas.documents import (
 from app.services.storage import ObjectStorageService
 
 router = APIRouter(prefix="/documents", tags=["documents"])
+
+
+async def _get_doc_person_ids(
+    user_id: uuid.UUID,
+    club_id: uuid.UUID,
+    db: AsyncSession,
+    role: str,
+) -> list[uuid.UUID]:
+    """Own-scope için erişilebilir person_id listesi (belge owner_id'ye karşı)."""
+    result = await db.execute(select(User.person_id).where(User.id == user_id))
+    person_id: uuid.UUID | None = result.scalar_one_or_none()
+    if not person_id:
+        return []
+    if role == "sporcu":
+        return [person_id]
+    if role == "veli":
+        result = await db.execute(
+            select(PersonGuardian.athlete_person_id).where(
+                PersonGuardian.guardian_person_id == person_id,
+                PersonGuardian.club_id == club_id,
+            )
+        )
+        return list(result.scalars().all())
+    return []
 
 settings = get_settings()
 
@@ -131,6 +157,7 @@ async def list_documents(
     document_type: Optional[str] = Query(default=None),
     content_status: Optional[str] = Query(default=None),
     club_id: uuid.UUID = Depends(get_club_id),
+    current_user: TokenPayload = Depends(get_current_user),
     _: None = Depends(require_permission("belge:read")),
     db: AsyncSession = Depends(get_db),
 ) -> List[DocumentOut]:
@@ -138,6 +165,17 @@ async def list_documents(
         Document.club_id == club_id,
         Document.is_deleted.is_(False),
     )
+    # Own-scope: sporcu/veli yalnızca kendilerine ait (owner_type="person") belgeleri görür
+    if is_own_scope_only(current_user.role, "belge:read"):
+        person_ids = await _get_doc_person_ids(
+            uuid.UUID(current_user.sub), club_id, db, current_user.role
+        )
+        if not person_ids:
+            return []
+        stmt = stmt.where(
+            Document.owner_type == "person",
+            Document.owner_id.in_(person_ids),
+        )
     if q:
         like = f"%{q}%"
         stmt = stmt.where(
@@ -159,10 +197,21 @@ async def list_documents(
 async def get_document(
     document_id: uuid.UUID,
     club_id: uuid.UUID = Depends(get_club_id),
+    current_user: TokenPayload = Depends(get_current_user),
     _: None = Depends(require_permission("belge:read")),
     db: AsyncSession = Depends(get_db),
 ) -> DocumentDetailOut:
     doc = await _get_document_or_404(document_id, club_id, db, load_revisions=True)
+    # Own-scope: sporcu/veli yalnızca kendi belgesine erişebilir
+    if is_own_scope_only(current_user.role, "belge:read"):
+        person_ids = await _get_doc_person_ids(
+            uuid.UUID(current_user.sub), club_id, db, current_user.role
+        )
+        if doc.owner_type != "person" or doc.owner_id not in person_ids:
+            raise HTTPException(
+                status_code=status.HTTP_403_FORBIDDEN,
+                detail="Bu belgeye erişim yetkiniz yok.",
+            )
     return DocumentDetailOut.model_validate(doc)
 
 
@@ -271,11 +320,21 @@ async def delete_document(
 async def list_revisions(
     document_id: uuid.UUID,
     club_id: uuid.UUID = Depends(get_club_id),
+    current_user: TokenPayload = Depends(get_current_user),
     _: None = Depends(require_permission("belge:read")),
     db: AsyncSession = Depends(get_db),
 ) -> List[RevisionDetailOut]:
-    # Tenant kontrolü
-    await _get_document_or_404(document_id, club_id, db)
+    doc = await _get_document_or_404(document_id, club_id, db)
+    # Own-scope: sporcu/veli yalnızca kendi belgesinin revizyonlarını görür
+    if is_own_scope_only(current_user.role, "belge:read"):
+        person_ids = await _get_doc_person_ids(
+            uuid.UUID(current_user.sub), club_id, db, current_user.role
+        )
+        if doc.owner_type != "person" or doc.owner_id not in person_ids:
+            raise HTTPException(
+                status_code=status.HTTP_403_FORBIDDEN,
+                detail="Bu belgeye erişim yetkiniz yok.",
+            )
 
     result = await db.execute(
         select(DocumentRevision)
@@ -464,6 +523,7 @@ async def download_revision_file(
     file_id: uuid.UUID,
     inline: bool = Query(False, description="True ise PDF'ler tarayıcıda inline açılır."),
     club_id: uuid.UUID = Depends(get_club_id),
+    current_user: TokenPayload = Depends(get_current_user),
     _: None = Depends(require_permission("belge:read")),
     db: AsyncSession = Depends(get_db),
     storage: ObjectStorageService = Depends(get_dms_storage),
@@ -477,8 +537,17 @@ async def download_revision_file(
       inline=true  → PDF'ler Content-Disposition: inline olarak döner (browser içi görüntüleme).
                      DOCX ve diğer türler her zaman attachment olarak döner.
     """
-    # Tenant kontrolü
-    await _get_document_or_404(document_id, club_id, db)
+    # Tenant + own-scope kontrolü
+    doc = await _get_document_or_404(document_id, club_id, db)
+    if is_own_scope_only(current_user.role, "belge:read"):
+        person_ids = await _get_doc_person_ids(
+            uuid.UUID(current_user.sub), club_id, db, current_user.role
+        )
+        if doc.owner_type != "person" or doc.owner_id not in person_ids:
+            raise HTTPException(
+                status_code=status.HTTP_403_FORBIDDEN,
+                detail="Bu dosyaya erişim yetkiniz yok.",
+            )
     await _get_revision_or_404(revision_id, document_id, db)
 
     result = await db.execute(
