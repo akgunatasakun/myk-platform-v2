@@ -500,7 +500,17 @@ async def test_restore_user_person_id_conflict_raises_409(
     """
     from fastapi import HTTPException
 
-    shared_person_id = uuid.uuid4()
+    # Gerçek bir Person kaydı oluştur (FK kısıtı var)
+    shared_person = Person(
+        id=uuid.uuid4(),
+        club_id=club.id,
+        first_name="G10",
+        last_name="TestKişi",
+        is_active=True,
+        is_deleted=False,
+    )
+    db_session.add(shared_person)
+    await db_session.flush()
 
     # Aktif kullanıcı — aynı person_id ile
     active_user = User(
@@ -512,9 +522,10 @@ async def test_restore_user_person_id_conflict_raises_409(
         role="uye",
         is_active=True,
         is_deleted=False,
-        person_id=shared_person_id,
+        person_id=shared_person.id,
     )
     db_session.add(active_user)
+    await db_session.flush()
 
     # Silinmiş kullanıcı — aynı person_id ile
     deleted_user = User(
@@ -526,7 +537,7 @@ async def test_restore_user_person_id_conflict_raises_409(
         role="uye",
         is_active=False,
         is_deleted=True,
-        person_id=shared_person_id,
+        person_id=shared_person.id,
     )
     db_session.add(deleted_user)
     await db_session.flush()
