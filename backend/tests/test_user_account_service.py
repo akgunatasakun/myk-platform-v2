@@ -486,6 +486,91 @@ async def test_restore_user_already_active_raises(
     assert exc_info.value.status_code == 409
 
 
+@pytest.mark.asyncio
+async def test_restore_user_person_id_conflict_raises_409(
+    db_session: AsyncSession, club: Club, admin: User
+):
+    """G10: Silinmiş kullanıcının person_id'si aktif başka kullanıcıya bağlıysa
+    restore 409 döner — IntegrityError değil, açıklayıcı mesaj.
+
+    Senaryo:
+      - Person X → aktif User A (person_id=X)
+      - Person X → silinmiş User B (person_id=X, is_deleted=True)
+      - User B restore edilmeye çalışılır → 409 Conflict
+    """
+    from fastapi import HTTPException
+
+    shared_person_id = uuid.uuid4()
+
+    # Aktif kullanıcı — aynı person_id ile
+    active_user = User(
+        id=uuid.uuid4(),
+        club_id=club.id,
+        email=f"active-{uuid.uuid4().hex[:6]}@test.com",
+        password_hash=hash_password("x"),
+        full_name="Aktif Kullanıcı",
+        role="uye",
+        is_active=True,
+        is_deleted=False,
+        person_id=shared_person_id,
+    )
+    db_session.add(active_user)
+
+    # Silinmiş kullanıcı — aynı person_id ile
+    deleted_user = User(
+        id=uuid.uuid4(),
+        club_id=club.id,
+        email=f"deleted-{uuid.uuid4().hex[:6]}@test.com",
+        password_hash=hash_password("x"),
+        full_name="Silinmiş Kullanıcı",
+        role="uye",
+        is_active=False,
+        is_deleted=True,
+        person_id=shared_person_id,
+    )
+    db_session.add(deleted_user)
+    await db_session.flush()
+
+    with pytest.raises(HTTPException) as exc_info:
+        await restore_user(
+            target_user=deleted_user,
+            assigner_user_id=admin.id,
+            db=db_session,
+        )
+
+    assert exc_info.value.status_code == 409
+    assert "person" in exc_info.value.detail.lower() or "aktif" in exc_info.value.detail.lower()
+
+
+@pytest.mark.asyncio
+async def test_restore_user_no_person_id_succeeds(
+    db_session: AsyncSession, club: Club, admin: User
+):
+    """person_id=None olan silinmiş kullanıcı çakışma olmadan restore edilebilir."""
+    deleted_user = User(
+        id=uuid.uuid4(),
+        club_id=club.id,
+        email=f"noperson-{uuid.uuid4().hex[:6]}@test.com",
+        password_hash=hash_password("x"),
+        full_name="Person'sız Silinmiş",
+        role="uye",
+        is_active=False,
+        is_deleted=True,
+        person_id=None,
+    )
+    db_session.add(deleted_user)
+    await db_session.flush()
+
+    restored = await restore_user(
+        target_user=deleted_user,
+        assigner_user_id=admin.id,
+        db=db_session,
+    )
+    assert restored.is_deleted is False
+    assert restored.is_active is True
+    assert restored.must_change_password is True
+
+
 # ─── reset_password ──────────────────────────────────────────────────────────
 
 @pytest.mark.asyncio

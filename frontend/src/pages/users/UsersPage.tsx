@@ -34,6 +34,7 @@ export default function UsersPage() {
   const [search, setSearch] = useState('')
   const [roleFilter, setRoleFilter] = useState('')
   const [activeFilter, setActiveFilter] = useState('')
+  const [showDeleted, setShowDeleted] = useState(false)
   const [skip, setSkip] = useState(0)
 
   const [modalOpen, setModalOpen] = useState(false)
@@ -45,7 +46,7 @@ export default function UsersPage() {
   const debounceRef = useRef<ReturnType<typeof setTimeout> | null>(null)
 
   const fetchUsers = useCallback(
-    async (searchVal: string, role: string, active: string, skipVal: number) => {
+    async (searchVal: string, role: string, active: string, skipVal: number, deleted: boolean) => {
       setLoading(true)
       setError(null)
       try {
@@ -53,6 +54,7 @@ export default function UsersPage() {
         if (searchVal) params.search = searchVal
         if (role) params.role = role
         if (active !== '') params.is_active = active === 'true'
+        if (deleted) params.include_deleted = true
 
         const resp = await usersApi.list(params)
         setData(resp.data)
@@ -69,13 +71,13 @@ export default function UsersPage() {
     if (debounceRef.current) clearTimeout(debounceRef.current)
     debounceRef.current = setTimeout(() => {
       setSkip(0)
-      fetchUsers(search, roleFilter, activeFilter, 0)
+      fetchUsers(search, roleFilter, activeFilter, 0, showDeleted)
     }, 300)
     return () => { if (debounceRef.current) clearTimeout(debounceRef.current) }
-  }, [search, roleFilter, activeFilter, fetchUsers])
+  }, [search, roleFilter, activeFilter, showDeleted, fetchUsers])
 
   useEffect(() => {
-    fetchUsers(search, roleFilter, activeFilter, skip)
+    fetchUsers(search, roleFilter, activeFilter, skip, showDeleted)
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [skip])
 
@@ -100,6 +102,20 @@ export default function UsersPage() {
       )
     } catch (err: unknown) {
       const msg = (err as { response?: { data?: { detail?: string } } })?.response?.data?.detail ?? 'Silme işlemi başarısız.'
+      alert(msg)
+    }
+  }
+
+  const handleRestore = async (user: UserListItem, e: React.MouseEvent) => {
+    e.stopPropagation()
+    if (!window.confirm(`${user.full_name} kullanıcısını geri yüklemek istiyor musunuz?`)) return
+    try {
+      await usersApi.restore(user.id)
+      setData((prev) =>
+        prev ? { ...prev, items: prev.items.filter((u) => u.id !== user.id), total: prev.total - 1 } : prev
+      )
+    } catch (err: unknown) {
+      const msg = (err as { response?: { data?: { detail?: string } } })?.response?.data?.detail ?? 'Geri yükleme başarısız.'
       alert(msg)
     }
   }
@@ -198,6 +214,14 @@ export default function UsersPage() {
           <option value="true">Aktif</option>
           <option value="false">Pasif</option>
         </select>
+
+        <button
+          className={`btn btn-sm ${showDeleted ? 'btn-warning' : 'btn-secondary'}`}
+          onClick={() => { setShowDeleted((v) => !v); setSkip(0); }}
+          title="Silinmiş kullanıcıları göster / gizle"
+        >
+          {showDeleted ? '🗑️ Silinenler Görünüyor' : '🗑️ Silinenler'}
+        </button>
       </div>
 
       {error && (
@@ -245,7 +269,9 @@ export default function UsersPage() {
                       </span>
                     </td>
                     <td>
-                      {user.is_active ? (
+                      {user.is_deleted ? (
+                        <span className="badge badge-danger">Silinmiş</span>
+                      ) : user.is_active ? (
                         <span className="badge badge-active">Aktif</span>
                       ) : (
                         <span className="badge badge-inactive">Pasif</span>
@@ -258,27 +284,39 @@ export default function UsersPage() {
                     </td>
                     <td>
                       <div className="action-buttons">
-                        <button
-                          className="btn btn-sm btn-secondary"
-                          onClick={(e) => openEdit(user, e)}
-                          title="Düzenle"
-                        >
-                          ✏️
-                        </button>
-                        <button
-                          className="btn btn-sm btn-secondary"
-                          onClick={(e) => handleResetPassword(user, e)}
-                          title="Parola Sıfırla"
-                        >
-                          🔑
-                        </button>
-                        <button
-                          className="btn btn-sm btn-danger"
-                          onClick={(e) => handleDelete(user, e)}
-                          title="Sil"
-                        >
-                          🗑️
-                        </button>
+                        {user.is_deleted ? (
+                          <button
+                            className="btn btn-sm btn-success"
+                            onClick={(e) => handleRestore(user, e)}
+                            title="Geri Yükle"
+                          >
+                            ♻️ Geri Yükle
+                          </button>
+                        ) : (
+                          <>
+                            <button
+                              className="btn btn-sm btn-secondary"
+                              onClick={(e) => openEdit(user, e)}
+                              title="Düzenle"
+                            >
+                              ✏️
+                            </button>
+                            <button
+                              className="btn btn-sm btn-secondary"
+                              onClick={(e) => handleResetPassword(user, e)}
+                              title="Parola Sıfırla"
+                            >
+                              🔑
+                            </button>
+                            <button
+                              className="btn btn-sm btn-danger"
+                              onClick={(e) => handleDelete(user, e)}
+                              title="Sil"
+                            >
+                              🗑️
+                            </button>
+                          </>
+                        )}
                       </div>
                     </td>
                   </tr>
