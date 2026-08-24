@@ -15,7 +15,7 @@ RBAC:
   rapor   → rapor:read (gelir raporu)
 """
 import uuid
-from datetime import date, datetime
+from datetime import date
 from decimal import Decimal
 from typing import List, Optional
 
@@ -24,7 +24,7 @@ from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import selectinload
 
-from app.core.rbac import require_permission
+from app.core.rbac import require_permission, is_own_scope_only
 from app.core.audit import log_action
 from app.services.event_service import emit_event
 from app.core.security import get_current_user
@@ -32,6 +32,8 @@ from app.core.tenant import get_club_id
 from app.database import get_db
 from app.models.payment import Payment
 from app.models.person import Person
+from app.models.person_guardian import PersonGuardian
+from app.models.user import User
 from app.schemas.auth import TokenPayload
 from app.schemas.payment import (
     OverduePaymentOut,
@@ -44,6 +46,31 @@ from app.schemas.payment import (
 )
 
 router = APIRouter(prefix="/payments", tags=["payments"])
+
+
+# ─── Own-scope yardımcıları ──────────────────────────────────────────────────
+
+async def _get_ward_ids(
+    user_id: uuid.UUID,
+    club_id: uuid.UUID,
+    db: AsyncSession,
+) -> list[uuid.UUID]:
+    """Veli'nin bağlı sporcularının (ward) person_id listesini döndür."""
+    # Önce user'ın person_id'sini bul
+    result = await db.execute(
+        select(User.person_id).where(User.id == user_id)
+    )
+    person_id = result.scalar_one_or_none()
+    if not person_id:
+        return []
+    # Guardian bağlantısından ward'ları al
+    result = await db.execute(
+        select(PersonGuardian.athlete_person_id).where(
+            PersonGuardian.guardian_person_id == person_id,
+            PersonGuardian.club_id == club_id,
+        )
+    )
+    return list(result.scalars().all())
 
 
 # ─── Yardımcılar ─────────────────────────────────────────────────────────────
@@ -92,6 +119,7 @@ async def list_payments(
     skip: int = Query(default=0, ge=0),
     limit: int = Query(default=50, ge=1, le=200),
     club_id: uuid.UUID = Depends(get_club_id),
+    current_user: TokenPayload = Depends(get_current_user),
     _: None = Depends(require_permission("odeme:read")),
     db: AsyncSession = Depends(get_db),
 ) -> PaymentListOut:
@@ -103,6 +131,14 @@ async def list_payments(
             Payment.is_deleted.is_(False),
         )
     )
+    # Own-scope: veli yalnızca bağlı sporcuların ödemelerini görür
+    if is_own_scope_only(current_user.role, "odeme:read"):
+        ward_ids = await _get_ward_ids(uuid.UUID(current_user.sub), club_id, db)
+        if not ward_ids:
+            return PaymentListOut(items=[], total=0, skip=skip, limit=limit)
+        q = q.where(Payment.person_id.in_(ward_ids))
+        person_id = None  # own-scope'da dışarıdan person_id filtresi kabul edilmez
+
     if status_filter:
         q = q.where(Payment.status == status_filter)
     if person_id:
@@ -133,6 +169,7 @@ async def list_payments(
 @router.get("/overdue", response_model=List[OverduePaymentOut])
 async def list_overdue(
     club_id: uuid.UUID = Depends(get_club_id),
+    current_user: TokenPayload = Depends(get_current_user),
     _: None = Depends(require_permission("odeme:read")),
     db: AsyncSession = Depends(get_db),
 ) -> List[OverduePaymentOut]:
@@ -142,7 +179,7 @@ async def list_overdue(
     gecikme_gun: Python katmanında hesaplanır (julianday yerine).
     """
     today = date.today()
-    result = await db.execute(
+    q = (
         select(Payment)
         .options(selectinload(Payment.person))
         .where(
@@ -153,6 +190,13 @@ async def list_overdue(
         )
         .order_by(Payment.due_date.asc())
     )
+    # Own-scope: veli yalnızca ward'larının gecikmiş ödemelerini görür
+    if is_own_scope_only(current_user.role, "odeme:read"):
+        ward_ids = await _get_ward_ids(uuid.UUID(current_user.sub), club_id, db)
+        if not ward_ids:
+            return []
+        q = q.where(Payment.person_id.in_(ward_ids))
+    result = await db.execute(q)
     payments = result.scalars().all()
 
     items = []
@@ -179,7 +223,6 @@ async def revenue_report(
 
     Son N ay içinde durum='paid' ödemeler, ay + ödeme_türü bazında gruplandırılır.
     """
-    from sqlalchemy import text
 
     # PostgreSQL: date_trunc; SQLite: strftime
     bind = db.get_bind() if hasattr(db, "get_bind") else None
@@ -190,7 +233,6 @@ async def revenue_report(
     # Her iki dialect'te çalışan tek yol: Python'da group etmek
     cutoff = date.today().replace(day=1)
     # months ay geriye git
-    import calendar
     y, m = cutoff.year, cutoff.month
     for _ in range(months - 1):
         m -= 1
@@ -242,10 +284,19 @@ async def revenue_report(
 async def get_payment(
     payment_id: uuid.UUID,
     club_id: uuid.UUID = Depends(get_club_id),
+    current_user: TokenPayload = Depends(get_current_user),
     _: None = Depends(require_permission("odeme:read")),
     db: AsyncSession = Depends(get_db),
 ) -> PaymentOut:
     p = await _get_payment(payment_id, club_id, db)
+    # Own-scope: veli yalnızca ward'larının ödemesini görebilir
+    if is_own_scope_only(current_user.role, "odeme:read"):
+        ward_ids = await _get_ward_ids(uuid.UUID(current_user.sub), club_id, db)
+        if p.person_id not in ward_ids:
+            raise HTTPException(
+                status_code=status.HTTP_403_FORBIDDEN,
+                detail="Bu ödemeye erişim yetkiniz yok.",
+            )
     return _to_out(p)
 
 

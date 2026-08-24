@@ -121,6 +121,27 @@ def has_permission(role: str, permission: str) -> bool:
     return own_ns in perms
 
 
+def is_own_scope_only(role: str, permission: str) -> bool:
+    """True ise rol yalnızca :own kayıtlarına erişebilir (tam yetki yok).
+
+    Kullanım: endpoint'te own-scope filtresi uygulanıp uygulanmayacağını belirler.
+    Örnek: is_own_scope_only("veli", "odeme:read") → True
+           is_own_scope_only("muhasebe", "odeme:read") → False (tam yetki var)
+    """
+    perms = PERMISSIONS.get(role, set())
+    if "*" in perms:
+        return False
+    if permission in perms:
+        return False
+    parts = permission.split(":")
+    ns_wildcard = f"{parts[0]}:*"
+    if ns_wildcard in perms:
+        return False
+    # Tam yetki yok ama :own var → own-scope
+    own_ns = f"{parts[0]}:read:own"
+    return own_ns in perms
+
+
 def mask_sensitive(data: dict, role: str) -> dict:
     """Hassas alanları maskeleyerek döndür."""
     if role not in SENSITIVE_FIELD_MASK_ROLES:

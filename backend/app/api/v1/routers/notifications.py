@@ -23,6 +23,7 @@ from pydantic import BaseModel
 from sqlalchemy import select, func
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from app.core.rbac import require_permission
 from app.core.security import get_current_user
 from app.core.tenant import get_club_id
 from app.database import get_db
@@ -79,6 +80,7 @@ async def _get_event(
 async def list_notifications(
     club_id: uuid.UUID = Depends(get_club_id),
     _current_user: TokenPayload = Depends(get_current_user),
+    _perm: None = Depends(require_permission("kulup:read")),
     limit: int = Query(default=50, le=100),
     unread_only: bool = Query(default=False),
     db: AsyncSession = Depends(get_db),
@@ -109,6 +111,7 @@ async def list_notifications(
 async def get_unread_count(
     club_id: uuid.UUID = Depends(get_club_id),
     _current_user: TokenPayload = Depends(get_current_user),
+    _perm: None = Depends(require_permission("kulup:read")),
     db: AsyncSession = Depends(get_db),
 ) -> UnreadCountOut:
     """Okunmamış bildirim sayısını döndür (AppShell badge)."""
@@ -127,6 +130,7 @@ async def mark_as_read(
     event_id: uuid.UUID,
     club_id: uuid.UUID = Depends(get_club_id),
     _current_user: TokenPayload = Depends(get_current_user),
+    _perm: None = Depends(require_permission("kulup:read")),
     db: AsyncSession = Depends(get_db),
 ) -> NotificationOut:
     """Tek bildirimi okundu olarak işaretle."""
@@ -142,6 +146,7 @@ async def mark_as_read(
 async def mark_all_as_read(
     club_id: uuid.UUID = Depends(get_club_id),
     _current_user: TokenPayload = Depends(get_current_user),
+    _perm: None = Depends(require_permission("kulup:read")),
     db: AsyncSession = Depends(get_db),
 ) -> None:
     """Tüm okunmamış bildirimleri okundu işaretle."""
