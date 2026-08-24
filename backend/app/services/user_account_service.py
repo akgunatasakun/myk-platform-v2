@@ -22,6 +22,7 @@ from typing import Optional
 
 from fastapi import HTTPException, status
 from sqlalchemy import select, update
+from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.audit import log_action
@@ -332,16 +333,50 @@ async def restore_user(
     assigner_user_id: uuid.UUID,
     db: AsyncSession,
 ) -> User:
-    """Soft-delete geri alma. G9: e-posta tekrarını önler."""
+    """Soft-delete geri alma. G9: e-posta tekrarını önler.
+
+    G10: Restore öncesinde person_id çakışması kontrol edilir. Silinmiş
+    kullanıcının person_id'si başka aktif bir kullanıcıya bağlıysa
+    IntegrityError yerine açıklayıcı 409 döner.
+    """
     if not target_user.is_deleted:
         raise HTTPException(
             status_code=status.HTTP_409_CONFLICT,
             detail="Bu hesap zaten aktif.",
         )
 
+    # G10: person_id çakışma kontrolü
+    if target_user.person_id is not None:
+        conflict = await db.execute(
+            select(User).where(
+                User.person_id == target_user.person_id,
+                User.club_id == target_user.club_id,
+                User.is_deleted.is_(False),
+                User.id != target_user.id,
+            )
+        )
+        if conflict.scalar_one_or_none() is not None:
+            raise HTTPException(
+                status_code=status.HTTP_409_CONFLICT,
+                detail=(
+                    "Bu kullanıcının bağlı olduğu Person kaydı başka aktif "
+                    "bir hesaba atanmış. Restore için önce o hesabı silin veya "
+                    "person_id bağlantısını kaldırın."
+                ),
+            )
+
     target_user.is_deleted = False
     target_user.is_active = True
     target_user.must_change_password = True  # restore sonrası yeniden giriş zorunlu
+
+    try:
+        await db.flush()
+    except IntegrityError:
+        await db.rollback()
+        raise HTTPException(
+            status_code=status.HTTP_409_CONFLICT,
+            detail="Restore sırasında benzersizlik ihlali oluştu (person_id çakışması).",
+        )
 
     await log_action(
         db,
