@@ -517,7 +517,6 @@ async def list_courses(
             uuid.UUID(current_user.sub), club_id, db, current_user.role
         )
         if not person_ids:
-            from app.schemas.training import TrainingCourseListOut
             return TrainingCourseListOut(items=[], total=0, skip=skip, limit=limit)
         enrolled_course_ids = select(TrainingEnrollment.course_id).where(
             TrainingEnrollment.person_id.in_(person_ids),
