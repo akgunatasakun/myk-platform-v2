@@ -11,27 +11,44 @@ interface NavItem {
   roles?: string[]
 }
 
+// Rol grupları — tek yerde tanımlı
+const ADMIN       = ['super_admin', 'kulup_yonetici']
+const MANAGEMENT  = [...ADMIN, 'baskan', 'yk_uyesi']
+const SECRETARIAT = [...MANAGEMENT, 'genel_sekreter', 'muhasebe']
+const STAFF       = [...SECRETARIAT, 'sportif_direktor', 'basantrenor', 'antrenor',
+                      'personel', 'saglik_sorumlusu', 'guvenlik_operasyon']
+const COACHES     = [...MANAGEMENT, 'sportif_direktor', 'basantrenor', 'antrenor', 'genel_sekreter']
+
 const NAV_ITEMS: NavItem[] = [
-  { path: '/dashboard', label: 'Genel Bakış', icon: '📊' },
-  { path: '/admin/applications', label: 'Başvurular', icon: '📋' },
-  { path: '/persons', label: 'Kişiler', icon: '👥' },
-  { path: '/users', label: 'Kullanıcılar', icon: '🔐', roles: ['kulup_yonetici', 'genel_sekreter', 'super_admin'] },
-  { path: '/audit', label: 'Denetim Kayıtları', icon: '🛡️', roles: ['kulup_yonetici', 'super_admin'] },
-  { path: '/sporcular', label: 'Sporcular', icon: '⛵' },
-  { path: '/veliler', label: 'Veliler', icon: '👨‍👩‍👧' },
-  { path: '/uyeler', label: 'Üyeler', icon: '🏅' },
-  { path: '/antrenorler', label: 'Antrenörler', icon: '🎯' },
-  { path: '/akademi', label: 'Deniz Akademisi', icon: '🪢' },
-  { path: '/egitimler', label: 'Eğitimler', icon: '📚' },
-  { path: '/yoklama', label: 'Yoklama', icon: '✅' },
-  { path: '/katilim', label: 'Katılım', icon: '🙋', roles: ['sporcu'] },
-  { path: '/tekneler', label: 'Ekipmanlar', icon: '🛟' },
-  { path: '/odemeler', label: 'Ödemeler', icon: '💳' },
-  { path: '/raporlar', label: 'Raporlar', icon: '📈' },
-  { path: '/bildirimler', label: 'Bildirimler', icon: '🔔' },
-  { path: '/belgeler', label: 'Belgeler', icon: '📂' },
-  { path: '/takvim', label: 'Takvim', icon: '📅' },
-  { path: '/ayarlar', label: 'Ayarlar', icon: '⚙️' },
+  // Herkes
+  { path: '/dashboard',          label: 'Genel Bakış',       icon: '📊' },
+  { path: '/bildirimler',        label: 'Bildirimler',        icon: '🔔' },
+  { path: '/belgeler',           label: 'Belgeler',           icon: '📂' },
+
+  // Yönetim + Personel
+  { path: '/admin/applications', label: 'Başvurular',         icon: '📋', roles: SECRETARIAT },
+  { path: '/persons',            label: 'Kişiler',            icon: '👥', roles: STAFF },
+  { path: '/users',              label: 'Kullanıcılar',       icon: '🔐', roles: [...MANAGEMENT, 'genel_sekreter'] },
+  { path: '/audit',              label: 'Denetim Kayıtları',  icon: '🛡️', roles: ADMIN },
+
+  // Kişi grupları — staff tam, rol sahibi kendi kaydını görür
+  { path: '/sporcular',          label: 'Sporcular',          icon: '⛵', roles: [...STAFF, 'sporcu'] },
+  { path: '/veliler',            label: 'Veliler',            icon: '👨‍👩‍👧', roles: [...SECRETARIAT, 'veli'] },
+  { path: '/uyeler',             label: 'Üyeler',             icon: '🏅', roles: [...SECRETARIAT, 'uye'] },
+  { path: '/antrenorler',        label: 'Antrenörler',        icon: '🎯', roles: [...SECRETARIAT, 'basantrenor', 'antrenor'] },
+
+  // Eğitim
+  { path: '/akademi',            label: 'Deniz Akademisi',    icon: '🪢', roles: [...STAFF, 'sporcu', 'veli'] },
+  { path: '/egitimler',          label: 'Eğitimler',          icon: '📚', roles: [...STAFF, 'sporcu', 'veli'] },
+  { path: '/yoklama',            label: 'Yoklama',            icon: '✅', roles: COACHES },
+  { path: '/katilim',            label: 'Katılım (Öz)',       icon: '🙋', roles: ['sporcu'] },
+
+  // Operasyonel
+  { path: '/tekneler',           label: 'Ekipmanlar',         icon: '🛟', roles: STAFF },
+  { path: '/odemeler',           label: 'Ödemeler',           icon: '💳', roles: [...SECRETARIAT, 'sporcu', 'veli', 'uye'] },
+  { path: '/raporlar',           label: 'Raporlar',           icon: '📈', roles: SECRETARIAT },
+  { path: '/takvim',             label: 'Takvim',             icon: '📅', roles: [...STAFF, 'sporcu', 'veli', 'uye'] },
+  { path: '/ayarlar',            label: 'Ayarlar',            icon: '⚙️', roles: ADMIN },
 ]
 
 interface AppShellProps {
