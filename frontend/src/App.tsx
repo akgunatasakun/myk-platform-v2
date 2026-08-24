@@ -37,20 +37,60 @@ import AuditPage from '@/pages/audit/AuditPage'
 import Forbidden from '@/pages/Forbidden'
 import NotFound from '@/pages/NotFound'
 
+// Rol grupları — AppShell ile senkron
+const ADMIN       = ['super_admin', 'kulup_yonetici']
+const MANAGEMENT  = [...ADMIN, 'baskan', 'yk_uyesi']
+const SECRETARIAT = [...MANAGEMENT, 'genel_sekreter', 'muhasebe']
+const STAFF       = [...SECRETARIAT, 'sportif_direktor', 'basantrenor', 'antrenor',
+                      'personel', 'saglik_sorumlusu', 'guvenlik_operasyon']
+const COACHES     = [...MANAGEMENT, 'sportif_direktor', 'basantrenor', 'antrenor', 'genel_sekreter']
+
+// Route bazlı izin haritası — sadece kısıtlı rotalar (undefined = herkes)
+const ROUTE_ROLES: Record<string, string[]> = {
+  '/admin/applications':  SECRETARIAT,
+  '/admin/applications/': SECRETARIAT,
+  '/persons':             STAFF,
+  '/persons/':            STAFF,
+  '/users':               [...MANAGEMENT, 'genel_sekreter'],
+  '/audit':               ADMIN,
+  '/sporcular':           [...STAFF, 'sporcu'],
+  '/sporcular/':          [...STAFF, 'sporcu'],
+  '/veliler':             [...SECRETARIAT, 'veli'],
+  '/veliler/':            [...SECRETARIAT, 'veli'],
+  '/uyeler':              [...SECRETARIAT, 'uye'],
+  '/uyeler/':             [...SECRETARIAT, 'uye'],
+  '/antrenorler':         [...SECRETARIAT, 'basantrenor', 'antrenor'],
+  '/antrenorler/':        [...SECRETARIAT, 'basantrenor', 'antrenor'],
+  '/akademi':             [...STAFF, 'sporcu', 'veli'],
+  '/akademi/':            [...STAFF, 'sporcu', 'veli'],
+  '/egitimler':           [...STAFF, 'sporcu', 'veli'],
+  '/egitimler/':          [...STAFF, 'sporcu', 'veli'],
+  '/yoklama':             COACHES,
+  '/katilim':             ['sporcu'],
+  '/tekneler':            STAFF,
+  '/tekneler/':           STAFF,
+  '/odemeler':            [...SECRETARIAT, 'sporcu', 'veli', 'uye'],
+  '/raporlar':            SECRETARIAT,
+  '/takvim':              [...STAFF, 'sporcu', 'veli', 'uye'],
+  '/ayarlar':             ADMIN,
+}
+
+function isRouteAllowed(pathname: string, role: string): boolean {
+  // Tam eşleşme veya prefix eşleşmesi
+  const matched = Object.entries(ROUTE_ROLES).find(([prefix]) =>
+    pathname === prefix || pathname.startsWith(prefix.endsWith('/') ? prefix : prefix + '/')
+  )
+  if (!matched) return true  // Haritada yok → herkese açık
+  return matched[1].includes(role)
+}
+
 function ProtectedRoute({ children }: { children: React.ReactNode }) {
   const { isAuthenticated, isLoading, user } = useAuth()
   const location = useLocation()
 
   if (isLoading) {
     return (
-      <div
-        style={{
-          display: 'flex',
-          alignItems: 'center',
-          justifyContent: 'center',
-          height: '100vh',
-        }}
-      >
+      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', height: '100vh' }}>
         <span className="loading-spinner lg" />
       </div>
     )
@@ -58,9 +98,14 @@ function ProtectedRoute({ children }: { children: React.ReactNode }) {
 
   if (!isAuthenticated) return <Navigate to="/login" replace />
 
-  // İlk girişte parola değiştirme zorunlu — /change-password dışındaki tüm route'ları engelle.
+  // İlk girişte parola değiştirme zorunlu
   if (user?.must_change_password && location.pathname !== '/change-password') {
     return <Navigate to="/change-password" replace />
+  }
+
+  // Phase 2: route guard — yetkisiz rol URL ile bile giremez
+  if (user?.role && !isRouteAllowed(location.pathname, user.role)) {
+    return <Navigate to="/403" replace />
   }
 
   return <>{children}</>
