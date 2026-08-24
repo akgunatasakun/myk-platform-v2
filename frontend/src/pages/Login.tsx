@@ -1,12 +1,13 @@
 import { FormEvent, useState } from 'react'
-import { useNavigate } from 'react-router-dom'
+import { useNavigate, useSearchParams } from 'react-router-dom'
 import { useAuth } from '@/hooks/useAuth'
 
 export default function Login() {
   const navigate = useNavigate()
   const { login, isLoading } = useAuth()
+  const [searchParams] = useSearchParams()
 
-  const [clubSlug, setClubSlug] = useState('')
+  const [clubSlug, setClubSlug] = useState(searchParams.get('club') ?? '')
   const [email, setEmail] = useState('')
   const [password, setPassword] = useState('')
   const [error, setError] = useState<string | null>(null)
