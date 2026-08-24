@@ -159,6 +159,34 @@ async def _get_own_person_ids(
     return []
 
 
+async def _assert_own_scope_course_access(
+    course_id: uuid.UUID,
+    person_ids: list[uuid.UUID],
+    club_id: uuid.UUID,
+    db: AsyncSession,
+) -> None:
+    """Sporcu/veli için kurs erişim kontrolü: kayıtlı değilse 403."""
+    if not person_ids:
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Bu kursa erişim yetkiniz yok.",
+        )
+    result = await db.execute(
+        select(TrainingEnrollment.id).where(
+            TrainingEnrollment.course_id == course_id,
+            TrainingEnrollment.person_id.in_(person_ids),
+            TrainingEnrollment.club_id == club_id,
+            TrainingEnrollment.status == "active",
+            TrainingEnrollment.is_deleted.is_(False),
+        )
+    )
+    if not result.scalar_one_or_none():
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Bu kursa erişim yetkiniz yok.",
+        )
+
+
 def _enrollment_count(course: TrainingCourse) -> int:
     """Yüklü enrollments varsa kullan; yoksa 0."""
     return sum(
@@ -618,7 +646,10 @@ async def get_course(
     db: AsyncSession = Depends(get_db),
 ) -> TrainingCourseOut:
     course = await _get_course(course_id, club_id, db)
-    if current_user.role == "antrenor":
+    if is_own_scope_only(current_user.role, "egitim:read"):
+        person_ids = await _get_own_person_ids(uuid.UUID(current_user.sub), club_id, db, current_user.role)
+        await _assert_own_scope_course_access(course_id, person_ids, club_id, db)
+    elif current_user.role == "antrenor":
         allowed = await get_antrenor_course_ids(uuid.UUID(current_user.sub), club_id, db)
         if course_id not in allowed:
             raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Bu kursa erişim yetkiniz yok.")
@@ -743,13 +774,12 @@ async def list_participants(
         )
         .order_by(TrainingEnrollment.enrolled_at)
     )
-    # Scope: sporcu/veli → kendi kaydı; antrenör → kurs erişim kontrolü
+    # Scope: sporcu/veli → kendi kaydı + kurs erişim kontrolü; antrenör → kurs erişim kontrolü
     if is_own_scope_only(current_user.role, "egitim:read"):
         person_ids = await _get_own_person_ids(
             uuid.UUID(current_user.sub), club_id, db, current_user.role
         )
-        if not person_ids:
-            return []
+        await _assert_own_scope_course_access(course_id, person_ids, club_id, db)
         enrollment_q = enrollment_q.where(TrainingEnrollment.person_id.in_(person_ids))
     elif current_user.role == "antrenor":
         allowed = await get_antrenor_course_ids(uuid.UUID(current_user.sub), club_id, db)
