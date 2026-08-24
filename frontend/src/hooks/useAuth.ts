@@ -21,7 +21,9 @@ const useAuthStore = create<AuthStore>((set, get) => ({
   user: null,
   accessToken: null,
   isAuthenticated: false,
-  isLoading: false,
+  // Başlangıçta true: ilk render'da ProtectedRoute spinner gösterir,
+  // fetchMe tamamlanmadan login sayfasına yönlendirmez.
+  isLoading: true,
 
   login: async (credentials) => {
     set({ isLoading: true })
@@ -49,17 +51,18 @@ const useAuthStore = create<AuthStore>((set, get) => ({
   },
 
   fetchMe: async () => {
+    set({ isLoading: true })
     try {
       const { data } = await apiClient.get<UserResponse>('/auth/me')
-      set({ user: data, isAuthenticated: true })
+      set({ user: data, isAuthenticated: true, isLoading: false })
     } catch {
-      set({ user: null, isAuthenticated: false })
+      set({ user: null, isAuthenticated: false, isLoading: false })
     }
   },
 
   clearSession: () => {
     setAccessToken(null)
-    set({ user: null, accessToken: null, isAuthenticated: false })
+    set({ user: null, accessToken: null, isAuthenticated: false, isLoading: false })
   },
 }))
 
