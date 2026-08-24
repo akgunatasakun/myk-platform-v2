@@ -115,6 +115,7 @@ class UserListItem(BaseModel):
     full_name: str
     role: str
     is_active: bool
+    is_deleted: bool
     person_id: Optional[uuid.UUID]
     last_login_at: Optional[datetime]
     created_at: datetime

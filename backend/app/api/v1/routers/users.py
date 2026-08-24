@@ -201,7 +201,12 @@ async def update_user_endpoint(
     if body.is_active is False or body.role is not None:
         _assert_not_self(current_user, user_id, "güncelleyemezsiniz")
 
-    target = await _get_user_for_club(user_id, club_id, db)
+    target = await _get_user_for_club(user_id, club_id, db, include_deleted=True)
+    if target.is_deleted:
+        raise HTTPException(
+            status_code=status.HTTP_409_CONFLICT,
+            detail="Silinmiş kullanıcı güncellenemez. Önce geri yükleyin.",
+        )
     await update_user(
         target_user=target,
         role=body.role,
