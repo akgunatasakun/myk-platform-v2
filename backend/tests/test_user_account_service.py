@@ -439,6 +439,41 @@ async def test_delete_user_g3_last_admin_blocked(
     assert exc_info.value.status_code == 409
 
 
+@pytest.mark.asyncio
+async def test_delete_user_g3_two_admins_allows_delete(
+    db_session: AsyncSession, club: Club, admin: User, second_admin: User
+):
+    """G3-fix: İki aktif yönetici varken birini silmek başarılı olmalı.
+
+    Eski kod select(User) + scalar_one_or_none() ile MultipleResultsFound (500)
+    fırlatıyordu. Fix: select(User.id).limit(1) kullanılıyor.
+    """
+    await delete_user(
+        target_user=second_admin,
+        assigner_user_id=admin.id,
+        db=db_session,
+    )
+    assert second_admin.is_deleted is True
+    assert second_admin.is_active is False
+
+
+@pytest.mark.asyncio
+async def test_update_user_g3_two_admins_allows_deactivate(
+    db_session: AsyncSession, club: Club, admin: User, second_admin: User
+):
+    """G3-fix: İki aktif yönetici varken birini pasifleştirmek 500 değil başarı döner."""
+    await update_user(
+        target_user=second_admin,
+        role=None,
+        is_active=False,
+        full_name=None,
+        assigner_role="kulup_yonetici",
+        assigner_user_id=admin.id,
+        db=db_session,
+    )
+    assert second_admin.is_active is False
+
+
 # ─── restore_user ─────────────────────────────────────────────────────────────
 
 @pytest.mark.asyncio

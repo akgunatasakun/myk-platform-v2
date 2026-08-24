@@ -56,20 +56,23 @@ async def _revoke_all_refresh_tokens(user_id: uuid.UUID, db: AsyncSession) -> in
 async def _assert_not_last_admin(
     target_user: User, db: AsyncSession, action: str
 ) -> None:
-    """target_user son aktif kulup_yonetici ise G3 ihlali — HTTPException fırlatır."""
+    """target_user son aktif kulup_yonetici ise G3 ihlali — HTTPException fırlatır.
+
+    G3-fix: select(User.id).limit(1) kullanılır; scalar_one_or_none() ile birden
+    fazla yönetici varken MultipleResultsFound (500) dönmesi önlenir.
+    """
     if target_user.role != "kulup_yonetici":
         return
     result = await db.execute(
-        select(User).where(
+        select(User.id).where(
             User.club_id == target_user.club_id,
             User.role == "kulup_yonetici",
             User.is_active.is_(True),
             User.is_deleted.is_(False),
             User.id != target_user.id,
-        )
+        ).limit(1)
     )
-    other_admin = result.scalar_one_or_none()
-    if other_admin is None:
+    if result.scalar_one_or_none() is None:
         raise HTTPException(
             status_code=status.HTTP_409_CONFLICT,
             detail=f"Son aktif yönetici {action} edilemez. "
