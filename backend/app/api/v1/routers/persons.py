@@ -10,6 +10,7 @@ from sqlalchemy.orm import selectinload
 
 from app.core.audit import log_action
 from app.core.rbac import SENSITIVE_FIELD_MASK_ROLES, require_permission
+from app.services.training_scope_service import get_antrenor_enrolled_person_ids
 from app.core.security import get_current_user
 from app.core.tenant import get_club_id
 from app.database import get_db
@@ -87,6 +88,13 @@ async def list_persons(
         .where(Person.club_id == club_id)
         .where(Person.is_deleted.is_(False))
     )
+
+    # Antrenör scope: yalnızca atandığı eğitimlere kayıtlı kişiler + kendisi
+    if current_user.role == "antrenor":
+        allowed_ids = await get_antrenor_enrolled_person_ids(
+            uuid.UUID(current_user.sub), club_id, db
+        )
+        base_query = base_query.where(Person.id.in_(allowed_ids))
 
     if search:
         pattern = f"%{search}%"
@@ -239,6 +247,16 @@ async def get_person(
     db: AsyncSession = Depends(get_db),
 ) -> PersonOut:
     person = await _get_person_for_club(person_id, club_id, db)
+    # Antrenör scope: yalnızca erişebildiği kişileri görebilir
+    if current_user.role == "antrenor":
+        allowed_ids = await get_antrenor_enrolled_person_ids(
+            uuid.UUID(current_user.sub), club_id, db
+        )
+        if person_id not in allowed_ids:
+            raise HTTPException(
+                status_code=status.HTTP_403_FORBIDDEN,
+                detail="Bu kişiye erişim yetkiniz yok.",
+            )
     mask = _should_mask(current_user.role)
     out = _build_person_out(person, mask=mask)
 

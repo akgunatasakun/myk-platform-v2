@@ -37,6 +37,7 @@ from sqlalchemy.orm import selectinload
 from app.core.audit import log_action
 from app.core.rbac import require_permission, is_own_scope_only
 from app.services.event_service import emit_event
+from app.services.training_scope_service import get_antrenor_course_ids
 from app.core.security import get_current_user
 from app.core.tenant import get_club_id
 from app.database import get_db
@@ -511,7 +512,7 @@ async def list_courses(
     if status_filter:
         q = q.where(TrainingCourse.status == status_filter)
 
-    # Own-scope: sporcu/veli sadece kayıtlı oldukları kursları görür
+    # Scope filtresi: sporcu/veli → kayıtlı kurslar; antrenör → atandığı kurslar
     if is_own_scope_only(current_user.role, "egitim:read"):
         person_ids = await _get_own_person_ids(
             uuid.UUID(current_user.sub), club_id, db, current_user.role
@@ -525,6 +526,11 @@ async def list_courses(
             TrainingEnrollment.is_deleted.is_(False),
         )
         q = q.where(TrainingCourse.id.in_(enrolled_course_ids))
+    elif current_user.role == "antrenor":
+        allowed = await get_antrenor_course_ids(uuid.UUID(current_user.sub), club_id, db)
+        if not allowed:
+            return TrainingCourseListOut(items=[], total=0, skip=skip, limit=limit)
+        q = q.where(TrainingCourse.id.in_(allowed))
 
     count_result = await db.execute(select(func.count()).select_from(q.subquery()))
     total = count_result.scalar_one()
@@ -607,10 +613,15 @@ async def create_course(
 async def get_course(
     course_id: uuid.UUID,
     club_id: uuid.UUID = Depends(get_club_id),
+    current_user: TokenPayload = Depends(get_current_user),
     _: None = Depends(require_permission("egitim:read")),
     db: AsyncSession = Depends(get_db),
 ) -> TrainingCourseOut:
     course = await _get_course(course_id, club_id, db)
+    if current_user.role == "antrenor":
+        allowed = await get_antrenor_course_ids(uuid.UUID(current_user.sub), club_id, db)
+        if course_id not in allowed:
+            raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Bu kursa erişim yetkiniz yok.")
     cnt = await _active_enrollment_count(course_id, club_id, db)
     instructors = await _load_course_instructors(course_id, club_id, db)
     out = TrainingCourseOut.model_validate(course)
@@ -732,7 +743,7 @@ async def list_participants(
         )
         .order_by(TrainingEnrollment.enrolled_at)
     )
-    # Own-scope: sporcu/veli yalnızca kendi (veya ward) kaydını görür
+    # Scope: sporcu/veli → kendi kaydı; antrenör → kurs erişim kontrolü
     if is_own_scope_only(current_user.role, "egitim:read"):
         person_ids = await _get_own_person_ids(
             uuid.UUID(current_user.sub), club_id, db, current_user.role
@@ -740,6 +751,10 @@ async def list_participants(
         if not person_ids:
             return []
         enrollment_q = enrollment_q.where(TrainingEnrollment.person_id.in_(person_ids))
+    elif current_user.role == "antrenor":
+        allowed = await get_antrenor_course_ids(uuid.UUID(current_user.sub), club_id, db)
+        if course_id not in allowed:
+            raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Bu kursa erişim yetkiniz yok.")
 
     result = await db.execute(enrollment_q)
     enrollments = result.scalars().all()
@@ -894,10 +909,15 @@ async def remove_participant(
 async def list_sessions(
     course_id: uuid.UUID,
     club_id: uuid.UUID = Depends(get_club_id),
+    current_user: TokenPayload = Depends(get_current_user),
     _: None = Depends(require_permission("egitim:read")),
     db: AsyncSession = Depends(get_db),
 ) -> List[TrainingSessionOut]:
     await _get_course(course_id, club_id, db)
+    if current_user.role == "antrenor":
+        allowed = await get_antrenor_course_ids(uuid.UUID(current_user.sub), club_id, db)
+        if course_id not in allowed:
+            raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Bu kursa erişim yetkiniz yok.")
 
     result = await db.execute(
         select(TrainingSession)
@@ -1072,7 +1092,7 @@ async def get_attendance(
         )
         .order_by(TrainingAttendance.created_at)
     )
-    # Own-scope: sporcu/veli yalnızca kendi (veya ward) yoklama kaydını görür
+    # Scope: sporcu/veli → kendi kaydı; antrenör → atandığı kurs
     if is_own_scope_only(current_user.role, "yoklama:read"):
         person_ids = await _get_own_person_ids(
             uuid.UUID(current_user.sub), club_id, db, current_user.role
@@ -1080,6 +1100,10 @@ async def get_attendance(
         if not person_ids:
             return []
         att_q = att_q.where(TrainingAttendance.person_id.in_(person_ids))
+    elif current_user.role == "antrenor":
+        allowed = await get_antrenor_course_ids(uuid.UUID(current_user.sub), club_id, db)
+        if course_id not in allowed:
+            raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Bu kursa erişim yetkiniz yok.")
 
     result = await db.execute(att_q)
     records = result.scalars().all()
@@ -1112,6 +1136,12 @@ async def bulk_update_attendance(
     """
     session = await _get_session(session_id, course_id, club_id, db)
     user_id = uuid.UUID(current_user.sub)
+
+    # Antrenör scope: yalnızca atandığı kursa yoklama yazabilir
+    if current_user.role == "antrenor":
+        allowed = await get_antrenor_course_ids(user_id, club_id, db)
+        if course_id not in allowed:
+            raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Bu kursa yoklama yazma yetkiniz yok.")
 
     created = 0
     updated = 0
@@ -1474,7 +1504,7 @@ async def attendance_report(
             TrainingAttendance.club_id == club_id,
         )
     )
-    # Own-scope: sporcu/veli yalnızca kendi (veya ward) satırlarını görür
+    # Scope: sporcu/veli → kendi kayıtları; antrenör → atandığı kurs kontrolü
     if is_own_scope_only(current_user.role, "yoklama:read"):
         person_ids = await _get_own_person_ids(
             uuid.UUID(current_user.sub), club_id, db, current_user.role
@@ -1487,6 +1517,10 @@ async def attendance_report(
                 katilimcilar=[],
             )
         att_q = att_q.where(TrainingAttendance.person_id.in_(person_ids))
+    elif current_user.role == "antrenor":
+        allowed = await get_antrenor_course_ids(uuid.UUID(current_user.sub), club_id, db)
+        if course_id not in allowed:
+            raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Bu kursa erişim yetkiniz yok.")
     att_result = await db.execute(att_q)
     records = att_result.scalars().all()
 
