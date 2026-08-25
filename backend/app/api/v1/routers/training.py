@@ -944,7 +944,10 @@ async def list_sessions(
     db: AsyncSession = Depends(get_db),
 ) -> List[TrainingSessionOut]:
     await _get_course(course_id, club_id, db)
-    if current_user.role == "antrenor":
+    if is_own_scope_only(current_user.role, "egitim:read"):
+        person_ids = await _get_own_person_ids(uuid.UUID(current_user.sub), club_id, db, current_user.role)
+        await _assert_own_scope_course_access(course_id, person_ids, club_id, db)
+    elif current_user.role == "antrenor":
         allowed = await get_antrenor_course_ids(uuid.UUID(current_user.sub), club_id, db)
         if course_id not in allowed:
             raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Bu kursa erişim yetkiniz yok.")
@@ -1122,13 +1125,12 @@ async def get_attendance(
         )
         .order_by(TrainingAttendance.created_at)
     )
-    # Scope: sporcu/veli → kendi kaydı; antrenör → atandığı kurs
+    # Scope: sporcu/veli → kendi kaydı + kurs erişim kontrolü; antrenör → atandığı kurs
     if is_own_scope_only(current_user.role, "yoklama:read"):
         person_ids = await _get_own_person_ids(
             uuid.UUID(current_user.sub), club_id, db, current_user.role
         )
-        if not person_ids:
-            return []
+        await _assert_own_scope_course_access(course_id, person_ids, club_id, db)
         att_q = att_q.where(TrainingAttendance.person_id.in_(person_ids))
     elif current_user.role == "antrenor":
         allowed = await get_antrenor_course_ids(uuid.UUID(current_user.sub), club_id, db)
@@ -1534,18 +1536,12 @@ async def attendance_report(
             TrainingAttendance.club_id == club_id,
         )
     )
-    # Scope: sporcu/veli → kendi kayıtları; antrenör → atandığı kurs kontrolü
+    # Scope: sporcu/veli → kendi kayıtları + kurs erişim kontrolü; antrenör → atandığı kurs kontrolü
     if is_own_scope_only(current_user.role, "yoklama:read"):
         person_ids = await _get_own_person_ids(
             uuid.UUID(current_user.sub), club_id, db, current_user.role
         )
-        if not person_ids:
-            return AttendanceReport(
-                course_id=course_id,
-                course_name=course.name,
-                toplam_oturum=len(session_ids),
-                katilimcilar=[],
-            )
+        await _assert_own_scope_course_access(course_id, person_ids, club_id, db)
         att_q = att_q.where(TrainingAttendance.person_id.in_(person_ids))
     elif current_user.role == "antrenor":
         allowed = await get_antrenor_course_ids(uuid.UUID(current_user.sub), club_id, db)
