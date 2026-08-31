@@ -21,6 +21,7 @@ rsync -avz --delete \
   --exclude='*.backup-*' \
   --exclude='.DS_Store' \
   --exclude='.gitignore' \
+  --exclude='*.md' \
   "$LOCAL_PATH/" \
   "$REMOTE:$REMOTE_PATH/"
 

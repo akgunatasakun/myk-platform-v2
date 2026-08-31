@@ -1,5 +1,5 @@
 # mersinyelken.org.tr — Deployment Rehberi
-**Hazırlanma tarihi:** 2026-07-23  
+**Hazırlanma tarihi:** 2026-07-23
 **Mimari:** Subdomain (panel.mersinyelken.org.tr)
 
 ---
@@ -222,7 +222,7 @@ certbot --nginx \
   -d panel.mersinyelken.org.tr
 ```
 
-E-posta gir → Şartları kabul et → Tamamlandı!  
+E-posta gir → Şartları kabul et → Tamamlandı!
 Sertifikalar 90 günde bir otomatik yenilenir.
 
 ---
