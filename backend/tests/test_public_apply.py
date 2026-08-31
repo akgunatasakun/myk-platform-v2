@@ -1307,3 +1307,43 @@ async def test_password_reset_confirm_short_password(
         json={"token": raw_token, "new_password": "kisa"},
     )
     assert resp.status_code == 422
+
+
+# ─── Testler — application_type (Sprint 0024) ────────────────────────────────
+
+@pytest.mark.asyncio
+async def test_public_submit_sets_application_type_course(
+    client: AsyncClient,
+    db_session: AsyncSession,
+    test_club: Club,
+) -> None:
+    """Public başvuru submit'i application_type='course' olarak kaydedilmeli."""
+    resp = await client.post(
+        "/api/v1/public/membership-applications",
+        json={
+            "club_slug": test_club.slug,
+            "first_name": "Kurs",
+            "last_name": "Başvurucu",
+            "email": "kurs@example.com",
+            "phone": "05001112233",
+            "consent_accepted": True,
+        },
+    )
+    assert resp.status_code == 201
+    data = resp.json()
+    assert "application_type" in data, "application_type response'ta yok"
+    assert data["application_type"] == "course", (
+        f"Public başvuru application_type='course' olmalı, alınan: {data['application_type']!r}"
+    )
+
+    # DB doğrulama
+    result = await db_session.execute(
+        select(MembershipApplication).where(
+            MembershipApplication.id == uuid.UUID(data["id"])
+        )
+    )
+    saved = result.scalar_one_or_none()
+    assert saved is not None
+    assert saved.application_type == "course", (
+        f"DB'de application_type 'course' olmalı, alınan: {saved.application_type!r}"
+    )

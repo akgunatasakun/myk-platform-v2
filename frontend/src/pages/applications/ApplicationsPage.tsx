@@ -24,6 +24,13 @@ function StatusBadge({ status }: { status: ApplicationStatus }) {
   return <span className={`badge ${meta.badgeClass}`}>{meta.label}</span>
 }
 
+function TypeBadge({ type }: { type?: 'membership' | 'course' | null }) {
+  if (type === 'course') {
+    return <span className="badge badge-info" style={{ marginLeft: 6 }}>Kurs</span>
+  }
+  return <span className="badge badge-default" style={{ marginLeft: 6 }}>Üyelik</span>
+}
+
 // ─── Yardımcı: tarih formatlama ───────────────────────────────────────────────
 
 function formatDate(iso: string | null | undefined): string {
@@ -48,6 +55,12 @@ const STATUS_FILTER_OPTIONS: Array<{ value: string; label: string }> = [
   { value: 'draft',     label: 'Taslak'       },
 ]
 
+const TYPE_FILTER_OPTIONS: Array<{ value: string; label: string }> = [
+  { value: '',           label: 'Tüm Türler' },
+  { value: 'course',     label: 'Kurs'       },
+  { value: 'membership', label: 'Üyelik'     },
+]
+
 export default function ApplicationsPage() {
   const navigate = useNavigate()
 
@@ -56,18 +69,21 @@ export default function ApplicationsPage() {
   const [error, setError] = useState<string | null>(null)
 
   const [statusFilter, setStatusFilter] = useState('')
+  const [typeFilter, setTypeFilter] = useState('')
   const [skip, setSkip] = useState(0)
 
-  // Status filter değişince skip'i sıfırla
+  // Filtre değişince skip'i sıfırla
   const prevStatusRef = useRef(statusFilter)
+  const prevTypeRef = useRef(typeFilter)
 
   const fetchApplications = useCallback(
-    async (status: string, skipVal: number) => {
+    async (status: string, type: string, skipVal: number) => {
       setLoading(true)
       setError(null)
       try {
         const params: Record<string, unknown> = { skip: skipVal, limit: PAGE_SIZE }
         if (status) params.status = status
+        if (type) params.application_type = type
         const resp = await applicationsApi.list(params)
         setData(resp.data)
       } catch {
@@ -79,18 +95,19 @@ export default function ApplicationsPage() {
     []
   )
 
-  // Status filter değişince sayfa 0'a dön
+  // Filtre değişince sayfa 0'a dön
   useEffect(() => {
-    if (prevStatusRef.current !== statusFilter) {
+    if (prevStatusRef.current !== statusFilter || prevTypeRef.current !== typeFilter) {
       prevStatusRef.current = statusFilter
+      prevTypeRef.current = typeFilter
       setSkip(0)
-      fetchApplications(statusFilter, 0)
+      fetchApplications(statusFilter, typeFilter, 0)
     }
-  }, [statusFilter, fetchApplications])
+  }, [statusFilter, typeFilter, fetchApplications])
 
   // İlk yükleme ve skip değişimi
   useEffect(() => {
-    fetchApplications(statusFilter, skip)
+    fetchApplications(statusFilter, typeFilter, skip)
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [skip])
 
@@ -98,9 +115,9 @@ export default function ApplicationsPage() {
   const currentPage = Math.floor(skip / PAGE_SIZE) + 1
 
   return (
-    <AppShell title="Üyelik Başvuruları">
+    <AppShell title="Başvurular">
       <div className="page-header">
-        <h1 className="page-title">Üyelik Başvuruları</h1>
+        <h1 className="page-title">Başvurular</h1>
         {data && (
           <span style={{ color: 'var(--color-muted)', fontSize: 13 }}>
             {data.total} başvuru
@@ -108,19 +125,32 @@ export default function ApplicationsPage() {
         )}
       </div>
 
-      {/* Status filtre tab'ları */}
-      <div className="app-filter-tabs" role="tablist" aria-label="Durum filtresi">
-        {STATUS_FILTER_OPTIONS.map((opt) => (
-          <button
-            key={opt.value}
-            role="tab"
-            aria-selected={statusFilter === opt.value}
-            className={`app-filter-tab${statusFilter === opt.value ? ' active' : ''}`}
-            onClick={() => setStatusFilter(opt.value)}
-          >
-            {opt.label}
-          </button>
-        ))}
+      {/* Filtre satırı: durum tab'ları + tür dropdown */}
+      <div style={{ display: 'flex', alignItems: 'center', gap: 12, flexWrap: 'wrap', marginBottom: 4 }}>
+        <div className="app-filter-tabs" role="tablist" aria-label="Durum filtresi" style={{ margin: 0 }}>
+          {STATUS_FILTER_OPTIONS.map((opt) => (
+            <button
+              key={opt.value}
+              role="tab"
+              aria-selected={statusFilter === opt.value}
+              className={`app-filter-tab${statusFilter === opt.value ? ' active' : ''}`}
+              onClick={() => setStatusFilter(opt.value)}
+            >
+              {opt.label}
+            </button>
+          ))}
+        </div>
+        <select
+          value={typeFilter}
+          onChange={(e) => setTypeFilter(e.target.value)}
+          className="form-select"
+          style={{ minWidth: 130, height: 32, fontSize: 13 }}
+          aria-label="Tür filtresi"
+        >
+          {TYPE_FILTER_OPTIONS.map((opt) => (
+            <option key={opt.value} value={opt.value}>{opt.label}</option>
+          ))}
+        </select>
       </div>
 
       {/* Error */}
@@ -131,7 +161,7 @@ export default function ApplicationsPage() {
           <button
             className="btn btn-sm btn-secondary"
             style={{ marginLeft: 'auto' }}
-            onClick={() => fetchApplications(statusFilter, skip)}
+            onClick={() => fetchApplications(statusFilter, typeFilter, skip)}
           >
             Tekrar Dene
           </button>
@@ -148,11 +178,7 @@ export default function ApplicationsPage() {
           <div className="empty-state">
             <div className="empty-state-icon">📋</div>
             <div className="empty-state-title">Başvuru Bulunamadı</div>
-            <div className="empty-state-desc">
-              {statusFilter
-                ? `"${STATUS_META[statusFilter as ApplicationStatus]?.label ?? statusFilter}" durumunda başvuru yok.`
-                : 'Henüz üyelik başvurusu yapılmamış.'}
-            </div>
+            <div className="empty-state-desc">Henüz başvuru bulunmuyor.</div>
           </div>
         ) : (
           <>
@@ -162,6 +188,7 @@ export default function ApplicationsPage() {
                   <th>Başvuru No</th>
                   <th>Ad Soyad</th>
                   <th>Tarih</th>
+                  <th>Tür</th>
                   <th>Durum</th>
                 </tr>
               </thead>
@@ -190,17 +217,15 @@ export default function ApplicationsPage() {
                       </span>
                     </td>
                     <td>
-                      <StatusBadge status={app.status} />
-                      {app.program_preference && (
-                        <span className="badge badge-default" style={{ marginLeft: 6, fontSize: 11 }}>
-                          {app.program_preference.toUpperCase()}
-                        </span>
-                      )}
+                      <TypeBadge type={app.application_type} />
                       {app.preferred_course_name && (
-                        <div style={{ marginTop: 5, fontSize: 12, color: 'var(--color-muted)' }}>
-                          Eğitim: {app.preferred_course_name}
+                        <div style={{ marginTop: 4, fontSize: 12, color: 'var(--color-muted)' }}>
+                          {app.preferred_course_name}
                         </div>
                       )}
+                    </td>
+                    <td>
+                      <StatusBadge status={app.status} />
                     </td>
                   </tr>
                 ))}

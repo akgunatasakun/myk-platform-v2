@@ -24,7 +24,7 @@ from app.core.audit import log_action
 from app.services.event_service import emit_event
 from app.core.security import hash_password
 from app.database import get_db
-from app.enums import ProgramPreference
+from app.enums import ApplicationType, ProgramPreference
 from app.models.club import Club
 from app.models.membership_application import MembershipApplication
 from app.models.training import TrainingCourse
@@ -242,6 +242,8 @@ async def public_create_application(
         guardian_phone=body.guardian_phone,
         program_preference=body.program_preference.value if body.program_preference else None,
         preferred_course_id=body.preferred_course_id,
+        # Public başvuru her zaman kurs başvurusudur; sunucu tarafı atama
+        application_type=ApplicationType.course.value,
         submitted_at=now,
         consent_accepted_at=now,
         consent_text_version="v1",
@@ -260,6 +262,7 @@ async def public_create_application(
             "status": "submitted",
             "application_number": app_number,
             "email": str(body.email),
+            "application_type": ApplicationType.course.value,
             "program_preference": _pp_value,
             "preferred_course_id": str(body.preferred_course_id) if body.preferred_course_id else None,
         },
@@ -276,6 +279,7 @@ async def public_create_application(
             "application_number": app_number,
             "first_name": body.first_name,
             "last_name": body.last_name,
+            "application_type": ApplicationType.course.value,
             "program_preference": _pp_value,
             "preferred_course_id": str(body.preferred_course_id) if body.preferred_course_id else None,
         },

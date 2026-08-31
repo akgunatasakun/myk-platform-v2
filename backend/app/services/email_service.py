@@ -133,6 +133,64 @@ async def send_rejection_email(
     await _send(subject, to_email, html)
 
 
+async def send_course_approval_email(
+    to_email: str,
+    applicant_name: str,
+) -> None:
+    """Kurs başvurusu onay bildirimi — üye numarası/şifre içermez."""
+    subject = "Kurs Başvurunuz Onaylandı — Mersin Yelken Kulübü"
+    html = f"""
+    <!DOCTYPE html>
+    <html lang="tr">
+    <body style="font-family:Arial,sans-serif;max-width:600px;margin:0 auto;padding:20px;">
+      <h2 style="color:#1a5276;">Mersin Yelken Kulübü</h2>
+      <h3>Kurs Başvurunuz Onaylandı</h3>
+      <p>Sayın {applicant_name},</p>
+      <p>Kurs başvurunuz incelenmiş ve onaylanmıştır.</p>
+      <p>Eğitim programı ve başlangıç tarihi hakkında yakında bilgilendirileceksiniz.</p>
+      <p>Kulübümüze hoş geldiniz!</p>
+      <hr>
+      <p style="font-size:12px;color:#666;">
+        Mersin Yelken Yat ve Su Sporları Kulübü<br>
+        Bu e-posta otomatik olarak gönderilmiştir.
+      </p>
+    </body>
+    </html>
+    """
+    await _send(subject, to_email, html)
+
+
+async def send_course_rejection_email(
+    to_email: str,
+    applicant_name: str,
+    reason: Optional[str],
+) -> None:
+    """Kurs başvurusu red bildirimi."""
+    subject = "Kurs Başvurunuz Hakkında — Mersin Yelken Kulübü"
+    reason_section = ""
+    if reason:
+        reason_section = f"<p><strong>Gerekçe:</strong> {reason}</p>"
+    html = f"""
+    <!DOCTYPE html>
+    <html lang="tr">
+    <body style="font-family:Arial,sans-serif;max-width:600px;margin:0 auto;padding:20px;">
+      <h2 style="color:#1a5276;">Mersin Yelken Kulübü</h2>
+      <h3>Kurs Başvurunuz Hakkında</h3>
+      <p>Sayın {applicant_name},</p>
+      <p>Kurs başvurunuz incelenmiş ancak bu aşamada kabul edilememiştir.</p>
+      {reason_section}
+      <p>Daha fazla bilgi için kulüpümüzle iletişime geçebilirsiniz.</p>
+      <hr>
+      <p style="font-size:12px;color:#666;">
+        Mersin Yelken Yat ve Su Sporları Kulübü<br>
+        Bu e-posta otomatik olarak gönderilmiştir.
+      </p>
+    </body>
+    </html>
+    """
+    await _send(subject, to_email, html)
+
+
 async def send_password_reset_email(
     to_email: str,
     reset_url: str,
@@ -209,6 +267,43 @@ def _build_event_email(event: "DomainEvent") -> Tuple[str, str]:
     """
     p: dict = event.payload or {}
     et = event.event_type
+
+    # ── application.submitted ──────────────────────────────────────────────
+    if et == "application.submitted":
+        first_name = p.get("first_name", "")
+        last_name = p.get("last_name", "")
+        app_number = p.get("application_number", "—")
+        app_type = p.get("application_type", "membership")
+        full_name = f"{first_name} {last_name}".strip() or "—"
+        if app_type == "course":
+            subject = f"Yeni Kurs Başvurusu — {full_name}"
+            body = (
+                f"<h3>Yeni Kurs Başvurusu</h3>"
+                f"<p>Online kurs başvuru formu aracılığıyla yeni bir başvuru alındı.</p>"
+                f"<table style='border-collapse:collapse;width:100%;'>"
+                f"<tr><td style='padding:6px;font-weight:bold;'>Ad Soyad</td>"
+                f"<td style='padding:6px;'>{full_name}</td></tr>"
+                f"<tr><td style='padding:6px;font-weight:bold;'>Başvuru No</td>"
+                f"<td style='padding:6px;'>{app_number}</td></tr>"
+                f"<tr><td style='padding:6px;font-weight:bold;'>Tür</td>"
+                f"<td style='padding:6px;'>Kurs Başvurusu</td></tr>"
+                f"</table>"
+            )
+        else:
+            subject = f"Yeni Üyelik Başvurusu — {full_name}"
+            body = (
+                f"<h3>Yeni Üyelik Başvurusu</h3>"
+                f"<p>Online üyelik başvuru formu aracılığıyla yeni bir başvuru alındı.</p>"
+                f"<table style='border-collapse:collapse;width:100%;'>"
+                f"<tr><td style='padding:6px;font-weight:bold;'>Ad Soyad</td>"
+                f"<td style='padding:6px;'>{full_name}</td></tr>"
+                f"<tr><td style='padding:6px;font-weight:bold;'>Başvuru No</td>"
+                f"<td style='padding:6px;'>{app_number}</td></tr>"
+                f"<tr><td style='padding:6px;font-weight:bold;'>Tür</td>"
+                f"<td style='padding:6px;'>Üyelik Başvurusu</td></tr>"
+                f"</table>"
+            )
+        return subject, _wrap(body)
 
     # ── payment.overdue ────────────────────────────────────────────────────
     if et == "payment.overdue":
@@ -317,7 +412,7 @@ def _build_event_email(event: "DomainEvent") -> Tuple[str, str]:
         status_tr = "Ödendi" if pstatus == "paid" else "Bekliyor"
         type_row = f"<tr><td style='padding:6px;font-weight:bold;'>Tür</td><td style='padding:6px;'>{ptype}</td></tr>" if ptype else ""
         method_row = f"<tr><td style='padding:6px;font-weight:bold;'>Yöntem</td><td style='padding:6px;'>{pmethod}</td></tr>" if pmethod else ""
-        subject = f"💳 Yeni Ödeme Kaydedildi"
+        subject = "💳 Yeni Ödeme Kaydedildi"
         body = (
             f"<h3>Ödeme Kaydı</h3>"
             f"<p>Sisteme yeni bir ödeme kaydı eklendi.</p>"

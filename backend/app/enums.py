@@ -2,6 +2,12 @@
 from enum import Enum
 
 
+class ApplicationType(str, Enum):
+    """Başvuru türü — membership (üyelik) veya course (kurs)."""
+    membership = "membership"
+    course     = "course"
+
+
 class ProgramPreference(str, Enum):
     """Üyelik başvurusundaki eğitim programı tercihi.
 

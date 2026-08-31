@@ -29,6 +29,7 @@ export interface MembershipApplication {
   program_preference?: string | null;
   preferred_course_id?: string | null;
   preferred_course_name?: string | null;
+  application_type?: 'membership' | 'course';
 
   // PDF / imza
   has_pdf: boolean;

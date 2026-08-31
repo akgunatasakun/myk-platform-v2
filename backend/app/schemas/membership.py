@@ -140,6 +140,7 @@ class MembershipApplicationOut(BaseModel):
     program_preference: Optional[str] = None
     preferred_course_id: Optional[uuid.UUID] = None
     preferred_course_name: Optional[str] = None
+    application_type: str = "membership"
     consent_text_version: Optional[str] = None
     consent_accepted_at: Optional[datetime] = None
 

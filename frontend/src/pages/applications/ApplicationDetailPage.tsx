@@ -262,7 +262,7 @@ export default function ApplicationDetailPage() {
     : 'Başvuru Detayı'
 
   return (
-    <AppShell title="Üyelik Başvurusu">
+    <AppShell title={app?.application_type === 'course' ? 'Kurs Başvurusu' : 'Üyelik Başvurusu'}>
       {/* Geri */}
       <div style={{ marginBottom: 16 }}>
         <button className="btn btn-ghost btn-sm" onClick={() => navigate('/admin/applications')}>

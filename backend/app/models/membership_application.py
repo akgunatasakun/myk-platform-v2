@@ -91,6 +91,8 @@ class MembershipApplication(Base):
     preferred_course_id: Mapped[Optional[uuid.UUID]] = mapped_column(
         ForeignKey("training_courses.id", ondelete="SET NULL"), nullable=True
     )
+    # Başvuru türü: 'membership' (üyelik) | 'course' (kurs)
+    application_type: Mapped[str] = mapped_column(String(20), nullable=False, default="membership")
 
     consent_text_version: Mapped[Optional[str]] = mapped_column(String(20), nullable=True)
     consent_accepted_at: Mapped[Optional[datetime]] = mapped_column(

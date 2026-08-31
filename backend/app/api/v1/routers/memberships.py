@@ -53,8 +53,14 @@ from app.schemas.membership import (
 )
 from app.services.storage import ObjectStorageService
 from app.config import get_settings
+from app.enums import ApplicationType
 from app.services.membership_approval import process_approval
-from app.services.email_service import send_approval_email, send_rejection_email
+from app.services.email_service import (
+    send_approval_email,
+    send_rejection_email,
+    send_course_approval_email,
+    send_course_rejection_email,
+)
 
 logger = logging.getLogger(__name__)
 
@@ -218,6 +224,7 @@ async def list_applications(
     skip: int = Query(0, ge=0),
     limit: int = Query(20, ge=1, le=100),
     status_filter: Optional[str] = Query(None, alias="status"),
+    application_type_filter: Optional[ApplicationType] = Query(None, alias="application_type"),
     db: AsyncSession = Depends(get_db),
     current_user: TokenPayload = Depends(get_current_user),
     club_id: uuid.UUID = Depends(get_club_id),
@@ -230,6 +237,8 @@ async def list_applications(
     )
     if status_filter:
         q = q.where(MembershipApplication.status == status_filter)
+    if application_type_filter:
+        q = q.where(MembershipApplication.application_type == application_type_filter.value)
 
     count_q = select(func.count()).select_from(q.subquery())
     total = (await db.execute(count_q)).scalar_one()
@@ -403,10 +412,12 @@ async def transition_status(
     elif to_status == "approved":
         app.approved_at = now
         app.approved_by_user_id = uuid.UUID(current_user.sub)
-        # ── Üye oluşturma: Person, PersonRole("uye"), member_number, User ──
-        approval_result = await process_approval(
-            app, db, approved_by_user_id=uuid.UUID(current_user.sub)
-        )
+        if app.application_type == ApplicationType.membership.value:
+            # ── Üye oluşturma: Person, PersonRole("uye"), member_number, User ──
+            approval_result = await process_approval(
+                app, db, approved_by_user_id=uuid.UUID(current_user.sub)
+            )
+        # course başvuruları: yalnızca durum değişimi; Person/User/TrainingEnrollment oluşturulmaz
     elif to_status == "rejected":
         app.rejected_at = now
         if body.reason:
@@ -420,8 +431,12 @@ async def transition_status(
         app.rejected_at = None
         app.rejection_reason = None
 
-    audit_after: dict = {"status": to_status, "application_number": app.application_number}
-    if to_status == "approved" and "approval_result" in dir():
+    audit_after: dict = {
+        "status": to_status,
+        "application_number": app.application_number,
+        "application_type": app.application_type,
+    }
+    if to_status == "approved" and app.application_type == ApplicationType.membership.value and "approval_result" in dir():
         audit_after["person_id"] = str(approval_result.person.id)
         audit_after["member_number"] = approval_result.member_number
         audit_after["person_created"] = approval_result.person_created
@@ -445,7 +460,11 @@ async def transition_status(
             event_type="application.approved",
             aggregate_type="membership_application",
             aggregate_id=app.id,
-            payload={"application_number": app.application_number, "email": app.email},
+            payload={
+                "application_number": app.application_number,
+                "email": app.email,
+                "application_type": app.application_type,
+            },
         )
     elif to_status == "rejected":
         await emit_event(
@@ -457,6 +476,7 @@ async def transition_status(
             payload={
                 "application_number": app.application_number,
                 "reason": app.rejection_reason,
+                "application_type": app.application_type,
             },
         )
 
@@ -464,23 +484,37 @@ async def transition_status(
     await db.refresh(app)
 
     # ── E-posta bildirimleri (transaction dışında — hata deployment'ı bozmasın) ──
-    if to_status == "approved" and "approval_result" in dir() and app.email:
+    _applicant_name = f"{app.first_name or ''} {app.last_name or ''}".strip()
+    if to_status == "approved" and app.email:
         try:
-            await send_approval_email(
-                to_email=app.email,
-                applicant_name=f"{app.first_name or ''} {app.last_name or ''}".strip(),
-                member_number=approval_result.member_number,
-                temp_password=approval_result.temp_password,
-            )
+            if app.application_type == ApplicationType.membership.value and "approval_result" in dir():
+                await send_approval_email(
+                    to_email=app.email,
+                    applicant_name=_applicant_name,
+                    member_number=approval_result.member_number,
+                    temp_password=approval_result.temp_password,
+                )
+            elif app.application_type == ApplicationType.course.value:
+                await send_course_approval_email(
+                    to_email=app.email,
+                    applicant_name=_applicant_name,
+                )
         except Exception as exc:
             logger.error("Onay e-postası gönderilemedi: %s", exc)
     elif to_status == "rejected" and app.email:
         try:
-            await send_rejection_email(
-                to_email=app.email,
-                applicant_name=f"{app.first_name or ''} {app.last_name or ''}".strip(),
-                reason=app.rejection_reason,
-            )
+            if app.application_type == ApplicationType.course.value:
+                await send_course_rejection_email(
+                    to_email=app.email,
+                    applicant_name=_applicant_name,
+                    reason=app.rejection_reason,
+                )
+            else:
+                await send_rejection_email(
+                    to_email=app.email,
+                    applicant_name=_applicant_name,
+                    reason=app.rejection_reason,
+                )
         except Exception as exc:
             logger.error("Red e-postası gönderilemedi: %s", exc)
 

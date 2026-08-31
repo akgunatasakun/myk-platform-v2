@@ -86,7 +86,7 @@ async def test_current_revision_is_head(engine):
     async with engine.connect() as conn:
         r = await conn.execute(text("SELECT version_num FROM alembic_version"))
         rev = r.scalar_one()
-    assert rev == "0023", f"Beklenen '0023', alınan '{rev!r}'"
+    assert rev == "0024", f"Beklenen '0024', alınan '{rev!r}'"
 
 
 # ── 2. Şema doğrulama ─────────────────────────────────────────────────────────
@@ -614,6 +614,214 @@ def test_0023_downgrade_removes_column():
                           AND column_name  = 'is_registration_open'
                     """))
                     assert r.scalar() == 0, "Downgrade sonrası is_registration_open hâlâ var"
+            finally:
+                await e.dispose()
+
+        asyncio.get_event_loop().run_until_complete(_check())
+    finally:
+        run_alembic("upgrade", "head")
+
+
+# ── 7b. Migration 0024: application_type ─────────────────────────────────────
+
+@pytest.mark.asyncio
+async def test_0024_column_exists_not_null_default_membership(engine):
+    """0024 sonrası membership_applications.application_type VARCHAR NOT NULL server default 'membership'."""
+    async with engine.connect() as conn:
+        # Kolon varlığı
+        r = await conn.execute(text("""
+            SELECT COUNT(*) FROM information_schema.columns
+            WHERE table_schema = 'public'
+              AND table_name   = 'membership_applications'
+              AND column_name  = 'application_type'
+        """))
+        assert r.scalar() == 1, "application_type kolonu yok"
+
+        # NOT NULL
+        r = await conn.execute(text("""
+            SELECT is_nullable FROM information_schema.columns
+            WHERE table_schema = 'public'
+              AND table_name   = 'membership_applications'
+              AND column_name  = 'application_type'
+        """))
+        nullable = r.scalar_one()
+        assert nullable == "NO", f"application_type nullable olmamalı, alınan: {nullable!r}"
+
+        # server_default via pg_attrdef
+        r = await conn.execute(text("""
+            SELECT pg_get_expr(d.adbin, d.adrelid)
+              FROM pg_attribute a
+              JOIN pg_class     c ON c.oid = a.attrelid
+              JOIN pg_attrdef   d ON d.adrelid = a.attrelid AND d.adnum = a.attnum
+             WHERE c.relname = 'membership_applications'
+               AND a.attname = 'application_type'
+        """))
+        default_expr = r.scalar_one_or_none()
+        assert default_expr is not None, "application_type için server default tanımlı değil"
+        assert "membership" in (default_expr or ""), (
+            f"server_default 'membership' içermeli, alınan: {default_expr!r}"
+        )
+
+
+@pytest.mark.asyncio
+async def test_0024_check_constraint_enforcement(engine):
+    """application_type geçersiz değer kabul etmemeli (CHECK constraint)."""
+    from sqlalchemy.exc import IntegrityError
+
+    # Geçerli bir club_id bul
+    async with engine.connect() as conn:
+        r = await conn.execute(text("SELECT id FROM clubs LIMIT 1"))
+        club_id = r.scalar_one_or_none()
+
+    if club_id is None:
+        pytest.skip("Test için kulüp kaydı gerekli")
+
+    with pytest.raises(IntegrityError):
+        async with engine.begin() as conn:
+            await conn.execute(text("""
+                INSERT INTO membership_applications
+                    (id, club_id, status, application_type)
+                VALUES
+                    (gen_random_uuid(), :club_id, 'submitted', 'invalid_type')
+            """), {"club_id": club_id})
+
+
+def test_0024_backfill_logic():
+    """Backfill testi — 3 senaryo:
+      a) program_preference dolu  → 'course'
+      b) preferred_course_id dolu → 'course'
+      c) ikisi de NULL            → 'membership'
+
+    Akış:
+      1. 0023'e downgrade (application_type kolonu yok)
+      2. Aynı kulüpte TrainingCourse + 3 legacy uygulama kaydı ekle
+      3. 0024'e upgrade (backfill çalışır)
+      4. Üç sonucu doğrula
+      5. finally (hata olsa da): upgrade head → test verisi temizle
+    """
+    inserted_app_ids: list = []
+    inserted_course_ids: list = []
+
+    async def _get_club_id() -> str:
+        e = create_async_engine(DATABASE_URL, echo=False)
+        try:
+            async with e.connect() as conn:
+                r = await conn.execute(text("SELECT id FROM clubs LIMIT 1"))
+                return str(r.scalar_one_or_none() or "")
+        finally:
+            await e.dispose()
+
+    async def _insert_legacy(club_id: str) -> None:
+        e = create_async_engine(DATABASE_URL, echo=False)
+        try:
+            async with e.begin() as conn:
+                # TrainingCourse oluştur (preferred_course_id testi için)
+                r = await conn.execute(text("""
+                    INSERT INTO training_courses
+                        (id, club_id, name, status, fee, is_active, is_deleted, is_registration_open)
+                    VALUES
+                        (gen_random_uuid(), :cid, 'Backfill Test Kurs', 'planlandi',
+                         0, true, false, true)
+                    RETURNING id
+                """), {"cid": club_id})
+                course_id = str(r.scalar_one())
+                inserted_course_ids.append(course_id)
+
+                # a) program_preference dolu → course
+                r = await conn.execute(text("""
+                    INSERT INTO membership_applications
+                        (id, club_id, status, program_preference)
+                    VALUES (gen_random_uuid(), :cid, 'submitted', 'optimist')
+                    RETURNING id
+                """), {"cid": club_id})
+                inserted_app_ids.append(str(r.scalar_one()))
+
+                # b) preferred_course_id dolu → course
+                r = await conn.execute(text("""
+                    INSERT INTO membership_applications
+                        (id, club_id, status, preferred_course_id)
+                    VALUES (gen_random_uuid(), :cid, 'submitted', :course_id::uuid)
+                    RETURNING id
+                """), {"cid": club_id, "course_id": course_id})
+                inserted_app_ids.append(str(r.scalar_one()))
+
+                # c) ikisi de NULL → membership
+                r = await conn.execute(text("""
+                    INSERT INTO membership_applications
+                        (id, club_id, status)
+                    VALUES (gen_random_uuid(), :cid, 'submitted')
+                    RETURNING id
+                """), {"cid": club_id})
+                inserted_app_ids.append(str(r.scalar_one()))
+        finally:
+            await e.dispose()
+
+    async def _verify() -> None:
+        e = create_async_engine(DATABASE_URL, echo=False)
+        try:
+            async with e.connect() as conn:
+                for idx, (expected, label) in enumerate([
+                    ("course",     "program_preference dolu"),
+                    ("course",     "preferred_course_id dolu"),
+                    ("membership", "ikisi de NULL"),
+                ]):
+                    r = await conn.execute(text("""
+                        SELECT application_type FROM membership_applications WHERE id = :rid
+                    """), {"rid": inserted_app_ids[idx]})
+                    val = r.scalar_one()
+                    assert val == expected, (
+                        f"[{label}] application_type '{expected}' olmalı, alınan: {val!r}"
+                    )
+        finally:
+            await e.dispose()
+
+    async def _cleanup() -> None:
+        e = create_async_engine(DATABASE_URL, echo=False)
+        try:
+            async with e.begin() as conn:
+                for rid in inserted_app_ids:
+                    await conn.execute(
+                        text("DELETE FROM membership_applications WHERE id = :rid"),
+                        {"rid": rid},
+                    )
+                for cid in inserted_course_ids:
+                    await conn.execute(
+                        text("DELETE FROM training_courses WHERE id = :cid"),
+                        {"cid": cid},
+                    )
+        finally:
+            await e.dispose()
+
+    club_id = asyncio.get_event_loop().run_until_complete(_get_club_id())
+    if not club_id:
+        pytest.skip("Test için kulüp kaydı gerekli")
+
+    try:
+        run_alembic("downgrade", "0023")
+        asyncio.get_event_loop().run_until_complete(_insert_legacy(club_id))
+        run_alembic("upgrade", "0024")
+        asyncio.get_event_loop().run_until_complete(_verify())
+    finally:
+        run_alembic("upgrade", "head")
+        asyncio.get_event_loop().run_until_complete(_cleanup())
+
+
+def test_0024_downgrade_removes_column():
+    """0024 downgrade: application_type kolonu kaldırılmalı."""
+    try:
+        run_alembic("downgrade", "0023")
+
+        async def _check() -> None:
+            e = create_async_engine(DATABASE_URL, echo=False)
+            try:
+                async with e.connect() as conn:
+                    r = await conn.execute(text("""
+                        SELECT COUNT(*) FROM information_schema.columns
+                        WHERE table_schema = 'public'
+                          AND table_name   = 'membership_applications'
+                          AND column_name  = 'application_type'
+                    """))
+                    assert r.scalar() == 0, "Downgrade sonrası application_type hâlâ var"
             finally:
                 await e.dispose()
 

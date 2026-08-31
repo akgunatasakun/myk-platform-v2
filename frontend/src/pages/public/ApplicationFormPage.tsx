@@ -172,8 +172,7 @@ function FormField({
 function SuccessScreen({ applicationNumber }: { applicationNumber: string | null }) {
   return (
     <div className="public-success">
-      <div className="public-success-icon">⛵</div>
-      <h2 className="public-success-title">Başvurunuz Alındı!</h2>
+      <h2 className="public-success-title">Kurs Başvurunuz Alındı</h2>
       <p className="public-success-desc">
         Kurs başvurunuz başarıyla iletildi. Yetkili tarafından incelendikten sonra
         e-posta adresinize bilgilendirme yapılacaktır.
@@ -185,7 +184,7 @@ function SuccessScreen({ applicationNumber }: { applicationNumber: string | null
         </div>
       )}
       <p className="public-success-note">
-        Bu numarayı not alarak başvurunuzun durumunu klüple iletişime geçerek
+        Bu numarayı not alarak başvurunuzun durumunu kulüple iletişime geçerek
         öğrenebilirsiniz.
       </p>
     </div>

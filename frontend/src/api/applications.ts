@@ -6,6 +6,8 @@ export interface ApplicationListParams {
   limit?: number;
   /** Durum filtresi: 'submitted' | 'approved' | 'rejected' | 'cancelled' | 'draft' */
   status?: string;
+  /** Başvuru türü filtresi: 'membership' | 'course' */
+  application_type?: string;
 }
 
 export const applicationsApi = {
