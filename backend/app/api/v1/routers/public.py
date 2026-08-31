@@ -16,7 +16,7 @@ from decimal import Decimal
 from fastapi import APIRouter, Depends, HTTPException, Query, Request, status
 from fastapi.responses import Response
 from pydantic import BaseModel, EmailStr, field_validator
-from sqlalchemy import select
+from sqlalchemy import func, or_, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.config import get_settings
@@ -143,6 +143,11 @@ async def public_list_training_courses(
                 TrainingCourse.is_active.is_(True),
                 TrainingCourse.is_deleted.is_(False),
                 TrainingCourse.status.in_(["planlandi", "aktif"]),
+                TrainingCourse.is_registration_open.is_(True),
+                or_(
+                    TrainingCourse.end_date.is_(None),
+                    TrainingCourse.end_date >= func.current_date(),
+                ),
             )
             .order_by(TrainingCourse.start_date.asc().nullslast(), TrainingCourse.name)
         )
@@ -186,13 +191,18 @@ async def public_create_application(
                     TrainingCourse.is_active.is_(True),
                     TrainingCourse.is_deleted.is_(False),
                     TrainingCourse.status.in_(["planlandi", "aktif"]),
+                    TrainingCourse.is_registration_open.is_(True),
+                    or_(
+                        TrainingCourse.end_date.is_(None),
+                        TrainingCourse.end_date >= func.current_date(),
+                    ),
                 )
             )
         ).scalar_one_or_none()
         if preferred_course is None:
             raise HTTPException(
                 status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
-                detail="Seçilen eğitim başvuruya açık değil.",
+                detail="Bu eğitim başvuruya kapalı veya bulunamadı.",
             )
 
     now = datetime.now(timezone.utc)

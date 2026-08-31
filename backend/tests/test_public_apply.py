@@ -476,7 +476,10 @@ def _make_course(
     status: str = "planlandi",
     is_active: bool = True,
     is_deleted: bool = False,
+    is_registration_open: bool = True,
+    end_date: str | None = None,  # ISO "YYYY-MM-DD"
 ) -> TrainingCourse:
+    from datetime import date
     return TrainingCourse(
         id=uuid.uuid4(),
         club_id=club_id,
@@ -484,6 +487,8 @@ def _make_course(
         status=status,
         is_active=is_active,
         is_deleted=is_deleted,
+        is_registration_open=is_registration_open,
+        end_date=date.fromisoformat(end_date) if end_date else None,
         fee=Decimal("0"),
     )
 
@@ -542,6 +547,101 @@ async def test_public_course_list_status_filter(
     assert str(inactive.id) not in ids, "Pasif kurs görünmemeli"
     assert str(deleted.id) not in ids, "Silinmiş kurs görünmemeli"
     assert str(completed.id) not in ids, "Tamamlanan kurs görünmemeli"
+
+
+@pytest.mark.asyncio
+async def test_public_course_list_registration_closed_hidden(
+    client: AsyncClient,
+    db_session: AsyncSession,
+    test_club: Club,
+) -> None:
+    """is_registration_open=False kurs public listede görünmemeli."""
+    closed = _make_course(test_club.id, name="Kapalı Kurs", is_registration_open=False)
+    open_ = _make_course(test_club.id, name="Açık Kurs", is_registration_open=True)
+    db_session.add_all([closed, open_])
+    await db_session.flush()
+
+    resp = await client.get(
+        "/api/v1/public/training-courses",
+        params={"club_slug": test_club.slug},
+    )
+    assert resp.status_code == 200
+    ids = {c["id"] for c in resp.json()}
+    assert str(open_.id) in ids
+    assert str(closed.id) not in ids, "Başvuruya kapalı kurs listede görünmemeli"
+
+
+@pytest.mark.asyncio
+async def test_public_course_list_past_end_date_hidden(
+    client: AsyncClient,
+    db_session: AsyncSession,
+    test_club: Club,
+) -> None:
+    """Geçmiş end_date kurs listede görünmemeli; gelecek / null görünmeli."""
+    past = _make_course(test_club.id, name="Bitmiş Kurs", end_date="2020-01-01")
+    future = _make_course(test_club.id, name="Gelecek Kurs", end_date="2099-12-31")
+    no_end = _make_course(test_club.id, name="Süresiz Kurs")
+    db_session.add_all([past, future, no_end])
+    await db_session.flush()
+
+    resp = await client.get(
+        "/api/v1/public/training-courses",
+        params={"club_slug": test_club.slug},
+    )
+    assert resp.status_code == 200
+    ids = {c["id"] for c in resp.json()}
+    assert str(past.id) not in ids, "Geçmiş end_date kurs listede olmamalı"
+    assert str(future.id) in ids
+    assert str(no_end.id) in ids
+
+
+@pytest.mark.asyncio
+async def test_submit_registration_closed_course_422(
+    client: AsyncClient,
+    db_session: AsyncSession,
+    test_club: Club,
+) -> None:
+    """is_registration_open=False kursa UUID ile submit → 422."""
+    course = _make_course(test_club.id, name="Kapalı UUID Kurs", is_registration_open=False)
+    db_session.add(course)
+    await db_session.flush()
+
+    resp = await client.post(
+        "/api/v1/public/membership-applications",
+        json={
+            "club_slug": test_club.slug,
+            "first_name": "Closed", "last_name": "Reg",
+            "email": f"cr-{uuid.uuid4().hex[:6]}@test.com",
+            "phone": "05320002001", "consent_accepted": True,
+            "preferred_course_id": str(course.id),
+        },
+    )
+    assert resp.status_code == 422
+    assert "kapalı" in resp.json().get("detail", "").lower()
+
+
+@pytest.mark.asyncio
+async def test_submit_past_end_date_course_422(
+    client: AsyncClient,
+    db_session: AsyncSession,
+    test_club: Club,
+) -> None:
+    """Geçmiş end_date kursa UUID ile submit → 422."""
+    course = _make_course(test_club.id, name="Bitmiş UUID Kurs", end_date="2020-01-01")
+    db_session.add(course)
+    await db_session.flush()
+
+    resp = await client.post(
+        "/api/v1/public/membership-applications",
+        json={
+            "club_slug": test_club.slug,
+            "first_name": "Past", "last_name": "End",
+            "email": f"pe-{uuid.uuid4().hex[:6]}@test.com",
+            "phone": "05320002002", "consent_accepted": True,
+            "preferred_course_id": str(course.id),
+        },
+    )
+    assert resp.status_code == 422
 
 
 @pytest.mark.asyncio

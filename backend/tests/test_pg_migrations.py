@@ -86,7 +86,7 @@ async def test_current_revision_is_head(engine):
     async with engine.connect() as conn:
         r = await conn.execute(text("SELECT version_num FROM alembic_version"))
         rev = r.scalar_one()
-    assert rev == "0022", f"Beklenen '0022', alınan '{rev!r}'"
+    assert rev == "0023", f"Beklenen '0023', alınan '{rev!r}'"
 
 
 # ── 2. Şema doğrulama ─────────────────────────────────────────────────────────
@@ -554,6 +554,66 @@ def test_0022_downgrade_removes_column_index_fk():
                           AND indexname  = 'ix_membership_applications_club_preferred_course'
                     """))
                     assert r2.scalar() == 0, "Downgrade sonrası composite index hâlâ var"
+            finally:
+                await e.dispose()
+
+        asyncio.get_event_loop().run_until_complete(_check())
+    finally:
+        run_alembic("upgrade", "head")
+
+
+# ── 7. Migration 0023: is_registration_open ──────────────────────────────────
+
+@pytest.mark.asyncio
+async def test_0023_column_exists_not_null_default_true(engine):
+    """0023 sonrası training_courses.is_registration_open BOOLEAN NOT NULL server default true."""
+    async with engine.connect() as conn:
+        # information_schema column_default server default'u göstermez;
+        # pg_attribute + pg_attrdef üzerinden doğrula.
+        r = await conn.execute(text("""
+            SELECT data_type, is_nullable
+            FROM information_schema.columns
+            WHERE table_schema = 'public'
+              AND table_name   = 'training_courses'
+              AND column_name  = 'is_registration_open'
+        """))
+        row = r.fetchone()
+        assert row is not None, "training_courses.is_registration_open kolonu bulunamadı"
+        assert row[0] == "boolean", f"Tip BOOLEAN olmalı, alınan: {row[0]!r}"
+        assert row[1] == "NO", "is_registration_open NOT NULL olmalı"
+
+        # Server default değerini pg_attrdef üzerinden al
+        r2 = await conn.execute(text("""
+            SELECT pg_get_expr(d.adbin, d.adrelid)
+            FROM pg_attribute a
+            JOIN pg_class c ON c.oid = a.attrelid
+            JOIN pg_attrdef d ON d.adrelid = a.attrelid AND d.adnum = a.attnum
+            WHERE c.relname = 'training_courses'
+              AND a.attname = 'is_registration_open'
+        """))
+        default_expr = r2.scalar()
+        assert default_expr is not None, "Server default tanımlı değil"
+        assert "true" in str(default_expr).lower(), (
+            f"Server default 'true' olmalı, alınan: {default_expr!r}"
+        )
+
+
+def test_0023_downgrade_removes_column():
+    """0023 downgrade: is_registration_open kolonu kaldırılmalı."""
+    try:
+        run_alembic("downgrade", "0022")
+
+        async def _check() -> None:
+            e = create_async_engine(DATABASE_URL, echo=False)
+            try:
+                async with e.connect() as conn:
+                    r = await conn.execute(text("""
+                        SELECT COUNT(*) FROM information_schema.columns
+                        WHERE table_schema = 'public'
+                          AND table_name   = 'training_courses'
+                          AND column_name  = 'is_registration_open'
+                    """))
+                    assert r.scalar() == 0, "Downgrade sonrası is_registration_open hâlâ var"
             finally:
                 await e.dispose()
 

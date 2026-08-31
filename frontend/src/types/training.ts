@@ -40,6 +40,7 @@ export interface TrainingCourse {
   attendance_mode: AttendanceMode
   is_active: boolean
   is_deleted: boolean
+  is_registration_open: boolean
   enrollment_count: number
   created_at: string
   updated_at: string
@@ -68,6 +69,7 @@ export interface TrainingCourseCreate {
   instructor_person_id?: string | null
   status?: CourseStatus
   attendance_mode?: AttendanceMode
+  is_registration_open?: boolean
 }
 
 export interface TrainingCourseUpdate {
@@ -87,6 +89,7 @@ export interface TrainingCourseUpdate {
   status?: CourseStatus
   is_active?: boolean
   attendance_mode?: AttendanceMode
+  is_registration_open?: boolean
 }
 
 // ── TrainingSession ───────────────────────────────────────────────────────────

@@ -59,6 +59,7 @@ class TrainingCourseCreate(BaseModel):
     instructor_person_id: Optional[uuid.UUID] = None
     status: Literal["planlandi", "aktif", "tamamlandi", "iptal"] = "planlandi"
     attendance_mode: AttendanceMode = AttendanceMode.coach_daily
+    is_registration_open: bool = True
 
     @field_validator("name")
     @classmethod
@@ -100,6 +101,7 @@ class TrainingCourseUpdate(BaseModel):
     status: Optional[Literal["planlandi", "aktif", "tamamlandi", "iptal"]] = None
     is_active: Optional[bool] = None
     attendance_mode: Optional[AttendanceMode] = None
+    is_registration_open: Optional[bool] = None
 
     @field_validator("name")
     @classmethod
@@ -146,6 +148,7 @@ class TrainingCourseOut(BaseModel):
     attendance_mode: str = "coach_daily"
     is_active: bool
     is_deleted: bool
+    is_registration_open: bool = True
     enrollment_count: int = 0
     created_at: datetime
     updated_at: datetime

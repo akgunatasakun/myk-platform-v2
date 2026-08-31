@@ -30,6 +30,7 @@ const EMPTY: TrainingCourseCreate = {
   instructor_person_ids: [],
   status: 'planlandi',
   attendance_mode: 'coach_daily',
+  is_registration_open: true,
 }
 
 const ATTENDANCE_MODE_OPTIONS: { value: AttendanceMode; label: string; description: string }[] = [
@@ -77,6 +78,7 @@ export default function TrainingFormModal({ isOpen, onClose, course, onSaved }: 
         instructor_person_ids: course.instructors.map((i) => i.id),
         status: course.status,
         attendance_mode: course.attendance_mode ?? 'coach_daily',
+        is_registration_open: course.is_registration_open ?? true,
       })
     } else {
       setForm(EMPTY)
@@ -125,6 +127,7 @@ export default function TrainingFormModal({ isOpen, onClose, course, onSaved }: 
           instructor_person_ids: form.instructor_person_ids ?? [],
           status: form.status,
           attendance_mode: form.attendance_mode,
+          is_registration_open: form.is_registration_open,
         }
         const resp = await trainingApi.updateCourse(course.id, body)
         saved = resp.data
@@ -341,6 +344,27 @@ export default function TrainingFormModal({ isOpen, onClose, course, onSaved }: 
                   </label>
                 ))}
               </div>
+            </div>
+
+            <div className="form-group">
+              <label
+                style={{ display: 'flex', alignItems: 'center', gap: 10, cursor: 'pointer' }}
+              >
+                <input
+                  type="checkbox"
+                  checked={form.is_registration_open ?? true}
+                  onChange={(e) =>
+                    setForm((f) => ({ ...f, is_registration_open: e.target.checked }))
+                  }
+                  style={{ width: 16, height: 16, accentColor: 'var(--color-primary)' }}
+                />
+                <span>
+                  <strong>Başvuruya açık</strong>
+                  <span style={{ display: 'block', fontSize: 12, color: 'var(--color-text-muted)', marginTop: 2 }}>
+                    İşaretsiz bırakırsanız bu kurs public başvuru formunda listelenmez (UAT / dahili kurs).
+                  </span>
+                </span>
+              </label>
             </div>
 
             <div className="form-group">

@@ -221,6 +221,11 @@ export default function TrainingPage() {
                       <span className={`badge ${STATUS_CLASS[c.status] ?? ''}`}>
                         {STATUS_LABEL[c.status] ?? c.status}
                       </span>
+                      {!c.is_registration_open && (
+                        <span className="badge" style={{ marginLeft: 4, background: 'var(--color-text-muted)', color: '#fff', fontSize: 11 }}>
+                          Başvuruya kapalı
+                        </span>
+                      )}
                     </td>
                     {canWrite && (
                       <td>

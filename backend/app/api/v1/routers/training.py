@@ -611,6 +611,7 @@ async def create_course(
         instructor_person_id=instructor_ids[0] if instructor_ids else None,
         status=body.status,
         attendance_mode=body.attendance_mode.value,
+        is_registration_open=body.is_registration_open,
     )
     db.add(course)
     await db.flush()
