@@ -1,0 +1,216 @@
+<!DOCTYPE html>
+<html lang="tr">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Deniz Akademisi — Oynayarak Öğren! 🌊</title>
+<style>
+:root{--ocean:#0077b6;--deep:#023e8a;--sky:#00B4D8;--mint:#00F5D4;--sun:#FFD700;--orange:#FF6B35;--dark:#0D2137;--white:#fff;}
+*{margin:0;padding:0;box-sizing:border-box;}
+html{scroll-behavior:smooth;}
+body{font-family:'Segoe UI',system-ui,sans-serif;background:linear-gradient(180deg,#011e4a 0%,#023e8a 40%,#0077b6 100%);min-height:100vh;color:var(--white);}
+@media(prefers-reduced-motion:reduce){*,*::before,*::after{animation-duration:.01ms!important;}}
+
+/* NAV */
+nav{display:flex;align-items:center;justify-content:space-between;padding:1rem 2rem;background:rgba(0,0,0,.2);backdrop-filter:blur(12px);position:sticky;top:0;z-index:100;}
+.logo-link{display:flex;align-items:center;gap:.6rem;text-decoration:none;color:var(--white);font-weight:800;font-size:.9rem;}
+.logo-link span{font-size:1.3rem;}
+.home-btn{background:rgba(255,255,255,.12);border:1.5px solid rgba(255,255,255,.25);color:var(--white);padding:.45rem 1.1rem;border-radius:50px;text-decoration:none;font-size:.8rem;font-weight:600;transition:background .2s;}
+.home-btn:hover{background:rgba(255,255,255,.25);}
+
+/* HERO */
+.akd-hero{text-align:center;padding:4rem 2rem 3rem;}
+.akd-hero h1{font-size:clamp(2.5rem,7vw,5rem);font-weight:900;margin-bottom:.6rem;text-shadow:0 4px 20px rgba(0,0,0,.4);}
+.akd-hero h1 span{background:linear-gradient(90deg,var(--sun),var(--mint));-webkit-background-clip:text;-webkit-text-fill-color:transparent;background-clip:text;}
+.akd-hero p{color:rgba(255,255,255,.75);font-size:1.05rem;max-width:560px;margin:0 auto;}
+
+/* BADGE TRACKER */
+.badge-bar{background:rgba(255,255,255,.07);border:1.5px solid rgba(255,255,255,.15);border-radius:20px;padding:1.25rem 2rem;max-width:700px;margin:0 auto 3rem;display:flex;align-items:center;gap:1.5rem;flex-wrap:wrap;justify-content:center;}
+.badge-bar h3{font-size:.85rem;color:rgba(255,255,255,.6);text-transform:uppercase;letter-spacing:1.5px;width:100%;text-align:center;margin-bottom:.25rem;}
+.bdg{display:flex;flex-direction:column;align-items:center;gap:.3rem;opacity:.35;transition:opacity .3s;}
+.bdg.earned{opacity:1;}
+.bdg span:first-child{font-size:2rem;filter:grayscale(1);}
+.bdg.earned span:first-child{filter:none;animation:pop .4s ease;}
+.bdg span:last-child{font-size:.65rem;color:rgba(255,255,255,.6);text-align:center;}
+.bdg.earned span:last-child{color:var(--sun);}
+@keyframes pop{0%{transform:scale(0);}70%{transform:scale(1.2);}100%{transform:scale(1);}}
+
+/* MODULE CARDS */
+.modules{padding:0 2rem 5rem;max-width:1000px;margin:0 auto;}
+.modules h2{text-align:center;font-size:1.5rem;margin-bottom:2rem;color:rgba(255,255,255,.85);}
+.grid{display:grid;grid-template-columns:repeat(3,1fr);gap:1.25rem;}
+.card{
+  background:rgba(255,255,255,.1);border:1.5px solid rgba(255,255,255,.18);
+  border-radius:22px;padding:2rem 1.5rem;text-align:center;
+  text-decoration:none;
+  transition:transform .3s,background .3s,border-color .3s;
+  display:flex;flex-direction:column;
+}
+.card:hover{transform:translateY(-8px);background:rgba(255,255,255,.18);border-color:rgba(0,245,212,.5);}
+.card-ico{font-size:3.5rem;margin-bottom:.75rem;animation:float 3s ease-in-out infinite;}
+.card:nth-child(2) .card-ico{animation-delay:.5s;}
+.card:nth-child(3) .card-ico{animation-delay:1s;}
+.card:nth-child(4) .card-ico{animation-delay:1.5s;}
+.card:nth-child(5) .card-ico{animation-delay:2s;}
+.card:nth-child(6) .card-ico{animation-delay:2.5s;}
+@keyframes float{0%,100%{transform:translateY(0);}50%{transform:translateY(-8px);}}
+.card-tag{font-size:.65rem;font-weight:800;letter-spacing:1.5px;text-transform:uppercase;border-radius:20px;padding:.2rem .6rem;margin-bottom:.5rem;display:inline-block;}
+.t-sim{background:rgba(0,180,216,.25);color:var(--sky);}
+.t-game{background:rgba(255,107,53,.25);color:#ffa07a;}
+.t-quiz{background:rgba(0,200,100,.25);color:#00e676;}
+.t-art{background:rgba(255,214,0,.25);color:var(--sun);}
+.card h3{font-size:1rem;font-weight:800;color:var(--white);margin-bottom:.4rem;}
+.card p{font-size:.8rem;color:rgba(255,255,255,.65);line-height:1.6;flex:1;}
+.card-go{display:inline-flex;align-items:center;gap:.4rem;margin-top:1rem;font-size:.82rem;font-weight:700;color:var(--mint);transition:gap .2s;}
+.card:hover .card-go{gap:.7rem;}
+
+/* WAVE BOTTOM */
+.wave-bottom{position:fixed;bottom:0;left:0;right:0;height:60px;pointer-events:none;}
+.wave-bottom svg{width:100%;height:100%;}
+
+@media(max-width:700px){.grid{grid-template-columns:1fr 1fr;}}
+@media(max-width:440px){.grid{grid-template-columns:1fr;}}
+</style>
+</head>
+<body>
+<nav>
+  <a href="/" class="nav-logo" style="display:flex;align-items:center;gap:.55rem;text-decoration:none;">
+    <svg width="34" height="38" viewBox="0 0 105 115" xmlns="http://www.w3.org/2000/svg">
+      <defs>
+        <linearGradient id="nl1" x1="0%" y1="0%" x2="100%" y2="0%"><stop offset="0%" stop-color="#152f88"/><stop offset="40%" stop-color="#60b0f0"/><stop offset="100%" stop-color="#1a3a8f"/></linearGradient>
+        <linearGradient id="nl2" x1="0%" y1="0%" x2="100%" y2="0%"><stop offset="0%" stop-color="#1535a0"/><stop offset="45%" stop-color="#b0dcf8"/><stop offset="100%" stop-color="#1a3c90"/></linearGradient>
+        <linearGradient id="nlh" x1="0%" y1="0%" x2="100%" y2="0%"><stop offset="0%" stop-color="#64c4f5"/><stop offset="50%" stop-color="#2d6be4"/><stop offset="100%" stop-color="#64c4f5"/></linearGradient>
+      </defs>
+      <path d="M 47,5 L 8,88 L 44,88 Z" fill="url(#nl1)"/>
+      <path d="M 48.5,22 L 25,89 L 57,89 Z" fill="url(#nl2)"/>
+      <path d="M 50,40 L 42,90 L 69,90 Z" fill="url(#nl2)"/>
+      <path d="M 51,57 L 56,90 L 77,90 Z" fill="url(#nl1)"/>
+      <path d="M 6,93 L 82,93 L 79,100 Q 44,108 11,100 Z" fill="url(#nlh)"/>
+    </svg>
+    <span style="color:#fff;font-size:.82rem;font-weight:800;line-height:1.2;">MYK<br><span style="font-weight:500;font-size:.65rem;opacity:.6;font-style:italic;">Mersin Yelken · 1987</span></span>
+  </a>
+  <button class="ham" id="ham" onclick="toggleNav()" aria-label="Menü" aria-expanded="false">☰</button>
+  <div class="nav-links" id="navLinks">
+    <a href="/akademi/">🎓 Akademi</a>
+    <a href="/egitimler.html">⛵ Eğitimler</a>
+    <a href="/hakkimizda.html">🏛 Hakkımızda</a>
+    <a href="/iletisim.html">📬 İletişim</a>
+  </div>
+  <div class="nav-actions" id="navActions">
+    <a href="https://panel.mersinyelken.org.tr/login?club=mersin-yelken" class="nav-btn-outline">Üye Girişi</a>
+    <a href="https://panel.mersinyelken.org.tr/login?club=mersin-yelken" class="nav-cta">Yönetici</a>
+  </div>
+</nav>
+
+<div class="akd-hero">
+  <div style="font-size:2rem;margin-bottom:.75rem;letter-spacing:.5rem;">🌊⛵🐬🦀🐠</div>
+  <h1>Oynayarak <span>Öğren!</span></h1>
+  <p>Rüzgarı simüle et, yelkeni ayarla, pusulayla yön bul, teknenin rengini seç!</p>
+</div>
+
+<!-- Badge tracker -->
+<div class="badge-bar" id="badgeBar">
+  <h3>🎖️ Rozetlerim</h3>
+  <div class="bdg" id="b-ruzgar"><span>🌬️</span><span>Rüzgar Kaşifi</span></div>
+  <div class="bdg" id="b-yelken"><span>⛵</span><span>Küçük Kaptan</span></div>
+  <div class="bdg" id="b-guvenlik"><span>🦺</span><span>Güvenli Denizci</span></div>
+  <div class="bdg" id="b-dalga"><span>🌊</span><span>Dalga Ustası</span></div>
+  <div class="bdg" id="b-pusula"><span>🧭</span><span>Pusula Ustası</span></div>
+  <div class="bdg" id="b-boya"><span>🎨</span><span>Tekne Tasarımcısı</span></div>
+  <div class="bdg" id="b-terimler"><span>📖</span><span>Deniz Dili</span></div>
+  <div class="bdg" id="b-tekne_parcalari"><span>⛵</span><span>Tekne Bilgini</span></div>
+  <div class="bdg" id="b-deniz_canlilari"><span>🐬</span><span>Deniz Dostu</span></div>
+</div>
+
+<div class="modules">
+  <h2>Hangi Modülü Keşfedeceksin?</h2>
+  <div class="grid">
+    <a href="/akademi/ruzgar.html" class="card">
+      <div class="card-ico">🌬️</div>
+      <span class="card-tag t-sim">Simülasyon</span>
+      <h3>Rüzgar Nasıl Oluşur?</h3>
+      <p>Güneşi sürükle, bulutları hareket ettir, rüzgar oluşsun! Adım adım interaktif.</p>
+      <span class="card-go">Başla →</span>
+    </a>
+    <a href="/akademi/yelken.html" class="card">
+      <div class="card-ico">⛵</div>
+      <span class="card-tag t-game">Oyun</span>
+      <h3>Yelken Açısı Oyunu</h3>
+      <p>Tekneyi kontrol et, doğru açıyı bul, mümkün olduğunca hızlan!</p>
+      <span class="card-go">Oyna →</span>
+    </a>
+    <a href="/akademi/guvenlik.html" class="card">
+      <div class="card-ico">🦺</div>
+      <span class="card-tag t-quiz">Test</span>
+      <h3>Güvenlik Okulu</h3>
+      <p>Kaptan Martı soruyor! Doğru cevapla rozet kazan, gerçek bir denizci ol.</p>
+      <span class="card-go">Teste Gir →</span>
+    </a>
+    <a href="/akademi/dalga.html" class="card">
+      <div class="card-ico">🌊</div>
+      <span class="card-tag t-sim">Simülasyon</span>
+      <h3>Dalga Laboratuvarı</h3>
+      <p>Rüzgar hızını değiştir, dalgaların nasıl büyüdüğünü gör!</p>
+      <span class="card-go">Keşfet →</span>
+    </a>
+    <a href="/akademi/pusula.html" class="card">
+      <div class="card-ico">🧭</div>
+      <span class="card-tag t-game">Oyun</span>
+      <h3>Pusula Ustası</h3>
+      <p>Kuzey, güney, doğu, batı! Doğru yönü bul, limana ulaş.</p>
+      <span class="card-go">Oyna →</span>
+    </a>
+    <a href="/akademi/boya.html" class="card">
+      <div class="card-ico">🎨</div>
+      <span class="card-tag t-art">Yaratıcı</span>
+      <h3>Tekneni Boya!</h3>
+      <p>Optimist teknenin parçalarını seç, renklendir ve PNG olarak indir!</p>
+      <span class="card-go">Boya →</span>
+    </a>
+    <a href="/akademi/terimler.html" class="card">
+      <div class="card-ico">📖</div>
+      <span class="card-tag t-quiz">Sözlük</span>
+      <h3>Deniz Sözlüğü</h3>
+      <p>İskele, bumba, lodos, poyraz… Denizci dilini öğren, 25 terim!</p>
+      <span class="card-go">Öğren →</span>
+    </a>
+    <a href="/akademi/tekne-parcalari.html" class="card">
+      <div class="card-ico">⛵</div>
+      <span class="card-tag t-sim">Keşif</span>
+      <h3>Tekne Parçaları</h3>
+      <p>Optimist'in her parçasına tıkla, ismini ve görevini öğren. Quiz de var!</p>
+      <span class="card-go">Keşfet →</span>
+    </a>
+    <a href="/akademi/deniz-canlilari.html" class="card">
+      <div class="card-ico">🐬</div>
+      <span class="card-tag t-game">Kartlar + Quiz</span>
+      <h3>Deniz Canlıları</h3>
+      <p>Caretta, yunus, ahtapot, sığırotu… Akdeniz'in sakinlerini tanı ve koru!</p>
+      <span class="card-go">Tanı →</span>
+    </a>
+      <a href="/akademi/deniz-isaretleri.html" class="acard c-safety" style="background:linear-gradient(135deg,rgba(52,152,219,.25),rgba(41,128,185,.12));">
+        <span class="acard-ico">🚦</span>
+        <span class="acard-name">Deniz İşaretleri</span>
+        <span class="acard-desc">IALA sistemi, kırmızı-yeşil boyalar, Cardinal işaretler</span>
+      </a>
+  </div>
+</div>
+
+<div class="wave-bottom">
+  <svg viewBox="0 0 1440 60" preserveAspectRatio="none">
+    <path d="M0,30 C360,60 720,0 1080,30 C1260,45 1350,35 1440,30 L1440,60 L0,60 Z" fill="rgba(0,0,0,.3)"/>
+  </svg>
+</div>
+
+<script>
+// Load badges from localStorage
+const badges=['ruzgar','yelken','guvenlik','dalga','pusula','boya','terimler','tekne_parcalari','deniz_canlilari'];
+badges.forEach(b=>{
+  if(localStorage.getItem('badge_'+b)){
+    const el=document.getElementById('b-'+b);
+    if(el)el.classList.add('earned');
+  }
+});
+</script>
+</body>
+</html>

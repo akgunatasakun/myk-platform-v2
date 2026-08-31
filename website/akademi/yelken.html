@@ -1,0 +1,263 @@
+<!DOCTYPE html>
+<html lang="tr">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Yelken Açıları — Optimist & ILCA — Deniz Akademisi</title>
+<style>
+:root{--ocean:#0077b6;--deep:#023e8a;--mint:#00F5D4;--sun:#FFD700;--orange:#FF6B35;--dark:#0D2137;}
+*{margin:0;padding:0;box-sizing:border-box;}
+body{font-family:'Segoe UI',system-ui,sans-serif;background:linear-gradient(180deg,var(--deep) 0%,var(--ocean) 100%);color:#fff;min-height:100vh;overflow-x:hidden;}
+@media(prefers-reduced-motion:reduce){*,*::before,*::after{animation-duration:.01ms!important;}}
+nav{display:flex;align-items:center;justify-content:space-between;padding:1rem 1.5rem;background:rgba(0,0,0,.3);backdrop-filter:blur(12px);position:sticky;top:0;z-index:100;}
+nav a{color:rgba(255,255,255,.8);text-decoration:none;font-size:.85rem;font-weight:600;}
+.back{background:rgba(255,255,255,.1);border:1px solid rgba(255,255,255,.2);padding:.4rem .9rem;border-radius:50px;}
+
+/* GAME AREA */
+.game-wrap{padding:2rem 1.5rem;max-width:700px;margin:0 auto;}
+.game-title{text-align:center;margin-bottom:2rem;}
+.game-title h1{font-size:clamp(1.5rem,4vw,2.5rem);font-weight:900;margin-bottom:.4rem;}
+.game-title p{color:rgba(255,255,255,.65);font-size:.88rem;}
+
+/* Wind indicator */
+.wind-box{background:rgba(255,255,255,.08);border:1.5px solid rgba(255,255,255,.15);border-radius:16px;padding:1.25rem 1.5rem;margin-bottom:1.5rem;display:flex;align-items:center;gap:1.25rem;}
+.wind-compass{width:60px;height:60px;border-radius:50%;border:2px solid rgba(255,255,255,.3);display:flex;align-items:center;justify-content:center;font-size:1.8rem;position:relative;flex-shrink:0;}
+.wind-info strong{display:block;font-size:1.1rem;color:var(--mint);}
+.wind-info span{font-size:.78rem;color:rgba(255,255,255,.55);}
+
+/* Boat canvas area */
+.boat-area{
+  background:linear-gradient(180deg,#87ceeb 0%,#b8e4f7 40%,#0077b6 41%,#023e8a 100%);
+  border-radius:20px;height:280px;position:relative;overflow:hidden;margin-bottom:1.5rem;
+}
+/* Waves */
+.bwave{position:absolute;bottom:0;left:-100%;width:300%;height:59%;background:linear-gradient(180deg,#0077b6,#023e8a);border-radius:40% 40% 0 0 / 10% 10% 0 0;}
+/* Boat SVG */
+#boatSvg{position:absolute;bottom:calc(59% - 30px);left:50%;transform:translateX(-50%);transition:left .3s;width:100px;}
+/* Speed indicator */
+.speed-bar-wrap{position:absolute;top:12px;right:16px;background:rgba(0,0,0,.3);border-radius:12px;padding:.5rem .75rem;text-align:center;}
+.speed-num{font-size:1.8rem;font-weight:900;color:var(--sun);display:block;line-height:1;}
+.speed-lbl{font-size:.6rem;color:rgba(255,255,255,.6);text-transform:uppercase;letter-spacing:1px;}
+/* Wind arrow on water */
+.wind-arrow{position:absolute;top:50%;left:50%;transform:translate(-50%,-50%);font-size:2.5rem;opacity:.35;pointer-events:none;}
+
+/* SLIDER */
+.slider-wrap{background:rgba(255,255,255,.06);border:1.5px solid rgba(255,255,255,.12);border-radius:16px;padding:1.5rem;}
+.slider-row{display:flex;align-items:center;gap:1rem;margin-bottom:.75rem;}
+.slider-row label{min-width:90px;font-size:.82rem;color:rgba(255,255,255,.65);}
+input[type=range]{-webkit-appearance:none;flex:1;height:8px;border-radius:4px;background:rgba(255,255,255,.15);outline:none;cursor:pointer;}
+input[type=range]::-webkit-slider-thumb{-webkit-appearance:none;width:22px;height:22px;border-radius:50%;background:linear-gradient(135deg,var(--mint),var(--ocean));box-shadow:0 2px 8px rgba(0,0,0,.3);cursor:pointer;}
+.slider-val{min-width:50px;text-align:right;font-weight:700;font-size:.9rem;color:var(--mint);}
+
+/* Feedback */
+#feedback{text-align:center;padding:1rem;border-radius:12px;background:rgba(255,255,255,.06);margin-top:1rem;font-size:1.05rem;min-height:56px;display:flex;align-items:center;justify-content:center;gap:.5rem;transition:background .3s;}
+#feedback.good{background:rgba(0,245,212,.12);border:1px solid rgba(0,245,212,.3);}
+#feedback.bad{background:rgba(255,100,50,.1);border:1px solid rgba(255,100,50,.25);}
+#feedback.perfect{background:rgba(255,214,0,.15);border:1px solid rgba(255,214,0,.4);}
+
+/* WIN */
+#winPanel{display:none;text-align:center;background:rgba(255,214,0,.1);border:2px solid rgba(255,214,0,.4);border-radius:20px;padding:2.5rem;margin-top:1.5rem;}
+#winPanel h2{color:var(--sun);font-size:2rem;margin-bottom:.5rem;}
+#winPanel p{color:rgba(255,255,255,.75);margin-bottom:1.5rem;}
+.btn-nxt{display:inline-block;background:linear-gradient(135deg,var(--orange),var(--sun));color:var(--dark);padding:.9rem 2.2rem;border-radius:50px;text-decoration:none;font-weight:800;font-size:1rem;box-shadow:0 6px 20px rgba(255,107,53,.4);}
+.btn-nxt:hover{transform:translateY(-3px);}
+</style>
+</head>
+<body>
+<nav>
+  <a href="/" class="nav-logo" style="display:flex;align-items:center;gap:.55rem;text-decoration:none;">
+    <svg width="34" height="38" viewBox="0 0 105 115" xmlns="http://www.w3.org/2000/svg">
+      <defs>
+        <linearGradient id="nl1" x1="0%" y1="0%" x2="100%" y2="0%"><stop offset="0%" stop-color="#152f88"/><stop offset="40%" stop-color="#60b0f0"/><stop offset="100%" stop-color="#1a3a8f"/></linearGradient>
+        <linearGradient id="nl2" x1="0%" y1="0%" x2="100%" y2="0%"><stop offset="0%" stop-color="#1535a0"/><stop offset="45%" stop-color="#b0dcf8"/><stop offset="100%" stop-color="#1a3c90"/></linearGradient>
+        <linearGradient id="nlh" x1="0%" y1="0%" x2="100%" y2="0%"><stop offset="0%" stop-color="#64c4f5"/><stop offset="50%" stop-color="#2d6be4"/><stop offset="100%" stop-color="#64c4f5"/></linearGradient>
+      </defs>
+      <path d="M 47,5 L 8,88 L 44,88 Z" fill="url(#nl1)"/>
+      <path d="M 48.5,22 L 25,89 L 57,89 Z" fill="url(#nl2)"/>
+      <path d="M 50,40 L 42,90 L 69,90 Z" fill="url(#nl2)"/>
+      <path d="M 51,57 L 56,90 L 77,90 Z" fill="url(#nl1)"/>
+      <path d="M 6,93 L 82,93 L 79,100 Q 44,108 11,100 Z" fill="url(#nlh)"/>
+    </svg>
+    <span style="color:#fff;font-size:.82rem;font-weight:800;line-height:1.2;">MYK<br><span style="font-weight:500;font-size:.65rem;opacity:.6;font-style:italic;">Mersin Yelken · 1987</span></span>
+  </a>
+  <button class="ham" id="ham" onclick="toggleNav()" aria-label="Menü" aria-expanded="false">☰</button>
+  <div class="nav-links" id="navLinks">
+    <a href="/akademi/">🎓 Akademi</a>
+    <a href="/egitimler.html">⛵ Eğitimler</a>
+    <a href="/hakkimizda.html">🏛 Hakkımızda</a>
+    <a href="/iletisim.html">📬 İletişim</a>
+  </div>
+  <div class="nav-actions" id="navActions">
+    <a href="https://panel.mersinyelken.org.tr/login?club=mersin-yelken" class="nav-btn-outline">Üye Girişi</a>
+    <a href="https://panel.mersinyelken.org.tr/login?club=mersin-yelken" class="nav-cta">Yönetici</a>
+  </div>
+</nav>
+
+<div class="game-wrap">
+  <div class="game-title">
+    <h1>⛵ Yelkeni Ayarla!</h1>
+    <p>Optimist ve ILCA — tek yelken, tek rota. Rüzgar yönüne göre yelkenini ayarla ve tekneyi hızlandır!</p>
+  <p style="font-size:.75rem;color:rgba(255,255,255,.45);margin-top:.4rem;">⚓ Optimist · ILCA — yalnızca <strong>ana yelken</strong> (flok/jib yok)</p>
+  </div>
+
+
+  <!-- Rüzgar Açıları Rehberi -->
+  <div style="background:rgba(255,255,255,.06);border:1.5px solid rgba(255,255,255,.12);border-radius:16px;padding:1.25rem 1.5rem;margin-bottom:1.5rem;">
+    <div style="font-size:.8rem;font-weight:700;color:var(--mint);margin-bottom:.75rem;letter-spacing:.05em;">⛵ YELKEN AÇILARI — TEK YELKEN (OPTİMİST · ILCA)</div>
+    <div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(150px,1fr));gap:.5rem;">
+      <div style="background:rgba(255,50,50,.12);border-radius:8px;padding:.5rem .75rem;font-size:.78rem;"><strong style="color:#ff6666;">🚫 Ölü Bölge</strong><br><span style="color:rgba(255,255,255,.5);">0–45° · Rüzgara karşı</span><br><span style="color:rgba(255,255,255,.35);">Tekne ilerleyemez</span></div>
+      <div style="background:rgba(0,245,212,.1);border-radius:8px;padding:.5rem .75rem;font-size:.78rem;"><strong style="color:var(--mint);">⛵ Orsa</strong><br><span style="color:rgba(255,255,255,.5);">45–60° · Rüzgara yakın</span><br><span style="color:rgba(255,255,255,.35);">Yelken içe, güçlü ilerleyiş</span></div>
+      <div style="background:rgba(0,245,212,.1);border-radius:8px;padding:.5rem .75rem;font-size:.78rem;"><strong style="color:var(--mint);">🌬️ Orsa Apazı</strong><br><span style="color:rgba(255,255,255,.5);">60–80° · Yarım rüzgar</span><br><span style="color:rgba(255,255,255,.35);">Konforlu, hızlı seyir</span></div>
+      <div style="background:rgba(255,214,0,.12);border-radius:8px;padding:.5rem .75rem;font-size:.78rem;"><strong style="color:var(--sun);">💨 Tam Apaz</strong><br><span style="color:rgba(255,255,255,.5);">90° · Rüzgar yandan</span><br><span style="color:rgba(255,255,255,.35);">En hızlı rota!</span></div>
+      <div style="background:rgba(255,214,0,.12);border-radius:8px;padding:.5rem .75rem;font-size:.78rem;"><strong style="color:var(--sun);">🚀 Geniş Apaz</strong><br><span style="color:rgba(255,255,255,.5);">100–140° · Rüzgar arkadan</span><br><span style="color:rgba(255,255,255,.35);">Yelken aç, hız iyi</span></div>
+      <div style="background:rgba(255,107,53,.1);border-radius:8px;padding:.5rem .75rem;font-size:.78rem;"><strong style="color:var(--orange);">🌀 Pupa</strong><br><span style="color:rgba(255,255,255,.5);">150–180° · Rüzgar tam arkadan</span><br><span style="color:rgba(255,255,255,.35);">Dikkat: kapama riski!</span></div>
+    </div>
+  </div>
+
+  <!-- Wind display -->
+  <div class="wind-box">
+    <div class="wind-compass" id="windCompass">💨</div>
+    <div class="wind-info">
+      <strong id="windDir">Rüzgar: Kuzeyden (0°)</strong>
+      <span id="windDesc">Rüzgar göneyden esiyor — teknenin pruvasını güneye çevir!</span>
+    </div>
+  </div>
+
+  <!-- Boat scene -->
+  <div class="boat-area">
+    <div class="bwave"></div>
+    <div class="wind-arrow" id="windArrowEmoji">→</div>
+    <svg id="boatSvg" viewBox="0 0 100 90" xmlns="http://www.w3.org/2000/svg">
+      <!-- Hull -->
+      <path d="M10,65 Q50,80 90,65 L80,75 Q50,90 20,75 Z" fill="#1a5276" stroke="#2980b9" stroke-width="1.5"/>
+      <!-- Mast -->
+      <line x1="50" y1="10" x2="50" y2="68" stroke="white" stroke-width="2.5" stroke-linecap="round"/>
+      <!-- Main sail -->
+      <polygon id="mainSail" points="50,12 50,65 15,65" fill="rgba(255,255,255,.88)" stroke="white" stroke-width="1"/>
+      <!-- Optimist/ILCA: yalnızca ana yelken —  flok/jib YOK -->
+    </svg>
+    <div class="speed-bar-wrap">
+      <span class="speed-num" id="speedNum">0</span>
+      <span class="speed-lbl">knot</span>
+    </div>
+  </div>
+
+  <!-- Controls -->
+  <div class="slider-wrap">
+    <div class="slider-row">
+      <label>🧭 Tekne Yönü</label>
+      <input type="range" id="boatAngle" min="0" max="359" value="90" oninput="update()">
+      <span class="slider-val" id="boatAngleVal">90°</span>
+    </div>
+    <div class="slider-row">
+      <label>⛵ Yelken Açısı</label>
+      <input type="range" id="sailAngle" min="-90" max="90" value="0" oninput="update()">
+      <span class="slider-val" id="sailAngleVal">0°</span>
+    </div>
+  </div>
+  <div id="feedback">⛵ Yelkeni ve tekne yönünü ayarla!</div>
+
+  <div id="winPanel">
+    <h2>🎉 Bravo! Küçük Kaptan!</h2>
+    <p>Doğru yelken açısını buldun! Artık <strong>Küçük Kaptan</strong> rozetini kazandın!</p>
+    <a href="/akademi/guvenlik.html" class="btn-nxt">🦺 Sıradaki: Güvenlik Okulu →</a>
+  </div>
+</div>
+
+<script>
+// Wind direction changes every 20 seconds
+const windDirs=[
+  {deg:0,   label:'Kuzeyden (K)',   emoji:'⬇️', desc:'Rüzgar kuzeyden — pupa rotasında güneye veya apaz için kuzeydoğu/kuzeybatıya çevir!'},
+  {deg:45,  label:'Kuzeydoğudan (KD)', emoji:'↙️', desc:'Rüzgar kuzeydoğudan — güneydoğu veya batıya gidebilirsin!'},
+  {deg:90,  label:'Doğudan (D)',    emoji:'⬅️', desc:'Rüzgar doğudan — batıya apaz seyri!'},
+  {deg:135, label:'Güneydoğudan (GD)', emoji:'↖️', desc:'Rüzgar güneydoğudan — kuzeybatıya apaz veya orsa!'},
+  {deg:180, label:'Güneyden (G)',   emoji:'⬆️', desc:'Rüzgar güneyden — kuzeye pupa veya apaz için kuzeydoğu/kuzeybatı!'},
+  {deg:225, label:'Güneybatıdan (GB)', emoji:'↗️', desc:'Rüzgar güneybatıdan — kuzeydoğuya apaz seyri!'},
+  {deg:270, label:'Batıdan (B)',    emoji:'➡️', desc:'Rüzgar batıdan — doğuya apaz seyri!'},
+  {deg:315, label:'Kuzeybatıdan (KB)', emoji:'↘️', desc:'Rüzgar kuzeybatıdan — güneydoğuya apaz veya orsa!'},
+];
+let windIdx=0;
+let windDeg=0;
+let winGiven=false;
+
+function setWind(){
+  windIdx=Math.floor(Math.random()*4);
+  windDeg=windDirs[windIdx].deg;
+  const w=windDirs[windIdx];
+  document.getElementById('windDir').textContent='Rüzgar: '+w.label+' ('+windDeg+'°)';
+  document.getElementById('windDesc').textContent=w.desc;
+  document.getElementById('windArrowEmoji').textContent=w.emoji;
+  document.getElementById('windCompass').textContent=w.emoji;
+}
+setWind();
+
+function calcSpeed(boatAngle, sailAngle, windDeg){
+  // Relative wind angle to boat (0=pruva/into wind, 90=apaz, 180=pupa)
+  let rel = ((boatAngle - windDeg) % 360 + 360) % 360;
+  if(rel > 180) rel = 360 - rel; // 0..180
+
+  // Yelken açısı adı
+  let angleName = '';
+  if(rel < 45) angleName = '🚫 Ölü Bölge';
+  else if(rel < 65) angleName = '⛵ Orsa';
+  else if(rel < 85) angleName = '🌬️ Orsa Apazı';
+  else if(rel <= 95) angleName = '💨 Tam Apaz';
+  else if(rel < 145) angleName = '🚀 Geniş Apaz';
+  else angleName = '🌀 Pupa';
+  window._lastAngleName = angleName;
+
+  // Hız hesabı — TYF Optimist/ILCA performans eğrisi
+  if(rel < 45) return 0;                        // ölü bölge
+  if(rel < 65) return Math.round((rel-45)/3);   // orsa: 0→6 knot
+  if(rel < 95) return Math.round(5+(rel-65)/6); // apaz bölgesi: 5→10
+  if(rel <= 100) return 10;                     // tam apaz — maksimum
+  if(rel < 145) return Math.round(10-(rel-100)/9); // geniş apaz: 10→5
+  return Math.round(5-(rel-145)/35*3);          // pupa: 5→2
+}
+
+function update(){
+  const ba=parseInt(document.getElementById('boatAngle').value);
+  const sa=parseInt(document.getElementById('sailAngle').value);
+  document.getElementById('boatAngleVal').textContent=ba+'°';
+  document.getElementById('sailAngleVal').textContent=sa+'°';
+
+  // Rotate sails visually
+  const mainSail=document.getElementById('mainSail');
+  // Simple visual rotation of sails around mast
+  mainSail.setAttribute('transform',`rotate(${sa*.6},50,65)`);
+
+  const spd=calcSpeed(ba,sa,windDeg);
+  document.getElementById('speedNum').textContent=spd;
+
+  const fb=document.getElementById('feedback');
+  fb.className='';
+  const aname=window._lastAngleName||'';
+  if(spd===0){
+    fb.textContent='😬 '+aname+' — Rüzgara karşı gidiyorsun! Tekne durdu. Buradan çıkmak için zig-zag (tramola) yap.';
+    fb.className='bad';
+  } else if(spd<=3){
+    fb.textContent='🐢 Çok yavaş... ' + (spd===0?'Ölü bölge — rüzgara karşı gidiyorsun!':'Yelken açısını değiştir. Orsa veya apaz pozisyonunu dene.');
+    fb.className='bad';
+  } else if(spd<=6){
+    fb.textContent='👍 '+aname+' — İyi gidiyorsun! Yelken açısını ve tekne yönünü ince ayar yap...';
+    fb.className='';
+  } else if(spd<=8){
+    fb.textContent='🌬️ Apaz seyri — tam rüzgar etkisinde!';
+    fb.className='good';
+  } else {
+    fb.textContent='🎉 MÜKEMMEL! Tam Apaz (90°) — en hızlı rota! Optimist ve ILCA için ideal!';
+    fb.className='perfect';
+    if(!winGiven){
+      winGiven=true;
+      setTimeout(()=>{
+        document.getElementById('winPanel').style.display='block';
+        document.getElementById('winPanel').scrollIntoView({behavior:'smooth'});
+        localStorage.setItem('badge_yelken','1');
+      },1000);
+    }
+  }
+}
+update();
+</script>
+</body>
+</html>

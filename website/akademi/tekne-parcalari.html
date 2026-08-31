@@ -1,0 +1,327 @@
+<!DOCTYPE html>
+<html lang="tr">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Tekne Parçaları — Deniz Akademisi</title>
+<style>
+:root{--ocean:#0077b6;--deep:#023e8a;--mint:#00F5D4;--sun:#FFD700;--orange:#FF6B35;--dark:#0D2137;}
+*{margin:0;padding:0;box-sizing:border-box;}
+body{font-family:'Segoe UI',system-ui,sans-serif;background:linear-gradient(180deg,#010d1f,#023e8a);color:#fff;min-height:100vh;}
+@media(prefers-reduced-motion:reduce){*,*::before,*::after{animation-duration:.01ms!important;}}
+
+nav{display:flex;align-items:center;justify-content:space-between;padding:1rem 1.5rem;background:rgba(0,0,0,.3);backdrop-filter:blur(12px);position:sticky;top:0;z-index:100;}
+nav a{color:rgba(255,255,255,.8);text-decoration:none;font-size:.85rem;font-weight:600;}
+.back{background:rgba(255,255,255,.1);border:1px solid rgba(255,255,255,.2);padding:.4rem .9rem;border-radius:50px;}
+
+.wrap{max-width:800px;margin:0 auto;padding:2rem 1.5rem;}
+.title{text-align:center;margin-bottom:1.75rem;}
+.title h1{font-size:clamp(1.8rem,5vw,2.8rem);font-weight:900;margin-bottom:.4rem;}
+.title p{color:rgba(255,255,255,.6);font-size:.88rem;}
+
+/* Mode toggle */
+.mode-row{display:flex;gap:.75rem;justify-content:center;margin-bottom:1.5rem;}
+.mode-btn{background:rgba(255,255,255,.08);border:1.5px solid rgba(255,255,255,.15);color:rgba(255,255,255,.65);border-radius:50px;padding:.5rem 1.2rem;font-size:.8rem;font-weight:700;cursor:pointer;transition:all .2s;}
+.mode-btn.active{background:rgba(0,245,212,.15);border-color:rgba(0,245,212,.4);color:var(--mint);}
+
+/* Boat SVG container */
+.boat-scene{
+  background:linear-gradient(180deg,#87ceeb 0%,#c8e8f5 40%,#0077b6 41%,#023e8a 100%);
+  border-radius:20px;position:relative;overflow:visible;
+  margin-bottom:1.5rem;min-height:280px;
+  display:flex;align-items:center;justify-content:center;
+  padding:1rem 0;
+}
+#boatSvg{width:min(500px,96%);position:relative;z-index:2;filter:drop-shadow(0 6px 20px rgba(0,0,0,.3));touch-action:manipulation;}
+@media(max-width:400px){.boat-scene{min-height:220px;}}
+
+/* Hotspot labels */
+.hs-label{
+  position:absolute;background:rgba(1,14,40,.85);border:1.5px solid rgba(0,245,212,.5);
+  border-radius:50px;padding:.3rem .75rem;font-size:.72rem;font-weight:800;
+  color:var(--mint);cursor:pointer;white-space:nowrap;z-index:10;
+  transition:all .2s;pointer-events:auto;
+}
+.hs-label:hover,.hs-label.active{background:rgba(0,180,216,.25);box-shadow:0 0 16px rgba(0,245,212,.3);}
+.hs-dot{
+  position:absolute;width:14px;height:14px;border-radius:50%;
+  background:var(--mint);border:2px solid #fff;z-index:11;cursor:pointer;
+  animation:pulse 2s ease-in-out infinite;
+}
+@keyframes pulse{0%,100%{box-shadow:0 0 0 0 rgba(0,245,212,.6);}50%{box-shadow:0 0 0 8px rgba(0,245,212,0);}}
+.hs-line{
+  position:absolute;border-left:1.5px dashed rgba(0,245,212,.4);
+  transform-origin:top;z-index:9;pointer-events:none;
+}
+
+/* Info box */
+#infoBox{
+  background:rgba(255,255,255,.07);border:1.5px solid rgba(0,245,212,.25);
+  border-radius:18px;padding:1.5rem;margin-bottom:1.5rem;min-height:130px;
+  transition:all .3s;
+}
+.info-header{display:flex;align-items:center;gap:.75rem;margin-bottom:.6rem;}
+.info-ico{font-size:2rem;}
+.info-name{font-size:1.15rem;font-weight:900;}
+.info-def{color:rgba(255,255,255,.7);font-size:.87rem;line-height:1.75;margin-bottom:.5rem;}
+.info-fun{font-size:.8rem;background:rgba(255,214,0,.08);border-left:3px solid var(--sun);padding:.5rem .75rem;border-radius:0 8px 8px 0;color:rgba(255,255,255,.6);font-style:italic;}
+
+/* Quiz mode */
+#quizPanel{display:none;}
+.quiz-q{background:rgba(255,255,255,.07);border:1.5px solid rgba(255,255,255,.12);border-radius:18px;padding:1.5rem;margin-bottom:1rem;}
+.quiz-q h3{font-size:.95rem;font-weight:800;margin-bottom:1rem;color:var(--sun);}
+.quiz-opts{display:flex;flex-direction:column;gap:.6rem;}
+.qopt{background:rgba(255,255,255,.06);border:1.5px solid rgba(255,255,255,.1);border-radius:12px;padding:.8rem 1.1rem;font-size:.85rem;font-weight:700;cursor:pointer;text-align:left;color:#fff;transition:all .2s;}
+.qopt:hover{background:rgba(255,255,255,.12);}
+.qopt.correct{background:rgba(0,245,212,.15);border-color:rgba(0,245,212,.5);color:var(--mint);}
+.qopt.wrong{background:rgba(231,76,60,.12);border-color:rgba(231,76,60,.4);color:#e74c3c;}
+.quiz-score{text-align:center;background:rgba(255,214,0,.08);border:1.5px solid rgba(255,214,0,.25);border-radius:14px;padding:1.25rem;margin-top:.75rem;}
+
+/* Progress */
+.progress-row{display:flex;gap:.5rem;justify-content:center;margin-bottom:1.5rem;flex-wrap:wrap;}
+.prog-dot{width:28px;height:28px;border-radius:50%;border:2px solid rgba(255,255,255,.2);display:flex;align-items:center;justify-content:center;font-size:.65rem;font-weight:800;color:rgba(255,255,255,.3);transition:all .3s;}
+.prog-dot.seen{border-color:rgba(0,245,212,.5);color:var(--mint);background:rgba(0,245,212,.1);}
+
+/* Win */
+#winPanel{display:none;text-align:center;background:rgba(255,214,0,.08);border:2px solid rgba(255,214,0,.35);border-radius:20px;padding:2.5rem;margin-top:1.25rem;}
+#winPanel h2{color:var(--sun);font-size:1.7rem;margin-bottom:.4rem;}
+.btn-nxt{display:inline-block;background:linear-gradient(135deg,var(--orange),var(--sun));color:var(--dark);padding:.85rem 2rem;border-radius:50px;text-decoration:none;font-weight:800;}
+</style>
+</head>
+<body>
+<nav>
+  <a href="/" class="nav-logo" style="display:flex;align-items:center;gap:.55rem;text-decoration:none;">
+    <svg width="34" height="38" viewBox="0 0 105 115" xmlns="http://www.w3.org/2000/svg">
+      <defs>
+        <linearGradient id="nl1" x1="0%" y1="0%" x2="100%" y2="0%"><stop offset="0%" stop-color="#152f88"/><stop offset="40%" stop-color="#60b0f0"/><stop offset="100%" stop-color="#1a3a8f"/></linearGradient>
+        <linearGradient id="nl2" x1="0%" y1="0%" x2="100%" y2="0%"><stop offset="0%" stop-color="#1535a0"/><stop offset="45%" stop-color="#b0dcf8"/><stop offset="100%" stop-color="#1a3c90"/></linearGradient>
+        <linearGradient id="nlh" x1="0%" y1="0%" x2="100%" y2="0%"><stop offset="0%" stop-color="#64c4f5"/><stop offset="50%" stop-color="#2d6be4"/><stop offset="100%" stop-color="#64c4f5"/></linearGradient>
+      </defs>
+      <path d="M 47,5 L 8,88 L 44,88 Z" fill="url(#nl1)"/>
+      <path d="M 48.5,22 L 25,89 L 57,89 Z" fill="url(#nl2)"/>
+      <path d="M 50,40 L 42,90 L 69,90 Z" fill="url(#nl2)"/>
+      <path d="M 51,57 L 56,90 L 77,90 Z" fill="url(#nl1)"/>
+      <path d="M 6,93 L 82,93 L 79,100 Q 44,108 11,100 Z" fill="url(#nlh)"/>
+    </svg>
+    <span style="color:#fff;font-size:.82rem;font-weight:800;line-height:1.2;">MYK<br><span style="font-weight:500;font-size:.65rem;opacity:.6;font-style:italic;">Mersin Yelken · 1987</span></span>
+  </a>
+  <button class="ham" id="ham" onclick="toggleNav()" aria-label="Menü" aria-expanded="false">☰</button>
+  <div class="nav-links" id="navLinks">
+    <a href="/akademi/">🎓 Akademi</a>
+    <a href="/egitimler.html">⛵ Eğitimler</a>
+    <a href="/hakkimizda.html">🏛 Hakkımızda</a>
+    <a href="/iletisim.html">📬 İletişim</a>
+  </div>
+  <div class="nav-actions" id="navActions">
+    <a href="https://panel.mersinyelken.org.tr/login?club=mersin-yelken" class="nav-btn-outline">Üye Girişi</a>
+    <a href="https://panel.mersinyelken.org.tr/login?club=mersin-yelken" class="nav-cta">Yönetici</a>
+  </div>
+</nav>
+
+<div class="wrap">
+  <div class="title">
+    <h1>⛵ Tekne Parçaları</h1>
+    <p>Optimist teknenin her parçasını tıklayarak öğren!</p>
+  </div>
+
+  <div class="mode-row">
+    <button class="mode-btn active" onclick="setMode('keşif',this)">🔍 Keşif Modu</button>
+    <button class="mode-btn" onclick="setMode('quiz',this)">🧠 Quiz Modu</button>
+  </div>
+  <div class="progress-row" id="progressRow"></div>
+
+  <!-- Boat scene -->
+  <div class="boat-scene" id="boatScene">
+    <svg id="boatSvg" viewBox="0 0 500 370" xmlns="http://www.w3.org/2000/svg">
+      <!-- Hull -->
+      <path id="svg-hull" d="M 80,250 Q 250,295 420,250 L 395,280 Q 250,328 105,280 Z" fill="#1a5276" stroke="rgba(255,255,255,.3)" stroke-width="2"/>
+      <!-- Keel stripe -->
+      <path d="M 105,280 Q 250,318 395,280 L 393,287 Q 250,326 107,287 Z" fill="#e74c3c" stroke="none"/>
+      <!-- Main sail -->
+      <polygon id="svg-mainsail" points="250,20 250,248 100,235" fill="rgba(255,255,255,.88)" stroke="rgba(200,220,255,.4)" stroke-width="1"/>
+      <!-- Optimist tek yelkenlidir — flok (jib) yok -->
+      <!-- Mast -->
+      <line id="svg-mast" x1="250" y1="15" x2="250" y2="250" stroke="#dde6ff" stroke-width="6" stroke-linecap="round"/>
+      <!-- Boom -->
+      <line id="svg-boom" x1="250" y1="247" x2="127" y2="247" stroke="#bbd" stroke-width="4" stroke-linecap="round"/>
+      <!-- Centerboard -->
+      <path id="svg-centerboard" d="M 248,282 L 244,340 L 258,340 L 254,282 Z" fill="#7f8c8d" stroke="rgba(255,255,255,.3)" stroke-width="1.5"/>
+      <!-- Rudder -->
+      <path id="svg-rudder" d="M 390,280 L 385,325 L 400,325 L 397,280 Z" fill="#95a5a6" stroke="rgba(255,255,255,.25)" stroke-width="1"/>
+      <!-- Tiller -->
+      <line id="svg-tiller" x1="390" y1="285" x2="345" y2="275" stroke="#bbd" stroke-width="3" stroke-linecap="round"/>
+      <!-- Halyard (rope from top of mast) -->
+      <line id="svg-halyard" x1="250" y1="18" x2="100" y2="237" stroke="rgba(255,200,100,.5)" stroke-width="1.5" stroke-dasharray="6,4"/>
+      <!-- Cleat (small detail on hull) -->
+      <rect id="svg-iskota" x="160" y="240" width="20" height="8" rx="4" fill="rgba(255,255,255,.6)"/>
+      <!-- Deck -->
+      <path id="svg-deck" d="M 105,252 Q 250,268 395,252" stroke="rgba(255,255,255,.15)" stroke-width="2" fill="none"/>
+    </svg>
+  </div>
+
+  <!-- Info box -->
+  <div id="infoBox">
+    <div class="info-header">
+      <span class="info-ico" id="infoIco">👆</span>
+      <span class="info-name" id="infoName">Bir parçaya tıkla!</span>
+    </div>
+    <div class="info-def" id="infoDef">Yukarıdaki teknede herhangi bir parçaya tıklayarak o parçayı keşfet.</div>
+    <div class="info-fun" id="infoFun" style="display:none;"></div>
+  </div>
+
+  <!-- Quiz panel -->
+  <div id="quizPanel">
+    <div id="quizContent"></div>
+  </div>
+
+  <div id="winPanel">
+    <h2>⚓ Denizci Adayı!</h2>
+    <p>Tüm tekne parçalarını keşfettin! <strong>Tekne Bilgini</strong> rozetini kazandın!</p>
+    <a href="/" class="btn-nxt">🏅 Tüm Rozetlere →</a>
+  </div>
+</div>
+
+<script>
+const PARTS={
+  'svg-mast':    {name:'Direk',ico:'🏗️',def:'Teknenin tam ortasına dik olarak yerleştirilen uzun metal ya da karbon boru. Ana yelkeni taşır.',fun:'Optimist direkleri genellikle 4-5 metre uzunluğundadır — bazen çocukların boyundan iki kat uzun!'},
+  'svg-mainsail':{name:'Ana Yelken',ico:'⛵',def:'Rüzgarı yakalayan büyük üçgen kumaş. İskota halatı ile açılıp kapanır. Teknenin motoru sayılır! Optimist\'te yalnızca ana yelken vardır.',fun:'İyi bir yelken kumaşı uçak kanatlarıyla aynı malzemeden yapılır.'},
+  'svg-boom':    {name:'Bumba',ico:'📏',def:'Yelkenin alt kenarına bağlı yatay spar. Tramola ve kavança manevralarında borda değiştirirken karşı tarafa geçer.',fun:'"Bumba\'ya dikkat!" denizcilerin en bilinen uyarısıdır. Başına çarptı mı çok acıtır!'},
+  'svg-hull':    {name:'Tekne Gövdesi',ico:'🚤',def:'Suda yüzen, içinde oturduğunuz taşıyıcı yapı. Plastik, fiberglas ya da ahşaptan yapılabilir.',fun:'Optimist tekne gövdesi kasıtlı olarak köşeli yapılmış — çocukların kolayca taşıyabilmesi için!'},
+  'svg-centerboard':{name:'Salma (Orza tahtası)',ico:'📐',def:'Teknenin altından sokulan kanatçık. Teknenin yana sürüklenmesini önler, rüzgar karşısında tutunmayı sağlar. Optimist\'te "salma" ya da "orza tahtası" denir.',fun:'Sığ sulara girilirken salma yukarı kaldırılır — tekne korunur.'},
+  'svg-rudder':  {name:'Dümen',ico:'🔧',def:'Teknenin arkasındaki su altı kanadı. Yönü değiştirmek için kullanılır.',fun:'Eski gemilerde dümen 6 adam tarafından çevrilirdi. Optimist\'te tek parmak yeterli!'},
+  'svg-tiller':  {name:'Dümen Yekesi',ico:'🎮',def:'Dümenle bağlı tutma kolu. Sağa bastırınca tekne sola döner — aksi gibi görünse de alışınca kolay!',fun:'Yeke hafifçe tutulur, sıkıca kavranmaz. Rahat eller = iyi manevra.'},
+  'svg-halyard': {name:'Drisa',ico:'🪢',def:'Yelkeni direğin tepesine çekmeye yarayan halat. Drisa ile yelken çekilir, gevşetilince yelken iner.',fun:'Profesyonel yelkenlerde halatlar farklı renklere boyanır — karanlıkta bile doğrusu tutulsun diye.'},
+  'svg-iskota':  {name:'Pala (Bağlama)',ico:'🔗',def:'İskota halatının sabitlendiği metal ya da plastik tutturma elemanı. İskota halatı buradan geçirilir, sıkıştırılır ya da serbest bırakılır.',fun:'Pala olmadan iskotayı elle tutmak zorunda kalırsın — uzun süre çok yorucu!'},
+  'svg-deck':    {name:'Güverte',ico:'🛹',def:'Teknenin üst yatay yüzeyi. Üzerinde durulur veya oturulur.',fun:'Küçük Optimistlerde güverte yok gibi — adeta bir sandal içinde yelken yapılıyor!'},
+};
+
+const partIds=Object.keys(PARTS);
+let seenParts=new Set();
+let currentMode='keşif';
+let badgeGiven=false;
+
+// Build progress dots
+const progRow=document.getElementById('progressRow');
+partIds.forEach((id,i)=>{
+  const dot=document.createElement('div');
+  dot.className='prog-dot';
+  dot.id='dot-'+id;
+  dot.title=PARTS[id].name;
+  dot.textContent=i+1;
+  progRow.appendChild(dot);
+});
+
+// Add click handlers to SVG elements
+partIds.forEach(id=>{
+  const el=document.getElementById(id);
+  if(!el)return;
+  el.style.cursor='pointer';
+  el.addEventListener('click',()=>showPart(id));
+  // Hover highlight
+  el.addEventListener('mouseenter',()=>el.style.opacity='0.75');
+  el.addEventListener('mouseleave',()=>el.style.opacity='1');
+});
+
+function showPart(id){
+  const p=PARTS[id];
+  if(!p)return;
+  document.getElementById('infoIco').textContent=p.ico;
+  document.getElementById('infoName').textContent=p.name;
+  document.getElementById('infoDef').textContent=p.def;
+  const funEl=document.getElementById('infoFun');
+  funEl.style.display='block';
+  funEl.textContent='💡 '+p.fun;
+  seenParts.add(id);
+  document.getElementById('dot-'+id).classList.add('seen');
+  // Reset all highlights
+  partIds.forEach(i=>{
+    const el=document.getElementById(i);
+    if(el)el.style.filter='';
+  });
+  const el=document.getElementById(id);
+  if(el)el.style.filter='brightness(1.4) drop-shadow(0 0 8px rgba(0,245,212,.6))';
+
+  // Win check
+  if(seenParts.size>=8&&!badgeGiven){
+    badgeGiven=true;
+    localStorage.setItem('badge_tekne_parcalari','1');
+    setTimeout(()=>{
+      document.getElementById('winPanel').style.display='block';
+      document.getElementById('winPanel').scrollIntoView({behavior:'smooth'});
+    },400);
+  }
+}
+
+// QUIZ MODE
+const QUIZ=[
+  {q:'Yelkeni direkten yukarı çeken halat hangisi?',opts:['İskota','Drisa','Bumba','Dümen yekesi'],ans:1},
+  {q:'Teknenin altında yana sürüklenmeyi önleyen kanatçığa ne denir?',opts:['Dümen','Drisa','Salma / Orza tahtası','Güverte'],ans:2},
+  {q:'Tramola/kavança sırasında borda değiştirirken karşıya geçen parça?',opts:['Direk','Bumba','Ana yelken','Drisa'],ans:1},
+  {q:'Teknenin yönünü değiştirmek için tuttuğumuz kol ne?',opts:['İskota','Salma','Güverte','Dümen yekesi'],ans:3},
+  {q:'Optimist tek yelkenlidir — taşımadığı yelken hangisi?',opts:['Ana Yelken','Flok (Jib)','Ana yelken doğru, flok yanlış','Hepsi var'],ans:1},
+  {q:'Teknenin suda yüzen taşıyıcı dış yapısı ne?',opts:['Güverte','Direk','Gövde','Salma'],ans:2},
+  {q:'İskota halatının sabitlendiği tutturma elemanına ne denir?',opts:['Drisa','Pala (bağlama)','Dümen','Bumba'],ans:1},
+  {q:'Dümen suyun altında hangi görevi yapar?',opts:['Hız artırır','Yön değiştirir','Yelkeni açar','Salma kaldırır'],ans:1},
+];
+
+let qIdx=0, qScore=0;
+
+function buildQuiz(){
+  const q=QUIZ[qIdx];
+  const html=`
+    <div class="quiz-q">
+      <h3>Soru ${qIdx+1}/${QUIZ.length}: ${q.q}</h3>
+      <div class="quiz-opts" id="quizOpts">
+        ${q.opts.map((o,i)=>`<button class="qopt" onclick="answerQ(${i})">${String.fromCharCode(65+i)}. ${o}</button>`).join('')}
+      </div>
+    </div>
+    <div class="quiz-score">⭐ Puan: <strong>${qScore}</strong> / ${qIdx*10}</div>
+  `;
+  document.getElementById('quizContent').innerHTML=html;
+}
+
+function answerQ(idx){
+  const q=QUIZ[qIdx];
+  const opts=document.querySelectorAll('.qopt');
+  opts.forEach((o,i)=>{
+    o.disabled=true;
+    if(i===q.ans)o.classList.add('correct');
+    else if(i===idx&&idx!==q.ans)o.classList.add('wrong');
+  });
+  if(idx===q.ans)qScore+=10;
+  setTimeout(()=>{
+    qIdx++;
+    if(qIdx>=QUIZ.length){
+      // Quiz done
+      if(qScore>=60&&!badgeGiven){
+        badgeGiven=true;
+        localStorage.setItem('badge_tekne_parcalari','1');
+        document.getElementById('winPanel').style.display='block';
+      }
+      document.getElementById('quizContent').innerHTML=`
+        <div class="quiz-q" style="text-align:center;">
+          <div style="font-size:3rem;margin-bottom:.75rem;">🎉</div>
+          <h3>Quiz bitti!</h3>
+          <p style="font-size:.9rem;color:rgba(255,255,255,.65);margin-top:.5rem">Toplam puan: <strong style="color:var(--sun)">${qScore} / ${QUIZ.length*10}</strong></p>
+          <button class="qopt" onclick="restartQuiz()" style="margin-top:1rem;text-align:center;">🔄 Tekrar Oyna</button>
+        </div>`;
+      return;
+    }
+    buildQuiz();
+  },1000);
+}
+
+function restartQuiz(){qIdx=0;qScore=0;buildQuiz();}
+
+function setMode(mode,btn){
+  currentMode=mode;
+  document.querySelectorAll('.mode-btn').forEach(b=>b.classList.remove('active'));
+  btn.classList.add('active');
+  document.getElementById('infoBox').style.display=mode==='keşif'?'block':'none';
+  const qp=document.getElementById('quizPanel');
+  if(mode==='quiz'){qp.style.display='block';qIdx=0;qScore=0;buildQuiz();}
+  else qp.style.display='none';
+}
+</script>
+</body>
+</html>

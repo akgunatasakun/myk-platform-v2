@@ -1,0 +1,317 @@
+<!DOCTYPE html>
+<html lang="tr">
+<head>
+<link rel="icon" type="image/png" href="/favicon.png" />
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>İletişim — Mersin Yelken Kulübü</title>
+<meta name="description" content="Mersin Yelken Yat ve Su Sporları Kulübü ile iletişime geçin. Konum, çalışma saatleri ve iletişim formu.">
+<style>
+:root{--ocean:#0077b6;--deep:#023e8a;--mint:#00F5D4;--sun:#FFD700;--orange:#FF6B35;--dark:#0D2137;}
+*{margin:0;padding:0;box-sizing:border-box;}
+body{font-family:'Segoe UI',system-ui,sans-serif;background:#0a0e1a;color:#fff;min-height:100vh;}
+@media(prefers-reduced-motion:reduce){*,*::before,*::after{animation-duration:.01ms!important;transition-duration:.01ms!important;}}
+
+nav{display:flex;align-items:center;justify-content:space-between;padding:1rem 2rem;background:rgba(0,0,0,.5);backdrop-filter:blur(12px);position:sticky;top:0;z-index:100;border-bottom:1px solid rgba(255,255,255,.08);}
+.nav-logo{font-weight:900;font-size:1.1rem;color:var(--mint);text-decoration:none;}
+.nav-links{display:flex;gap:1.5rem;}
+.nav-links a{color:rgba(255,255,255,.7);text-decoration:none;font-size:.85rem;font-weight:600;transition:color .2s;}
+.nav-links a:hover,.nav-links a.active{color:var(--mint);}
+.nav-cta{background:linear-gradient(135deg,var(--ocean),var(--mint));color:#fff!important;padding:.4rem 1rem;border-radius:50px;}
+.ham{display:none;background:none;border:none;color:#fff;font-size:1.5rem;cursor:pointer;padding:.3rem;line-height:1;}
+@media(max-width:680px){
+  .ham{display:block;}
+  .nav-links{display:none;flex-direction:column;position:absolute;top:100%;left:0;right:0;background:rgba(1,14,40,.97);padding:1rem 2rem 1.5rem;border-bottom:1px solid rgba(255,255,255,.1);gap:.85rem;z-index:99;}
+  .nav-links.open{display:flex;}
+  nav{position:sticky;flex-wrap:wrap;}
+}
+
+.hero{background:linear-gradient(180deg,#011e4a 0%,#023e8a 100%);padding:5rem 2rem 4rem;text-align:center;}
+.hero-tag{display:inline-block;background:rgba(0,245,212,.12);border:1px solid rgba(0,245,212,.3);color:var(--mint);padding:.35rem .9rem;border-radius:50px;font-size:.75rem;font-weight:700;letter-spacing:1.5px;text-transform:uppercase;margin-bottom:1.25rem;}
+.hero h1{font-size:clamp(2rem,6vw,3.5rem);font-weight:900;margin-bottom:.75rem;}
+.hero p{color:rgba(255,255,255,.65);font-size:.95rem;max-width:480px;margin:0 auto;line-height:1.7;}
+
+section{padding:4rem 2rem;}
+.container{max-width:960px;margin:0 auto;}
+
+/* Grid layout */
+.contact-grid{display:grid;grid-template-columns:1fr 1.3fr;gap:2.5rem;align-items:start;}
+@media(max-width:680px){.contact-grid{grid-template-columns:1fr;}}
+
+/* Info panel */
+.info-panel{}
+.info-card{background:rgba(255,255,255,.06);border:1.5px solid rgba(255,255,255,.1);border-radius:20px;padding:1.5rem;margin-bottom:1.25rem;transition:border-color .3s;}
+.info-card:hover{border-color:rgba(0,245,212,.25);}
+.info-ico{font-size:1.8rem;margin-bottom:.6rem;}
+.info-label{font-size:.7rem;font-weight:700;text-transform:uppercase;letter-spacing:1.5px;color:rgba(255,255,255,.4);margin-bottom:.3rem;}
+.info-val{font-size:.92rem;font-weight:700;line-height:1.65;}
+.info-val a{color:var(--mint);text-decoration:none;}
+.info-val a:hover{text-decoration:underline;}
+.info-sub{font-size:.78rem;color:rgba(255,255,255,.5);margin-top:.2rem;line-height:1.6;}
+
+/* Social */
+.social-row{display:flex;gap:.75rem;margin-top:1.25rem;}
+.soc-btn{display:flex;align-items:center;gap:.5rem;background:rgba(255,255,255,.07);border:1.5px solid rgba(255,255,255,.13);border-radius:12px;padding:.7rem 1.1rem;text-decoration:none;color:#fff;font-size:.82rem;font-weight:700;transition:all .2s;}
+.soc-btn:hover{background:rgba(255,255,255,.14);border-color:rgba(255,255,255,.25);}
+
+/* FORM */
+.form-panel{background:rgba(255,255,255,.05);border:1.5px solid rgba(255,255,255,.1);border-radius:24px;padding:2.5rem;}
+.form-title{font-size:1.2rem;font-weight:900;margin-bottom:.5rem;}
+.form-sub{font-size:.82rem;color:rgba(255,255,255,.5);margin-bottom:1.75rem;line-height:1.6;}
+.field{margin-bottom:1.25rem;}
+.field label{display:block;font-size:.78rem;font-weight:700;color:rgba(255,255,255,.6);margin-bottom:.5rem;text-transform:uppercase;letter-spacing:.8px;}
+.field input,.field select,.field textarea{
+  width:100%;background:rgba(255,255,255,.07);border:1.5px solid rgba(255,255,255,.13);border-radius:12px;
+  color:#fff;padding:.85rem 1rem;font-size:.9rem;font-family:inherit;outline:none;
+  transition:border-color .2s;
+}
+.field input:focus,.field select:focus,.field textarea:focus{border-color:rgba(0,245,212,.5);background:rgba(255,255,255,.09);}
+.field select option{background:#0a1628;color:#fff;}
+.field textarea{resize:vertical;min-height:110px;}
+.field-row{display:grid;grid-template-columns:1fr 1fr;gap:1rem;}
+@media(max-width:480px){.field-row{grid-template-columns:1fr;}}
+.form-check{display:flex;gap:.75rem;align-items:flex-start;margin-bottom:1.5rem;font-size:.8rem;color:rgba(255,255,255,.6);line-height:1.6;}
+.form-check input{width:18px;height:18px;flex-shrink:0;margin-top:.1rem;accent-color:var(--mint);}
+.form-check a{color:var(--mint);}
+.btn-send{width:100%;background:linear-gradient(135deg,var(--orange),var(--sun));color:var(--dark);border:none;border-radius:14px;padding:1rem;font-size:.95rem;font-weight:900;cursor:pointer;transition:transform .2s,box-shadow .2s;}
+.btn-send:hover{transform:translateY(-2px);box-shadow:0 12px 28px rgba(255,107,53,.35);}
+#successMsg{display:none;text-align:center;background:rgba(0,245,212,.1);border:1.5px solid rgba(0,245,212,.3);border-radius:14px;padding:1.5rem;color:var(--mint);font-weight:700;margin-top:1rem;}
+
+/* MAP PLACEHOLDER */
+.map-wrap{background:linear-gradient(135deg,#011e4a,#023e8a);border:1.5px solid rgba(255,255,255,.1);border-radius:20px;height:280px;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:.75rem;font-size:.88rem;color:rgba(255,255,255,.55);text-align:center;padding:1.5rem;margin-top:2.5rem;}
+.map-wrap .map-pin{font-size:3rem;}
+.map-wrap a{color:var(--mint);font-weight:700;text-decoration:none;}
+.map-wrap a:hover{text-decoration:underline;}
+
+/* HOURS */
+.hours-grid{display:grid;grid-template-columns:1fr 1fr;gap:1rem;margin-top:1rem;}
+@media(max-width:480px){.hours-grid{grid-template-columns:1fr;}}
+.hour-card{background:rgba(255,255,255,.05);border:1px solid rgba(255,255,255,.1);border-radius:14px;padding:1.1rem;}
+.hour-day{font-size:.72rem;text-transform:uppercase;letter-spacing:1px;color:rgba(255,255,255,.45);margin-bottom:.25rem;}
+.hour-time{font-size:.92rem;font-weight:800;}
+.hour-note{font-size:.74rem;color:rgba(255,255,255,.45);margin-top:.2rem;}
+
+footer{background:#030a14;border-top:1px solid rgba(255,255,255,.07);padding:2rem;text-align:center;color:rgba(255,255,255,.35);font-size:.8rem;}
+
+.hours-season{margin-bottom:.75rem;}
+.season-label{font-size:.75rem;font-weight:700;color:#64c4f5;letter-spacing:.06em;margin-bottom:.45rem;}
+.hours-row{display:flex;justify-content:space-between;align-items:center;padding:.3rem 0;border-bottom:1px solid rgba(255,255,255,.06);}
+.hours-row:last-child{border-bottom:none;}
+.day-range{font-size:.82rem;color:rgba(255,255,255,.7);}
+.time-val{font-size:.82rem;font-weight:700;color:#ffd700;}
+.hours-divider{height:1px;background:rgba(255,255,255,.1);margin:.75rem 0;}
+.hours-title{font-weight:700;font-size:.82rem;color:rgba(255,255,255,.6);letter-spacing:.08em;text-transform:uppercase;margin-bottom:.8rem;}
+</style>
+</head>
+<body>
+<nav>
+  <a href="/" class="nav-logo" style="display:flex;align-items:center;gap:.55rem;text-decoration:none;">
+    <svg width="34" height="38" viewBox="0 0 105 115" xmlns="http://www.w3.org/2000/svg">
+      <defs>
+        <linearGradient id="nl1" x1="0%" y1="0%" x2="100%" y2="0%"><stop offset="0%" stop-color="#152f88"/><stop offset="40%" stop-color="#60b0f0"/><stop offset="100%" stop-color="#1a3a8f"/></linearGradient>
+        <linearGradient id="nl2" x1="0%" y1="0%" x2="100%" y2="0%"><stop offset="0%" stop-color="#1535a0"/><stop offset="45%" stop-color="#b0dcf8"/><stop offset="100%" stop-color="#1a3c90"/></linearGradient>
+        <linearGradient id="nlh" x1="0%" y1="0%" x2="100%" y2="0%"><stop offset="0%" stop-color="#64c4f5"/><stop offset="50%" stop-color="#2d6be4"/><stop offset="100%" stop-color="#64c4f5"/></linearGradient>
+      </defs>
+      <path d="M 47,5 L 8,88 L 44,88 Z" fill="url(#nl1)"/>
+      <path d="M 48.5,22 L 25,89 L 57,89 Z" fill="url(#nl2)"/>
+      <path d="M 50,40 L 42,90 L 69,90 Z" fill="url(#nl2)"/>
+      <path d="M 51,57 L 56,90 L 77,90 Z" fill="url(#nl1)"/>
+      <path d="M 6,93 L 82,93 L 79,100 Q 44,108 11,100 Z" fill="url(#nlh)"/>
+    </svg>
+    <span style="color:#fff;font-size:.82rem;font-weight:800;line-height:1.2;">MYK<br><span style="font-weight:500;font-size:.65rem;opacity:.6;font-style:italic;">Mersin Yelken · 1987</span></span>
+  </a>
+  <button class="ham" id="ham" onclick="toggleNav()" aria-label="Menü" aria-expanded="false">☰</button>
+  <div class="nav-links" id="navLinks">
+    <a href="/akademi/">🎓 Akademi</a>
+    <a href="/egitimler.html">⛵ Eğitimler</a>
+    <a href="/hakkimizda.html">🏛 Hakkımızda</a>
+    <a href="/iletisim.html">📬 İletişim</a>
+  </div>
+  <div class="nav-actions" id="navActions">
+    <a href="https://panel.mersinyelken.org.tr/login?club=mersin-yelken" class="nav-btn-outline">Üye Girişi</a>
+    <a href="https://panel.mersinyelken.org.tr/login?club=mersin-yelken" class="nav-cta">Yönetici</a>
+  </div>
+</nav>
+
+<div class="hero">
+  <span class="hero-tag">İletişim</span>
+  <h1>Sizi Duymak İsteriz</h1>
+  <p>Kurs hakkında soru, üyelik bilgisi, sponsorluk teklifi ya da sadece merhaba — kapımız açık.</p>
+</div>
+
+<section>
+  <div class="container">
+    <div class="contact-grid">
+
+      <!-- INFO -->
+      <div class="info-panel">
+        <div class="info-card">
+          <div class="info-ico">📧</div>
+          <div class="info-label">E-posta</div>
+          <div class="info-val"><a href="mailto:yonetim@mersinyelken.kulubu.org.tr">yonetim@mersinyelken.kulubu.org.tr</a></div>
+          <div class="info-sub">Genel sorular için · Genellikle 24 saat içinde yanıt</div>
+        </div>
+        <div class="info-card">
+          <div class="info-ico">📍</div>
+          <div class="info-label">Adres</div>
+          <div class="info-val">Mersin Yelken Yat ve Su Sporları Kulübü<br>Pirireis, 1140. Sk. No:2<br>33110 Yenişehir / MERSİN</div>
+          <div class="info-sub">Servis yok, bireysel ulaşım · Ücretsiz otopark</div>
+        </div>
+        <div class="info-card">
+          <div class="info-ico">📞</div>
+          <div class="info-label">Telefon</div>
+          <div class="info-val"><a href="tel:+903243278277">+90 324 327 82 77</a></div>
+          <div class="info-sub">Yaz 09:00–18:00 · Kış 09:00–17:00 · Her gün açık</div>
+        </div>
+        <div class="info-card">
+          <div class="info-ico">💛</div>
+          <div class="info-label">Sponsorluk</div>
+          <div class="info-val"><a href="mailto:sponsorluk@mersinyelken.kulubu.org.tr">sponsorluk@mersinyelken.kulubu.org.tr</a></div>
+          <div class="info-sub">Kurumsal iş birliği ve etkinlik sponsorluğu için</div>
+        </div>
+
+        <div class="info-label" style="margin-top:1.5rem;margin-bottom:.6rem;">Sosyal Medya</div>
+        <div class="social-row">
+          <a href="https://www.facebook.com/mersinyelken" target="_blank" rel="noopener" class="soc-btn">📘 Facebook</a>
+          <a href="https://www.instagram.com/mersinyelken.kulubu" target="_blank" rel="noopener" class="soc-btn">📸 Instagram</a>
+        </div>
+
+        <!-- Çalışma saatleri -->
+        <div class="info-hours">
+          <div class="hours-title">🕐 Çalışma Saatleri</div>
+          <div class="hours-season">
+            <div class="season-label">☀️ Yaz Dönemi (Nisan – Eylül)</div>
+            <div class="hours-row"><span class="day-range">Pazartesi – Cuma</span><span class="time-val">09:00 – 18:00</span></div>
+            <div class="hours-row"><span class="day-range">Cumartesi – Pazar</span><span class="time-val">09:00 – 18:00</span></div>
+          </div>
+          <div class="hours-divider"></div>
+          <div class="hours-season">
+            <div class="season-label">❄️ Kış Dönemi (Ekim – Mart)</div>
+            <div class="hours-row"><span class="day-range">Pazartesi – Cuma</span><span class="time-val">09:00 – 17:00</span></div>
+            <div class="hours-row"><span class="day-range">Cumartesi – Pazar</span><span class="time-val">09:00 – 17:00</span></div>
+          </div></div>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- FORM -->
+      <div class="form-panel">
+        <div class="form-title">✉️ Mesaj Gönder</div>
+        <!-- TODO Faz 3: POST /api/contact → alan doğrulama, rate limit, honeypot, e-posta bildirimi, DB kaydı, KVKK zaman damgası -->
+        <div class="form-sub">Tüm alanları doldurun, size en kısa sürede ulaşalım. <span style="color:rgba(255,180,0,.7);font-size:.75rem;">⚠️ Şu an demo — mesajlar backend aktif olana kadar e-posta ile iletilmiyor.</span></div>
+        <form id="contactForm" onsubmit="handleSubmit(event)">
+          <div class="field-row">
+            <div class="field">
+              <label for="fname">Ad</label>
+              <input type="text" id="fname" name="fname" placeholder="Adınız" required>
+            </div>
+            <div class="field">
+              <label for="lname">Soyad</label>
+              <input type="text" id="lname" name="lname" placeholder="Soyadınız" required>
+            </div>
+          </div>
+          <div class="field">
+            <label for="email">E-posta</label>
+            <input type="email" id="email" name="email" placeholder="ornek@email.com" required>
+          </div>
+          <div class="field">
+            <label for="phone">Telefon (isteğe bağlı)</label>
+            <input type="tel" id="phone" name="phone" placeholder="0 5xx xxx xx xx">
+          </div>
+          <div class="field">
+            <label for="topic">Konu</label>
+            <select id="topic" name="topic" required>
+              <option value="" disabled selected>Seçin…</option>
+              <option>Çocuk Kurs Kaydı</option>
+              <option>Yetişkin Kurs Kaydı</option>
+              <option>Üyelik Bilgisi</option>
+              <option>Engelli Yelken Programı</option>
+              <option>Sponsorluk & İş Birliği</option>
+              <option>Tekne Kiralama</option>
+              <option>Regata & Yarışma</option>
+              <option>Diğer</option>
+            </select>
+          </div>
+          <div class="field">
+            <label for="message">Mesaj</label>
+            <textarea id="message" name="message" placeholder="Sormak istediklerinizi yazın…" required></textarea>
+          </div>
+          <div class="form-check">
+            <input type="checkbox" id="kvkk" required>
+            <label for="kvkk">
+              <a href="/kvkk.html" target="_blank">KVKK Aydınlatma Metni</a>'ni okudum ve kişisel verilerimin işlenmesine onay veriyorum.
+            </label>
+          </div>
+          <button type="submit" class="btn-send">⛵ Mesajı Gönder</button>
+        </form>
+        <div id="successMsg">
+          🎉 Mesajınız alındı! En kısa sürede dönüş yapacağız.
+        </div>
+      </div>
+    </div>
+
+    <!-- Harita placeholder -->
+    <div class="map-wrap">
+      <div class="map-pin">🗺️</div>
+      <div>
+        <strong>Pirireis, 1140. Sk. No:2, Yenişehir / Mersin</strong><br>
+        Pirireis, 1140. Sk. No:2, 33110 Yenişehir / Mersin
+      </div>
+      <a href="https://maps.google.com/?q=Mersin+Yat+Liman%C4%B1" target="_blank" rel="noopener">
+        Google Maps'te Aç →
+      </a>
+    </div>
+  </div>
+</section>
+
+<footer style="background:#030a14;border-top:1px solid rgba(255,255,255,.07);padding:2rem;text-align:center;">
+  <div style="display:flex;align-items:center;justify-content:center;gap:.75rem;margin-bottom:.75rem;">
+    <svg width="28" height="31" viewBox="0 0 105 115" xmlns="http://www.w3.org/2000/svg" opacity=".7">
+      <defs><linearGradient id="fl1" x1="0%" y1="0%" x2="100%" y2="0%"><stop offset="0%" stop-color="#152f88"/><stop offset="100%" stop-color="#60b0f0"/></linearGradient><linearGradient id="flh" x1="0%" y1="0%" x2="100%" y2="0%"><stop offset="0%" stop-color="#64c4f5"/><stop offset="100%" stop-color="#2d6be4"/></linearGradient></defs>
+      <path d="M 47,5 L 8,88 L 44,88 Z" fill="url(#fl1)"/><path d="M 48.5,22 L 25,89 L 57,89 Z" fill="url(#fl1)"/><path d="M 50,40 L 42,90 L 69,90 Z" fill="url(#fl1)"/><path d="M 51,57 L 56,90 L 77,90 Z" fill="url(#fl1)"/><path d="M 6,93 L 82,93 L 79,100 Q 44,108 11,100 Z" fill="url(#flh)"/>
+    </svg>
+    <div style="text-align:left;">
+      <div style="font-weight:800;font-size:.82rem;color:#e8f4ff;">MERSİN YELKEN YAT VE SU SPORLARI KULÜBÜ</div>
+      <div style="font-size:.68rem;color:rgba(255,255,255,.4);">Mersin Sailing Club · 1987 · TYF Lisanslı</div>
+    </div>
+  </div>
+  <div style="display:flex;justify-content:center;gap:1.25rem;flex-wrap:wrap;margin-bottom:.75rem;">
+    <a href="/akademi/" style="color:rgba(255,255,255,.4);font-size:.75rem;text-decoration:none;">Akademi</a>
+    <a href="/egitimler.html" style="color:rgba(255,255,255,.4);font-size:.75rem;text-decoration:none;">Eğitimler</a>
+    <a href="/hakkimizda.html" style="color:rgba(255,255,255,.4);font-size:.75rem;text-decoration:none;">Hakkımızda</a>
+    <a href="/iletisim.html" style="color:rgba(255,255,255,.4);font-size:.75rem;text-decoration:none;">İletişim</a>
+    <a href="/kvkk.html" style="color:rgba(255,255,255,.4);font-size:.75rem;text-decoration:none;">KVKK</a>
+    <a href="https://panel.mersinyelken.org.tr/login?club=mersin-yelken" style="color:rgba(0,196,154,.6);font-size:.75rem;text-decoration:none;">Üye Girişi</a>
+    <a href="https://panel.mersinyelken.org.tr/login?club=mersin-yelken" style="color:rgba(255,255,255,.3);font-size:.75rem;text-decoration:none;">Yönetici</a>
+  </div>
+  <p style="color:rgba(255,255,255,.22);font-size:.72rem;">
+    © 2026 Mersin Yelken Yat ve Su Sporları Kulübü · Pirireis, 1140. Sk. No:2, 33110 Yenişehir / MERSİN · +90 324 327 82 77
+  </p>
+</footer>
+
+<script>
+function toggleNav(){
+  const m=document.getElementById('navLinks'),h=document.getElementById('ham');
+  m.classList.toggle('open');
+  const o=m.classList.contains('open');
+  h.setAttribute('aria-expanded',o?'true':'false');
+  h.textContent=o?'✕':'☰';
+}
+document.addEventListener('keydown',e=>{if(e.key==='Escape'){const m=document.getElementById('navLinks');if(m){m.classList.remove('open');document.getElementById('ham').textContent='☰';}}});
+
+function handleSubmit(e){
+  e.preventDefault();
+  const form=document.getElementById('contactForm');
+  const btn=form.querySelector('.btn-send');
+  btn.textContent='Gönderiliyor…';
+  btn.disabled=true;
+  // Simulated send (no backend yet — Faz 3)
+  setTimeout(()=>{
+    form.style.display='none';
+    document.getElementById('successMsg').style.display='block';
+  },900);
+}
+</script>
+</body>
+</html>

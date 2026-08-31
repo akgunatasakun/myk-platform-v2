@@ -1,0 +1,346 @@
+<!DOCTYPE html>
+<html lang="tr">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Dalga Laboratuvarı — Deniz Akademisi</title>
+<style>
+:root{--ocean:#0077b6;--deep:#023e8a;--mint:#00F5D4;--sun:#FFD700;--orange:#FF6B35;--dark:#0D2137;}
+*{margin:0;padding:0;box-sizing:border-box;}
+body{font-family:'Segoe UI',system-ui,sans-serif;background:linear-gradient(180deg,#011e4a,#023e8a);color:#fff;min-height:100vh;}
+@media(prefers-reduced-motion:reduce){*,*::before,*::after{animation-duration:.01ms!important;}}
+nav{display:flex;align-items:center;justify-content:space-between;padding:1rem 1.5rem;background:rgba(0,0,0,.3);backdrop-filter:blur(12px);position:sticky;top:0;z-index:100;}
+nav a{color:rgba(255,255,255,.8);text-decoration:none;font-size:.85rem;font-weight:600;}
+.back{background:rgba(255,255,255,.1);border:1px solid rgba(255,255,255,.2);padding:.4rem .9rem;border-radius:50px;}
+
+.lab-wrap{max-width:700px;margin:0 auto;padding:2rem 1.5rem;}
+.lab-title{text-align:center;margin-bottom:2rem;}
+.lab-title h1{font-size:clamp(1.8rem,5vw,3rem);font-weight:900;margin-bottom:.4rem;}
+.lab-title p{color:rgba(255,255,255,.65);font-size:.9rem;}
+
+/* Canvas */
+#waveCanvas{
+  width:100%;border-radius:20px;
+  background:linear-gradient(180deg,#87ceeb 0%,#b8e4f7 38%,#0077b6 39%,#023e8a 100%);
+  display:block;cursor:crosshair;
+}
+
+/* Controls */
+.controls{background:rgba(255,255,255,.07);border:1.5px solid rgba(255,255,255,.13);border-radius:18px;padding:1.5rem;margin:1.25rem 0;}
+.ctrl-row{display:flex;align-items:center;gap:1rem;margin-bottom:1rem;}
+.ctrl-row:last-child{margin-bottom:0;}
+.ctrl-row label{min-width:110px;font-size:.82rem;color:rgba(255,255,255,.7);}
+input[type=range]{-webkit-appearance:none;flex:1;height:8px;border-radius:4px;background:rgba(255,255,255,.15);outline:none;cursor:pointer;}
+input[type=range]::-webkit-slider-thumb{-webkit-appearance:none;width:22px;height:22px;border-radius:50%;background:linear-gradient(135deg,var(--mint),var(--ocean));box-shadow:0 2px 8px rgba(0,0,0,.3);cursor:pointer;}
+.ctrl-val{min-width:70px;text-align:right;font-weight:800;font-size:.95rem;color:var(--mint);}
+
+/* Info panel */
+.info-grid{display:grid;grid-template-columns:repeat(3,1fr);gap:1rem;margin-bottom:1.5rem;}
+.info-card{background:rgba(255,255,255,.07);border:1px solid rgba(255,255,255,.13);border-radius:14px;padding:1.1rem;text-align:center;}
+.ic-val{display:block;font-size:1.5rem;font-weight:900;color:var(--sun);margin-bottom:.2rem;}
+.ic-label{font-size:.68rem;color:rgba(255,255,255,.55);text-transform:uppercase;letter-spacing:1px;}
+
+/* Fact box */
+.fact{background:rgba(0,245,212,.08);border:1.5px solid rgba(0,245,212,.25);border-radius:14px;padding:1rem 1.25rem;margin-bottom:1.5rem;font-size:.88rem;line-height:1.65;transition:all .4s;}
+.fact strong{color:var(--mint);}
+
+/* Boat on waves */
+.boat-row{display:flex;align-items:center;justify-content:center;gap:.5rem;margin-bottom:1.25rem;font-size:.85rem;color:rgba(255,255,255,.6);}
+.boat-emoji{font-size:2rem;transition:transform .5s;}
+
+/* Win */
+#winPanel{display:none;text-align:center;background:rgba(0,245,212,.1);border:2px solid rgba(0,245,212,.4);border-radius:20px;padding:2.5rem;margin-top:1rem;}
+#winPanel h2{color:var(--mint);font-size:2rem;margin-bottom:.5rem;}
+.btn-nxt{display:inline-block;background:linear-gradient(135deg,var(--orange),var(--sun));color:var(--dark);padding:.9rem 2.2rem;border-radius:50px;text-decoration:none;font-weight:800;font-size:1rem;}
+</style>
+</head>
+<body>
+<nav>
+  <a href="/" class="nav-logo" style="display:flex;align-items:center;gap:.55rem;text-decoration:none;">
+    <svg width="34" height="38" viewBox="0 0 105 115" xmlns="http://www.w3.org/2000/svg">
+      <defs>
+        <linearGradient id="nl1" x1="0%" y1="0%" x2="100%" y2="0%"><stop offset="0%" stop-color="#152f88"/><stop offset="40%" stop-color="#60b0f0"/><stop offset="100%" stop-color="#1a3a8f"/></linearGradient>
+        <linearGradient id="nl2" x1="0%" y1="0%" x2="100%" y2="0%"><stop offset="0%" stop-color="#1535a0"/><stop offset="45%" stop-color="#b0dcf8"/><stop offset="100%" stop-color="#1a3c90"/></linearGradient>
+        <linearGradient id="nlh" x1="0%" y1="0%" x2="100%" y2="0%"><stop offset="0%" stop-color="#64c4f5"/><stop offset="50%" stop-color="#2d6be4"/><stop offset="100%" stop-color="#64c4f5"/></linearGradient>
+      </defs>
+      <path d="M 47,5 L 8,88 L 44,88 Z" fill="url(#nl1)"/>
+      <path d="M 48.5,22 L 25,89 L 57,89 Z" fill="url(#nl2)"/>
+      <path d="M 50,40 L 42,90 L 69,90 Z" fill="url(#nl2)"/>
+      <path d="M 51,57 L 56,90 L 77,90 Z" fill="url(#nl1)"/>
+      <path d="M 6,93 L 82,93 L 79,100 Q 44,108 11,100 Z" fill="url(#nlh)"/>
+    </svg>
+    <span style="color:#fff;font-size:.82rem;font-weight:800;line-height:1.2;">MYK<br><span style="font-weight:500;font-size:.65rem;opacity:.6;font-style:italic;">Mersin Yelken · 1987</span></span>
+  </a>
+  <button class="ham" id="ham" onclick="toggleNav()" aria-label="Menü" aria-expanded="false">☰</button>
+  <div class="nav-links" id="navLinks">
+    <a href="/akademi/">🎓 Akademi</a>
+    <a href="/egitimler.html">⛵ Eğitimler</a>
+    <a href="/hakkimizda.html">🏛 Hakkımızda</a>
+    <a href="/iletisim.html">📬 İletişim</a>
+  </div>
+  <div class="nav-actions" id="navActions">
+    <a href="https://panel.mersinyelken.org.tr/login?club=mersin-yelken" class="nav-btn-outline">Üye Girişi</a>
+    <a href="https://panel.mersinyelken.org.tr/login?club=mersin-yelken" class="nav-cta">Yönetici</a>
+  </div>
+</nav>
+
+<div class="lab-wrap">
+  <div class="lab-title">
+    <h1>🌊 Dalga Laboratuvarı</h1>
+    <p>Rüzgar hızını ve süresini değiştirerek dalgaların nasıl büyüdüğünü gör!</p>
+  </div>
+
+  
+  <!-- Dalga Türleri Eğitim Kartları -->
+  <div style="background:rgba(255,255,255,.04);border:1.5px solid rgba(255,255,255,.1);border-radius:20px;padding:1.6rem;margin-bottom:2rem;">
+    <div style="font-size:.8rem;font-weight:700;color:#64c4f5;margin-bottom:1.2rem;letter-spacing:.05em;">🌊 DALGA TÜRLERİ — TYF EĞİTİM KONULARI</div>
+    <div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(220px,1fr));gap:1rem;margin-bottom:1.4rem;">
+      <div style="background:rgba(0,119,182,.2);border:1px solid rgba(0,119,182,.4);border-radius:12px;padding:1rem;">
+        <div style="font-size:1.4rem;margin-bottom:.4rem;">💨</div>
+        <strong style="color:#64c4f5;">Rüzgar Dalgası</strong>
+        <p style="font-size:.8rem;color:rgba(255,255,255,.65);margin-top:.4rem;line-height:1.55;">Yerel rüzgarın su yüzeyini iterek oluşturduğu dalgalar. Dalga boyu ve yüksekliği rüzgar hızı, süresi ve fetch mesafesiyle doğrudan bağlantılıdır. Düzensiz, sivri tepeler görülür.</p>
+        <div style="margin-top:.6rem;font-size:.72rem;background:rgba(100,196,245,.1);border-radius:6px;padding:.4rem .6rem;color:#64c4f5;">⚓ Mersin'de: Lodos ve Karayeli rüzgar dalgaları</div>
+      </div>
+      <div style="background:rgba(0,180,216,.15);border:1px solid rgba(0,180,216,.3);border-radius:12px;padding:1rem;">
+        <div style="font-size:1.4rem;margin-bottom:.4rem;">🌊</div>
+        <strong style="color:#90e0ef;">Şişme Dalga (Swell)</strong>
+        <p style="font-size:.8rem;color:rgba(255,255,255,.65);margin-top:.4rem;line-height:1.55;">Uzak mesafeli rüzgarların oluşturduğu, kaynaktan bağımsız hareket eden uzun periyotlu dalgalar. Yuvarlak tepeler, düzenli aralık, tehlikeli büyüklüğe ulaşabilir.</p>
+        <div style="margin-top:.6rem;font-size:.72rem;background:rgba(144,224,239,.1);border-radius:6px;padding:.4rem .6rem;color:#90e0ef;">⚠️ Görünürde rüzgar yokken swell olabilir!</div>
+      </div>
+      <div style="background:rgba(255,107,53,.1);border:1px solid rgba(255,107,53,.25);border-radius:12px;padding:1rem;">
+        <div style="font-size:1.4rem;margin-bottom:.4rem;">🏄</div>
+        <strong style="color:#ffa07a;">Kırılan Dalga</strong>
+        <p style="font-size:.8rem;color:rgba(255,255,255,.65);margin-top:.4rem;line-height:1.55;">Su sığlaştıkça dalga hızı düşer, yüksekliği artar ve tepe öne devrilir. Kıyılarda, kayalıklarda ve sığlıklarda oluşur. Yelkenciler için en tehlikeli dalga türü.</p>
+        <div style="margin-top:.6rem;font-size:.72rem;background:rgba(255,107,53,.1);border-radius:6px;padding:.4rem .6rem;color:#ffa07a;">🆘 Kırılan dalgaya asla pruva ile girme!</div>
+      </div>
+    </div>
+
+    <!-- Seyir Rehberi -->
+    <div style="font-size:.8rem;font-weight:700;color:#ffd700;margin-bottom:.9rem;letter-spacing:.05em;margin-top:1.2rem;">⛵ DALGAYA GÖRE SEYİR REHBERİ — OPTİMİST & ILCA</div>
+    <div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(200px,1fr));gap:.75rem;">
+      <div style="background:rgba(255,214,0,.08);border-radius:10px;padding:.85rem;">
+        <strong style="color:#ffd700;font-size:.88rem;">🎯 Dalgaya Karşı (Pruva)</strong>
+        <ul style="list-style:none;margin-top:.5rem;font-size:.76rem;color:rgba(255,255,255,.65);line-height:1.7;">
+          <li>• Gövde üzerinde öne eğil</li>
+          <li>• Dalganın üzerinden geç, arkasından değil</li>
+          <li>• Hız azaltılabilir — salma düşür</li>
+          <li>• Pruvanın dalga altına girdiğini görürsen hızla gerile</li>
+        </ul>
+      </div>
+      <div style="background:rgba(255,214,0,.08);border-radius:10px;padding:.85rem;">
+        <strong style="color:#ffd700;font-size:.88rem;">🌀 Dalgayı Arkadan Alma (Pupa)</strong>
+        <ul style="list-style:none;margin-top:.5rem;font-size:.76rem;color:rgba(255,255,255,.65);line-height:1.7;">
+          <li>• Kapama (accidental jibe) riski yüksek</li>
+          <li>• Sancak/iskele tutarlı tut</li>
+          <li>• Dalga tepesinde dengesiz hissedersen yavaşla</li>
+          <li>• Optimist'te kıç ağırlaştırma tehlikelidir</li>
+        </ul>
+      </div>
+      <div style="background:rgba(255,214,0,.08);border-radius:10px;padding:.85rem;">
+        <strong style="color:#ffd700;font-size:.88rem;">💨 Yan Dalga (Apaz)</strong>
+        <ul style="list-style:none;margin-top:.5rem;font-size:.76rem;color:rgba(255,255,255,.65);line-height:1.7;">
+          <li>• Tekne yatmaya çalışır — salma ayarı kritik</li>
+          <li>• Omzunu dalgaya dön, dengenin merkezini koru</li>
+          <li>• Yüksek dalgada orsa apazına geç</li>
+        </ul>
+      </div>
+      <div style="background:rgba(255,107,53,.1);border-radius:10px;padding:.85rem;">
+        <strong style="color:#ffa07a;font-size:.88rem;">🛑 Güvenlik Sınırları</strong>
+        <ul style="list-style:none;margin-top:.5rem;font-size:.76rem;color:rgba(255,255,255,.65);line-height:1.7;">
+          <li>• <strong style="color:#ffa07a;">Optimist:</strong> ≤ 3 Beaufort (≤ 15 km/h)</li>
+          <li>• <strong style="color:#ffa07a;">ILCA 4:</strong> ≤ 4 Beaufort</li>
+          <li>• <strong style="color:#ffa07a;">ILCA 6/7:</strong> ≤ 5 Beaufort</li>
+          <li>• Dalga yüksekliği ≥ 0,5 m → antrenör onayı</li>
+        </ul>
+      </div>
+    </div>
+  </div>
+
+  <canvas id="waveCanvas" height="240"></canvas>
+
+  <div class="controls">
+    <div class="ctrl-row">
+      <label>💨 Rüzgar Hızı</label>
+      <input type="range" id="windSpeed" min="1" max="40" value="5" oninput="update()">
+      <span class="ctrl-val"><span id="wsVal">5</span> knot</span>
+    </div>
+    <div class="ctrl-row">
+      <label>⏱️ Rüzgar Süresi</label>
+      <input type="range" id="windDur" min="1" max="24" value="2" oninput="update()">
+      <span class="ctrl-val"><span id="wdVal">2</span> saat</span>
+    </div>
+    <div class="ctrl-row">
+      <label>🌊 Açık Deniz</label>
+      <input type="range" id="fetch" min="10" max="500" value="50" oninput="update()">
+      <span class="ctrl-val"><span id="fetchVal">50</span> km</span>
+    </div>
+  </div>
+
+  <div class="info-grid">
+    <div class="info-card">
+      <span class="ic-val" id="waveHeight">0.3</span>
+      <div class="ic-label">Dalga Yüksekliği (m)</div>
+    </div>
+    <div class="info-card">
+      <span class="ic-val" id="wavePeriod">3</span>
+      <div class="ic-label">Dalga Periyodu (sn)</div>
+    </div>
+    <div class="info-card">
+      <span class="ic-val" id="waveCategory">🌿 Sakin</span>
+      <div class="ic-label">Beaufort Durumu</div>
+    </div>
+  </div>
+
+  <div class="fact" id="factBox">
+    <strong>💡 Biliyor muydun?</strong> Rüzgar hızı arttıkça dalgalar hem daha yüksek hem de daha uzun olur!
+  </div>
+
+  <div class="boat-row">
+    <span id="boatEmoji" class="boat-emoji">⛵</span>
+    <span id="boatStatus">Sakin denizde ilerleniyor...</span>
+  </div>
+
+  <div id="winPanel">
+    <div style="font-size:3rem;margin-bottom:.5rem;">🌊</div>
+    <h2>Dalga Ustası!</h2>
+    <p>Fırtına dalgasını keşfettin! <strong>Dalga Ustası</strong> rozetini kazandın!</p>
+    <a href="/akademi/pusula.html" class="btn-nxt">🧭 Sıradaki: Pusula Ustası →</a>
+  </div>
+</div>
+
+<script>
+const canvas=document.getElementById('waveCanvas');
+const ctx=canvas.getContext('2d');
+let animFrame=0;
+let winGiven=false;
+
+const facts=[
+  '💡 <strong>Rüzgar hızı</strong> arttıkça dalgalar hem daha yüksek hem daha uzun olur!',
+  '🌊 <strong>Beaufort Skalası</strong> deniz durumunu 0-12 arasında puanlar. 12 = kasırga!',
+  '⛵ <strong>Optimist tekneleri</strong> 3 Beaufort üzerinde yarışmaz — güvenlik önce!',
+  '🐬 <strong>Yunuslar</strong> dalgaların enerjisini kullanarak "sörf" yapabilir!',
+  '🧪 Dalga yüksekliği <strong>rüzgar hızının karesiyle</strong> artar. Hız 2 katına çıkınca dalga 4 katı büyür!',
+  '🌍 Okyanus dalgaları <strong>binlerce km</strong> yol kat edebilir!',
+  '⚓ <strong>Lodos rüzgarı</strong> Türkiye kıyılarında Akdeniz\'den esen sıcak fırtınalı rüzgardır.',
+];
+let factIdx=0;
+
+function calcWaves(ws,wd,fetch){
+  // Simplified SMB wave model
+  const g=9.81;
+  const U=ws*0.514; // m/s
+  const F=fetch*1000; // meters
+  const t=wd*3600;   // seconds
+  // Significant wave height
+  const H=0.0248*Math.pow(U,2)/g*Math.pow(g*F/Math.pow(U,2),0.5);
+  const T=0.729*U/g*Math.pow(g*F/Math.pow(U,2),0.25);
+  return {H:Math.min(15,Math.round(H*10)/10)||0.1, T:Math.min(25,Math.round(T*10)/10)||1};
+}
+
+function beaufort(ws){
+  if(ws<1)return'🌿 Sakin (0)';
+  if(ws<4)return'🍃 Hafif (1-2)';
+  if(ws<8)return'🌬️ Esinti (3)';
+  if(ws<14)return'💨 Orta (4)';
+  if(ws<18)return'🌊 Sert (5)';
+  if(ws<23)return'⛈️ Kuvvetli (6)';
+  if(ws<30)return'🌪️ Fırtına (7-8)';
+  return'🌀 Kasırga (9+)';
+}
+
+function boatStatus(h){
+  if(h<0.5)return'⛵ Sakin denizde süzülüyor...';
+  if(h<1)return'⛵ Hafifçe sallanan teknede...';
+  if(h<2)return'⛵ Tekne sallanıyor, dikkat!';
+  if(h<3.5)return'😬 Dalgalar büyüdü, liman bulun!';
+  return'🆘 Fırtına! Liman kaçınılmaz!';
+}
+
+function update(){
+  const ws=parseInt(document.getElementById('windSpeed').value);
+  const wd=parseInt(document.getElementById('windDur').value);
+  const fetch=parseInt(document.getElementById('fetch').value);
+  document.getElementById('wsVal').textContent=ws;
+  document.getElementById('wdVal').textContent=wd;
+  document.getElementById('fetchVal').textContent=fetch;
+
+  const {H,T}=calcWaves(ws,wd,fetch);
+  document.getElementById('waveHeight').textContent=H;
+  document.getElementById('wavePeriod').textContent=T;
+  document.getElementById('waveCategory').textContent=beaufort(ws);
+  document.getElementById('boatStatus').textContent=boatStatus(H);
+
+  // Boat tilt
+  const tilt=Math.min(35,H*8);
+  document.getElementById('boatEmoji').style.transform=`rotate(${Math.sin(Date.now()/500)*tilt}deg)`;
+
+  // Cycle facts
+  factIdx=(factIdx+1)%facts.length;
+  document.getElementById('factBox').innerHTML='🌊 '+facts[factIdx];
+
+  // Win: storm wave
+  if(H>=4&&!winGiven){
+    winGiven=true;
+    localStorage.setItem('badge_dalga','1');
+    setTimeout(()=>{
+      document.getElementById('winPanel').style.display='block';
+      document.getElementById('winPanel').scrollIntoView({behavior:'smooth'});
+    },500);
+  }
+}
+
+// Canvas wave animation
+function drawWaves(){
+  const W=canvas.offsetWidth; canvas.width=W;
+  const H=canvas.height;
+  const t=Date.now()/1000;
+  const ws=parseInt(document.getElementById('windSpeed').value);
+  const amp=Math.min(60, ws*2.5);
+  const freq=Math.max(0.5, 3-ws*0.05);
+
+  ctx.clearRect(0,0,W,H);
+
+  // Sky
+  const skyGrad=ctx.createLinearGradient(0,0,0,H*.38);
+  skyGrad.addColorStop(0,'#87ceeb');
+  skyGrad.addColorStop(1,'#d6f0ff');
+  ctx.fillStyle=skyGrad;
+  ctx.fillRect(0,0,W,H*.38);
+
+  // Draw multiple wave layers
+  [[.7,0.9,1.2],[.5,0.7,.8],[.3,0.5,.5]].forEach(([a,f,s],i)=>{
+    ctx.beginPath();
+    ctx.moveTo(0, H*.38);
+    for(let x=0;x<=W;x+=4){
+      const y=H*.38+amp*a*Math.sin((x/W*freq*Math.PI*2)+t*s+i*1.2);
+      ctx.lineTo(x,y);
+    }
+    ctx.lineTo(W,H); ctx.lineTo(0,H); ctx.closePath();
+    const g=ctx.createLinearGradient(0,H*.38,0,H);
+    g.addColorStop(0,`rgba(0,${100+i*20},${180+i*20},0.9)`);
+    g.addColorStop(1,`rgba(2,62,138,1)`);
+    ctx.fillStyle=g; ctx.fill();
+
+    // Foam tops
+    ctx.beginPath();
+    ctx.moveTo(0,H*.38);
+    for(let x=0;x<=W;x+=4){
+      const y=H*.38+amp*a*Math.sin((x/W*freq*Math.PI*2)+t*s+i*1.2);
+      ctx.lineTo(x,y);
+    }
+    ctx.strokeStyle=`rgba(255,255,255,${0.3-i*.05})`;
+    ctx.lineWidth=2; ctx.stroke();
+  });
+
+  // Boat tilt realtime
+  const boatEl=document.getElementById('boatEmoji');
+  const tiltAmt=Math.min(30,ws*1.5);
+  boatEl.style.transform=`rotate(${Math.sin(t*1.5)*tiltAmt}deg)`;
+
+  animFrame=requestAnimationFrame(drawWaves);
+}
+drawWaves();
+update();
+</script>
+</body>
+</html>

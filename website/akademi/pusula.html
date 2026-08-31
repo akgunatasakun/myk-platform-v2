@@ -1,0 +1,278 @@
+<!DOCTYPE html>
+<html lang="tr">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Pusula Ustası — Deniz Akademisi</title>
+<style>
+:root{--ocean:#0077b6;--deep:#023e8a;--mint:#00F5D4;--sun:#FFD700;--orange:#FF6B35;--dark:#0D2137;}
+*{margin:0;padding:0;box-sizing:border-box;}
+body{font-family:'Segoe UI',system-ui,sans-serif;background:linear-gradient(180deg,#0a1628,#023e8a);color:#fff;min-height:100vh;}
+@media(prefers-reduced-motion:reduce){*,*::before,*::after{animation-duration:.01ms!important;}}
+nav{display:flex;align-items:center;justify-content:space-between;padding:1rem 1.5rem;background:rgba(0,0,0,.3);backdrop-filter:blur(12px);position:sticky;top:0;z-index:100;}
+nav a{color:rgba(255,255,255,.8);text-decoration:none;font-size:.85rem;font-weight:600;}
+.back{background:rgba(255,255,255,.1);border:1px solid rgba(255,255,255,.2);padding:.4rem .9rem;border-radius:50px;}
+
+.game-wrap{max-width:520px;margin:0 auto;padding:2rem 1.5rem;}
+.game-title{text-align:center;margin-bottom:2rem;}
+.game-title h1{font-size:clamp(1.8rem,5vw,3rem);font-weight:900;margin-bottom:.4rem;}
+.game-title p{color:rgba(255,255,255,.65);font-size:.88rem;}
+
+/* Score / round */
+.hud{display:flex;justify-content:space-between;align-items:center;background:rgba(255,255,255,.07);border:1px solid rgba(255,255,255,.13);border-radius:14px;padding:.75rem 1.25rem;margin-bottom:1.5rem;}
+.hud-item span:first-child{font-size:.72rem;color:rgba(255,255,255,.5);display:block;text-transform:uppercase;letter-spacing:1px;}
+.hud-item span:last-child{font-size:1.2rem;font-weight:900;color:var(--sun);}
+
+/* Mission card */
+.mission{background:rgba(255,255,255,.08);border:1.5px solid rgba(255,255,255,.18);border-radius:18px;padding:1.5rem;margin-bottom:1.5rem;text-align:center;}
+.mission-ico{font-size:2.5rem;margin-bottom:.5rem;}
+.mission-text{font-size:1rem;font-weight:700;line-height:1.5;}
+.mission-text span{color:var(--mint);font-size:1.3rem;}
+
+/* Compass */
+.compass-wrap{position:relative;width:260px;height:260px;margin:0 auto 1.5rem;}
+.compass-ring{
+  width:260px;height:260px;border-radius:50%;
+  background:radial-gradient(circle,#1a3a6b 40%,#0a1628 70%,#0d2137 100%);
+  border:4px solid rgba(255,255,255,.2);
+  box-shadow:0 0 40px rgba(0,180,216,.2),inset 0 0 30px rgba(0,0,0,.4);
+  position:absolute;top:0;left:0;
+  display:flex;align-items:center;justify-content:center;
+}
+/* Cardinal labels */
+.card-label{position:absolute;font-weight:900;font-size:.9rem;color:rgba(255,255,255,.8);}
+.lN{top:8px;left:50%;transform:translateX(-50%);color:var(--orange);}
+.lS{bottom:8px;left:50%;transform:translateX(-50%);}
+.lE{right:8px;top:50%;transform:translateY(-50%);}
+.lW{left:8px;top:50%;transform:translateY(-50%);}
+/* Degrees ring */
+.deg-ring{width:220px;height:220px;border-radius:50%;border:1px dashed rgba(255,255,255,.15);position:absolute;top:20px;left:20px;}
+/* Needle */
+#needle{
+  position:absolute;top:50%;left:50%;
+  width:6px;height:110px;
+  transform-origin:bottom center;
+  transform:translateX(-50%) translateY(-100%) rotate(0deg);
+  transition:transform .4s cubic-bezier(.25,1.5,.5,1);
+  cursor:pointer;z-index:10;
+}
+.needle-n{position:absolute;top:0;left:50%;transform:translateX(-50%);width:0;height:0;border-left:10px solid transparent;border-right:10px solid transparent;border-bottom:55px solid var(--orange);}
+.needle-s{position:absolute;bottom:0;left:50%;transform:translateX(-50%);width:0;height:0;border-left:8px solid transparent;border-right:8px solid transparent;border-top:55px solid rgba(255,255,255,.6);}
+/* Center dot */
+.center-dot{position:absolute;top:50%;left:50%;transform:translate(-50%,-50%);width:16px;height:16px;border-radius:50%;background:var(--mint);border:2px solid #fff;z-index:11;}
+
+/* Rotate buttons */
+.rotate-row{display:flex;gap:.75rem;justify-content:center;margin-bottom:1.25rem;}
+.rot-btn{background:rgba(255,255,255,.1);border:1.5px solid rgba(255,255,255,.2);color:#fff;width:56px;height:56px;border-radius:50%;font-size:1.5rem;cursor:pointer;transition:background .2s,transform .15s;}
+.rot-btn:hover{background:rgba(255,255,255,.25);transform:scale(1.1);}
+.dir-btn{background:rgba(0,180,216,.15);border:1.5px solid rgba(0,180,216,.3);color:#fff;padding:.6rem 1.25rem;border-radius:50px;font-size:.82rem;font-weight:700;cursor:pointer;transition:background .2s,transform .15s;}
+.dir-btn:hover{background:rgba(0,180,216,.3);transform:scale(1.05);}
+
+/* Feedback */
+#feedback{text-align:center;border-radius:14px;padding:1rem;font-size:1rem;min-height:54px;display:flex;align-items:center;justify-content:center;gap:.5rem;background:rgba(255,255,255,.05);margin-bottom:1rem;transition:all .3s;}
+#feedback.correct{background:rgba(0,245,212,.12);border:1px solid rgba(0,245,212,.3);}
+#feedback.wrong{background:rgba(255,100,50,.1);border:1px solid rgba(255,100,50,.3);}
+
+/* Win */
+#winPanel{display:none;text-align:center;background:rgba(255,214,0,.1);border:2px solid rgba(255,214,0,.4);border-radius:20px;padding:3rem;margin-top:1rem;}
+#winPanel h2{color:var(--sun);font-size:2rem;margin-bottom:.5rem;}
+.btn-nxt{display:inline-block;background:linear-gradient(135deg,var(--orange),var(--sun));color:var(--dark);padding:.9rem 2.2rem;border-radius:50px;text-decoration:none;font-weight:800;font-size:1rem;}
+</style>
+</head>
+<body>
+<nav>
+  <a href="/" class="nav-logo" style="display:flex;align-items:center;gap:.55rem;text-decoration:none;">
+    <svg width="34" height="38" viewBox="0 0 105 115" xmlns="http://www.w3.org/2000/svg">
+      <defs>
+        <linearGradient id="nl1" x1="0%" y1="0%" x2="100%" y2="0%"><stop offset="0%" stop-color="#152f88"/><stop offset="40%" stop-color="#60b0f0"/><stop offset="100%" stop-color="#1a3a8f"/></linearGradient>
+        <linearGradient id="nl2" x1="0%" y1="0%" x2="100%" y2="0%"><stop offset="0%" stop-color="#1535a0"/><stop offset="45%" stop-color="#b0dcf8"/><stop offset="100%" stop-color="#1a3c90"/></linearGradient>
+        <linearGradient id="nlh" x1="0%" y1="0%" x2="100%" y2="0%"><stop offset="0%" stop-color="#64c4f5"/><stop offset="50%" stop-color="#2d6be4"/><stop offset="100%" stop-color="#64c4f5"/></linearGradient>
+      </defs>
+      <path d="M 47,5 L 8,88 L 44,88 Z" fill="url(#nl1)"/>
+      <path d="M 48.5,22 L 25,89 L 57,89 Z" fill="url(#nl2)"/>
+      <path d="M 50,40 L 42,90 L 69,90 Z" fill="url(#nl2)"/>
+      <path d="M 51,57 L 56,90 L 77,90 Z" fill="url(#nl1)"/>
+      <path d="M 6,93 L 82,93 L 79,100 Q 44,108 11,100 Z" fill="url(#nlh)"/>
+    </svg>
+    <span style="color:#fff;font-size:.82rem;font-weight:800;line-height:1.2;">MYK<br><span style="font-weight:500;font-size:.65rem;opacity:.6;font-style:italic;">Mersin Yelken · 1987</span></span>
+  </a>
+  <button class="ham" id="ham" onclick="toggleNav()" aria-label="Menü" aria-expanded="false">☰</button>
+  <div class="nav-links" id="navLinks">
+    <a href="/akademi/">🎓 Akademi</a>
+    <a href="/egitimler.html">⛵ Eğitimler</a>
+    <a href="/hakkimizda.html">🏛 Hakkımızda</a>
+    <a href="/iletisim.html">📬 İletişim</a>
+  </div>
+  <div class="nav-actions" id="navActions">
+    <a href="https://panel.mersinyelken.org.tr/login?club=mersin-yelken" class="nav-btn-outline">Üye Girişi</a>
+    <a href="https://panel.mersinyelken.org.tr/login?club=mersin-yelken" class="nav-cta">Yönetici</a>
+  </div>
+</nav>
+
+<div class="game-wrap">
+  <div class="game-title">
+    <h1>🧭 Pusula Ustası</h1>
+    <p>Pusulayı döndürerek doğru yönü bul, limanı bul!</p>
+  </div>
+
+  <div class="hud">
+    <div class="hud-item"><span>⭐ Puan</span><span id="score">0</span></div>
+    <div class="hud-item"><span>🎯 Tur</span><span id="round">1 / 7</span></div>
+    <div class="hud-item"><span>✅ Doğru</span><span id="correct">0</span></div>
+  </div>
+
+  <!-- Mission -->
+  <div class="mission">
+    <div class="mission-ico" id="missionIco">🏝️</div>
+    <div class="mission-text" id="missionText">Ada <span id="targetDir">Kuzey</span> yönünde.<br>Pusulayı döndür!</div>
+  </div>
+
+  <!-- Compass -->
+  <div class="compass-wrap">
+    <div class="compass-ring">
+      <span class="card-label lN">K</span>
+      <span class="card-label lS">G</span>
+      <span class="card-label lE">D</span>
+      <span class="card-label lW">B</span>
+      <div class="deg-ring"></div>
+    </div>
+    <div id="needle">
+      <div class="needle-n"></div>
+      <div class="needle-s"></div>
+    </div>
+    <div class="center-dot"></div>
+  </div>
+
+  <!-- Controls -->
+  <div class="rotate-row">
+    <button class="rot-btn" onclick="rotate(-45)" title="45° sola">↺</button>
+    <button class="rot-btn" onclick="rotate(-15)" title="15° sola">←</button>
+    <button class="dir-btn" onclick="checkAnswer()">✅ Yönü Onayla</button>
+    <button class="rot-btn" onclick="rotate(15)" title="15° sağa">→</button>
+    <button class="rot-btn" onclick="rotate(45)" title="45° sağa">↻</button>
+  </div>
+
+  <div id="feedback">🧭 Pusulayı çevirerek doğru yönü bul!</div>
+
+  <div id="winPanel">
+    <div style="font-size:3.5rem;margin-bottom:.5rem;">🧭</div>
+    <h2>Pusula Ustası!</h2>
+    <p id="winText">Tüm soruları tamamladın! <strong>Pusula Ustası</strong> rozetini kazandın!</p>
+    <a href="/akademi/boya.html" class="btn-nxt">🎨 Sıradaki: Tekneni Boya! →</a>
+  </div>
+</div>
+
+<script>
+const missions=[
+  {dir:'Kuzey',deg:0,ico:'🏝️',hint:'Kuzey yıldızı yönü!'},
+  {dir:'Güney',deg:180,ico:'🌊',hint:'Güney — sıcak sulara doğru!'},
+  {dir:'Doğu',deg:90,ico:'🏖️',hint:'Doğu — güneşin doğduğu yön!'},
+  {dir:'Batı',deg:270,ico:'⛵',hint:'Batı — güneşin battığı yön!'},
+  {dir:'Kuzeydoğu',deg:45,ico:'🐬',hint:'K ve D arasında 45 derece!'},
+  {dir:'Güneybatı',deg:225,ico:'🦀',hint:'G ve B arasında!'},
+  {dir:'Kuzeybatı',deg:315,ico:'🐟',hint:'K ve B arasında!'},
+];
+
+let current=0;
+let currentAngle=0;
+let score=0;
+let correctCount=0;
+let winGiven=false;
+
+function setMission(){
+  if(current>=missions.length){
+    showWin();return;
+  }
+  const m=missions[current];
+  document.getElementById('missionIco').textContent=m.ico;
+  document.getElementById('targetDir').textContent=m.dir;
+  document.getElementById('round').textContent=`${current+1} / ${missions.length}`;
+  document.getElementById('feedback').textContent='🧭 '+m.hint;
+  document.getElementById('feedback').className='';
+}
+
+function rotate(deg){
+  currentAngle=(currentAngle+deg+360)%360;
+  document.getElementById('needle').style.transform=
+    `translateX(-50%) translateY(-100%) rotate(${currentAngle}deg)`;
+}
+
+function checkAnswer(){
+  const m=missions[current];
+  const target=m.deg;
+  const diff=Math.abs(((currentAngle-target)+360)%360);
+  const err=Math.min(diff,360-diff);
+  const fb=document.getElementById('feedback');
+
+  if(err<=20){
+    score+=err<=5?15:10;
+    correctCount++;
+    fb.textContent='🎉 Doğru! '+m.dir+' yönünü buldun! +'+( err<=5?15:10)+' puan';
+    fb.className='correct';
+    document.getElementById('score').textContent=score;
+    document.getElementById('correct').textContent=correctCount;
+    current++;
+    setTimeout(setMission,1200);
+  } else if(err<=45){
+    fb.textContent='🔶 Çok yakın! '+err+' derece farkın var. Biraz daha döndür!';
+    fb.className='wrong';
+  } else {
+    fb.textContent='❌ Yanlış yön! '+m.hint;
+    fb.className='wrong';
+  }
+}
+
+function showWin(){
+  document.getElementById('winPanel').style.display='block';
+  document.getElementById('winText').innerHTML=
+    `Tüm yönleri buldun! <strong>${correctCount}/${missions.length}</strong> doğru.<br>
+    Toplam puan: <strong style="color:var(--sun)">${score}</strong><br><br>
+    <strong>Pusula Ustası</strong> rozeti kazanıldı! 🧭`;
+  document.getElementById('winPanel').scrollIntoView({behavior:'smooth'});
+  localStorage.setItem('badge_pusula','1');
+}
+
+// Touch/mouse drag to rotate compass
+let dragging=false;
+let startAngle=0;
+const compassWrap=document.querySelector('.compass-wrap');
+compassWrap.addEventListener('mousedown',e=>{
+  dragging=true;
+  const r=compassWrap.getBoundingClientRect();
+  const cx=r.left+r.width/2, cy=r.top+r.height/2;
+  startAngle=Math.atan2(e.clientY-cy,e.clientX-cx)*180/Math.PI;
+});
+document.addEventListener('mousemove',e=>{
+  if(!dragging)return;
+  const r=compassWrap.getBoundingClientRect();
+  const cx=r.left+r.width/2,cy=r.top+r.height/2;
+  const angle=Math.atan2(e.clientY-cy,e.clientX-cx)*180/Math.PI;
+  const delta=angle-startAngle;
+  startAngle=angle;
+  currentAngle=(currentAngle+delta+360)%360;
+  document.getElementById('needle').style.transform=
+    `translateX(-50%) translateY(-100%) rotate(${currentAngle}deg)`;
+});
+document.addEventListener('mouseup',()=>{dragging=false;});
+compassWrap.addEventListener('touchstart',e=>{
+  const t=e.touches[0];
+  const r=compassWrap.getBoundingClientRect();
+  startAngle=Math.atan2(t.clientY-r.top-r.height/2,t.clientX-r.left-r.width/2)*180/Math.PI;
+  e.preventDefault();
+},{passive:false});
+compassWrap.addEventListener('touchmove',e=>{
+  const t=e.touches[0];
+  const r=compassWrap.getBoundingClientRect();
+  const a=Math.atan2(t.clientY-r.top-r.height/2,t.clientX-r.left-r.width/2)*180/Math.PI;
+  const delta=a-startAngle;
+  startAngle=a;
+  currentAngle=(currentAngle+delta+360)%360;
+  document.getElementById('needle').style.transform=
+    `translateX(-50%) translateY(-100%) rotate(${currentAngle}deg)`;
+  e.preventDefault();
+},{passive:false});
+
+setMission();
+</script>
+</body>
+</html>

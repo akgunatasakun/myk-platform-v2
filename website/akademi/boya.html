@@ -1,0 +1,305 @@
+<!DOCTYPE html>
+<html lang="tr">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Tekneni Boya! — Deniz Akademisi</title>
+<style>
+:root{--ocean:#0077b6;--deep:#023e8a;--mint:#00F5D4;--sun:#FFD700;--orange:#FF6B35;--dark:#0D2137;}
+*{margin:0;padding:0;box-sizing:border-box;}
+body{font-family:'Segoe UI',system-ui,sans-serif;background:linear-gradient(180deg,#011e4a,#023e8a);color:#fff;min-height:100vh;}
+@media(prefers-reduced-motion:reduce){*,*::before,*::after{animation-duration:.01ms!important;}}
+nav{display:flex;align-items:center;justify-content:space-between;padding:1rem 1.5rem;background:rgba(0,0,0,.3);backdrop-filter:blur(12px);position:sticky;top:0;z-index:100;}
+nav a{color:rgba(255,255,255,.8);text-decoration:none;font-size:.85rem;font-weight:600;}
+.back{background:rgba(255,255,255,.1);border:1px solid rgba(255,255,255,.2);padding:.4rem .9rem;border-radius:50px;}
+
+.wrap{max-width:720px;margin:0 auto;padding:2rem 1.5rem;}
+.title{text-align:center;margin-bottom:1.75rem;}
+.title h1{font-size:clamp(1.8rem,5vw,3rem);font-weight:900;margin-bottom:.35rem;}
+.title p{color:rgba(255,255,255,.65);font-size:.88rem;}
+
+/* Canvas area */
+.canvas-area{
+  background:linear-gradient(180deg,#87ceeb 0%,#c8e8f5 42%,#0077b6 43%,#023e8a 100%);
+  border-radius:20px;padding:1.5rem;margin-bottom:1.5rem;
+  display:flex;align-items:center;justify-content:center;
+  min-height:320px;position:relative;
+  overflow:hidden;
+}
+/* Subtle waves */
+.canvas-area::after{
+  content:'';position:absolute;bottom:0;left:-20%;right:-20%;height:57%;
+  background:linear-gradient(180deg,rgba(0,119,182,.6),rgba(2,62,138,.9));
+  border-radius:40% 40% 0 0;
+  pointer-events:none;
+}
+#boatSvg{width:min(420px,90%);position:relative;z-index:2;filter:drop-shadow(0 8px 20px rgba(0,0,0,.35));cursor:pointer;}
+
+/* Part labels */
+.part-label{display:none;}
+
+/* Color palette */
+.palette-wrap{background:rgba(255,255,255,.07);border:1.5px solid rgba(255,255,255,.13);border-radius:18px;padding:1.25rem 1.5rem;margin-bottom:1.25rem;}
+.palette-title{font-size:.75rem;font-weight:700;text-transform:uppercase;letter-spacing:1.5px;color:rgba(255,255,255,.5);margin-bottom:.85rem;}
+.parts-row{display:flex;gap:.75rem;flex-wrap:wrap;margin-bottom:1.1rem;align-items:center;}
+.part-btn{
+  background:rgba(255,255,255,.08);border:1.5px solid rgba(255,255,255,.2);
+  color:#fff;border-radius:50px;padding:.4rem 1rem;
+  font-size:.78rem;font-weight:700;cursor:pointer;transition:all .2s;
+}
+.part-btn:hover,.part-btn.active{background:rgba(0,180,216,.25);border-color:rgba(0,245,212,.6);color:var(--mint);}
+.colors-row{display:flex;gap:.6rem;flex-wrap:wrap;}
+.color-btn{
+  width:36px;height:36px;border-radius:50%;cursor:pointer;
+  border:3px solid transparent;transition:transform .2s,border-color .2s;
+  flex-shrink:0;
+}
+.color-btn:hover{transform:scale(1.15);}
+.color-btn.active{border-color:#fff;transform:scale(1.2);}
+.custom-color{width:36px;height:36px;border-radius:50%;border:3px solid rgba(255,255,255,.3);overflow:hidden;cursor:pointer;flex-shrink:0;}
+.custom-color input{width:200%;height:200%;margin:-50%;border:none;cursor:pointer;opacity:0;position:absolute;}
+.custom-color-wrap{position:relative;width:36px;height:36px;}
+
+/* Actions */
+.actions{display:flex;gap:.75rem;flex-wrap:wrap;justify-content:center;}
+.btn-action{border:none;border-radius:50px;padding:.75rem 1.6rem;font-weight:800;font-size:.88rem;cursor:pointer;transition:transform .2s,box-shadow .2s;}
+.btn-action:hover{transform:translateY(-2px);}
+.btn-dl{background:linear-gradient(135deg,var(--orange),var(--sun));color:var(--dark);box-shadow:0 4px 15px rgba(255,107,53,.4);}
+.btn-reset{background:rgba(255,255,255,.1);color:#fff;border:1.5px solid rgba(255,255,255,.2);}
+
+/* Win */
+#winPanel{display:none;text-align:center;background:rgba(255,214,0,.1);border:2px solid rgba(255,214,0,.4);border-radius:20px;padding:2rem;margin-top:1.25rem;}
+#winPanel h2{color:var(--sun);font-size:1.6rem;margin-bottom:.4rem;}
+#winPanel p{color:rgba(255,255,255,.75);margin-bottom:1.25rem;font-size:.9rem;}
+.btn-nxt{display:inline-block;background:linear-gradient(135deg,var(--orange),var(--sun));color:var(--dark);padding:.8rem 2rem;border-radius:50px;text-decoration:none;font-weight:800;font-size:.9rem;}
+</style>
+</head>
+<body>
+<nav>
+  <a href="/" class="nav-logo" style="display:flex;align-items:center;gap:.55rem;text-decoration:none;">
+    <svg width="34" height="38" viewBox="0 0 105 115" xmlns="http://www.w3.org/2000/svg">
+      <defs>
+        <linearGradient id="nl1" x1="0%" y1="0%" x2="100%" y2="0%"><stop offset="0%" stop-color="#152f88"/><stop offset="40%" stop-color="#60b0f0"/><stop offset="100%" stop-color="#1a3a8f"/></linearGradient>
+        <linearGradient id="nl2" x1="0%" y1="0%" x2="100%" y2="0%"><stop offset="0%" stop-color="#1535a0"/><stop offset="45%" stop-color="#b0dcf8"/><stop offset="100%" stop-color="#1a3c90"/></linearGradient>
+        <linearGradient id="nlh" x1="0%" y1="0%" x2="100%" y2="0%"><stop offset="0%" stop-color="#64c4f5"/><stop offset="50%" stop-color="#2d6be4"/><stop offset="100%" stop-color="#64c4f5"/></linearGradient>
+      </defs>
+      <path d="M 47,5 L 8,88 L 44,88 Z" fill="url(#nl1)"/>
+      <path d="M 48.5,22 L 25,89 L 57,89 Z" fill="url(#nl2)"/>
+      <path d="M 50,40 L 42,90 L 69,90 Z" fill="url(#nl2)"/>
+      <path d="M 51,57 L 56,90 L 77,90 Z" fill="url(#nl1)"/>
+      <path d="M 6,93 L 82,93 L 79,100 Q 44,108 11,100 Z" fill="url(#nlh)"/>
+    </svg>
+    <span style="color:#fff;font-size:.82rem;font-weight:800;line-height:1.2;">MYK<br><span style="font-weight:500;font-size:.65rem;opacity:.6;font-style:italic;">Mersin Yelken · 1987</span></span>
+  </a>
+  <button class="ham" id="ham" onclick="toggleNav()" aria-label="Menü" aria-expanded="false">☰</button>
+  <div class="nav-links" id="navLinks">
+    <a href="/akademi/">🎓 Akademi</a>
+    <a href="/egitimler.html">⛵ Eğitimler</a>
+    <a href="/hakkimizda.html">🏛 Hakkımızda</a>
+    <a href="/iletisim.html">📬 İletişim</a>
+  </div>
+  <div class="nav-actions" id="navActions">
+    <a href="https://panel.mersinyelken.org.tr/login?club=mersin-yelken" class="nav-btn-outline">Üye Girişi</a>
+    <a href="https://panel.mersinyelken.org.tr/login?club=mersin-yelken" class="nav-cta">Yönetici</a>
+  </div>
+</nav>
+
+<div class="wrap">
+  <div class="title">
+    <h1>🎨 Tekneni Boya!</h1>
+    <p>Optimist teknenin parçalarını seç ve istediğin renge boya. Sonra indir!</p>
+  </div>
+
+  <div class="canvas-area">
+    <svg id="boatSvg" viewBox="0 0 400 300" xmlns="http://www.w3.org/2000/svg">
+      <!-- Hull -->
+      <path id="p-hull"
+        d="M 60,200 Q 200,235 340,200 L 320,225 Q 200,262 80,225 Z"
+        fill="#1a5276" stroke="rgba(255,255,255,.3)" stroke-width="1.5"
+        class="boat-part" data-part="Gövde" style="cursor:pointer"/>
+      <!-- Keel stripe -->
+      <path id="p-stripe"
+        d="M 80,225 Q 200,252 320,225 L 318,230 Q 200,258 82,230 Z"
+        fill="#e74c3c" stroke="none"
+        class="boat-part" data-part="Şerit" style="cursor:pointer"/>
+      <!-- Main sail -->
+      <polygon id="p-mainsail"
+        points="200,20 200,198 80,190"
+        fill="rgba(255,255,255,.92)" stroke="rgba(255,255,255,.5)" stroke-width="1"
+        class="boat-part" data-part="Ana Yelken" style="cursor:pointer"/>
+      <!-- Optimist tek yelkenlidir, flok (jib) taşımaz -->
+      <!-- Mast -->
+      <line id="p-mast" x1="200" y1="15" x2="200" y2="200"
+        stroke="#fff" stroke-width="5" stroke-linecap="round"
+        class="boat-part" data-part="Direk" style="cursor:pointer"/>
+      <!-- Boom -->
+      <line id="p-boom" x1="200" y1="197" x2="105" y2="197"
+        stroke="#ddd" stroke-width="3.5" stroke-linecap="round"
+        class="boat-part" data-part="Bumba" style="cursor:pointer"/>
+      <!-- Rudder -->
+      <path id="p-rudder"
+        d="M 200,225 L 196,255 L 207,255 L 203,225 Z"
+        fill="#95a5a6" stroke="rgba(255,255,255,.3)" stroke-width="1"
+        class="boat-part" data-part="Dümen" style="cursor:pointer"/>
+      <!-- Number -->
+      <text x="145" y="145" font-size="22" font-weight="900" fill="rgba(0,60,120,.7)" font-family="sans-serif">MYK</text>
+      <text x="148" y="170" font-size="16" font-weight="700" fill="rgba(0,60,120,.5)" font-family="sans-serif">1987</text>
+    </svg>
+  </div>
+
+  <!-- Palette -->
+  <div class="palette-wrap">
+    <div class="palette-title">Parça Seç</div>
+    <div class="parts-row" id="partsRow"></div>
+    <div class="palette-title">Renk Seç</div>
+    <div class="colors-row" id="colorsRow"></div>
+  </div>
+
+  <div class="actions">
+    <button class="btn-action btn-dl" onclick="downloadBoat()">⬇️ PNG İndir</button>
+    <button class="btn-action btn-reset" onclick="resetColors()">🔄 Sıfırla</button>
+  </div>
+
+  <div id="winPanel">
+    <h2>🎉 Harika Tasarım!</h2>
+    <p>Kendi teknenini yarattın! <strong>Tekne Tasarımcısı</strong> rozetini kazandın!</p>
+    <a href="/" class="btn-nxt">🏅 Tüm Rozetlere Bak →</a>
+  </div>
+</div>
+
+<script>
+const COLORS=[
+  '#ffffff','#ffe066','#ff6b35','#e74c3c','#c0392b',
+  '#2ecc71','#27ae60','#3498db','#0077b6','#023e8a',
+  '#9b59b6','#f39c12','#e67e22','#1abc9c','#2c3e50',
+  '#ecf0f1','#bdc3c7','#95a5a6','#000000',
+];
+
+const PARTS={
+  'Ana Yelken':'p-mainsail',
+  'Gövde':'p-hull',
+  'Şerit':'p-stripe',
+  'Direk':'p-mast',
+  'Bumba':'p-boom',
+  'Dümen':'p-rudder',
+};
+
+let selectedPart=null;
+let selectedColor='#ffffff';
+let paintCount=0;
+let badgeGiven=false;
+
+// Build part buttons
+const partsRow=document.getElementById('partsRow');
+Object.keys(PARTS).forEach(name=>{
+  const btn=document.createElement('button');
+  btn.className='part-btn';
+  btn.textContent=name;
+  btn.onclick=()=>selectPart(name,btn);
+  partsRow.appendChild(btn);
+});
+
+// Build color buttons
+const colorsRow=document.getElementById('colorsRow');
+COLORS.forEach(c=>{
+  const btn=document.createElement('div');
+  btn.className='color-btn';
+  btn.style.background=c;
+  btn.title=c;
+  btn.onclick=()=>selectColor(c,btn);
+  colorsRow.appendChild(btn);
+});
+// Custom color picker
+const cwrap=document.createElement('div');
+cwrap.className='custom-color-wrap';
+cwrap.title='Özel renk';
+cwrap.innerHTML=`<div class="custom-color" style="background:linear-gradient(135deg,#f00,#0f0,#00f)">
+  <input type="color" id="customColor" onchange="onCustomColor(this)">
+</div>`;
+colorsRow.appendChild(cwrap);
+
+// Click on SVG parts
+document.querySelectorAll('.boat-part').forEach(el=>{
+  el.addEventListener('click',()=>{
+    const partName=el.dataset.part;
+    // Find and activate button
+    document.querySelectorAll('.part-btn').forEach(b=>{
+      b.classList.toggle('active',b.textContent===partName);
+    });
+    selectedPart=partName;
+    applyColor();
+  });
+});
+
+function selectPart(name,btn){
+  document.querySelectorAll('.part-btn').forEach(b=>b.classList.remove('active'));
+  btn.classList.add('active');
+  selectedPart=name;
+}
+function selectColor(c,btn){
+  document.querySelectorAll('.color-btn').forEach(b=>b.classList.remove('active'));
+  btn.classList.add('active');
+  selectedColor=c;
+  applyColor();
+}
+function onCustomColor(input){
+  selectedColor=input.value;
+  document.getElementById('customColor').parentElement.style.background=selectedColor;
+  applyColor();
+}
+function applyColor(){
+  if(!selectedPart||!selectedColor)return;
+  const id=PARTS[selectedPart];
+  const el=document.getElementById(id);
+  if(!el)return;
+  const tag=el.tagName.toLowerCase();
+  if(tag==='line')el.setAttribute('stroke',selectedColor);
+  else el.setAttribute('fill',selectedColor);
+  paintCount++;
+  if(paintCount>=3&&!badgeGiven){
+    badgeGiven=true;
+    localStorage.setItem('badge_boya','1');
+    setTimeout(()=>{
+      document.getElementById('winPanel').style.display='block';
+      document.getElementById('winPanel').scrollIntoView({behavior:'smooth'});
+    },300);
+  }
+}
+function resetColors(){
+  document.getElementById('p-hull').setAttribute('fill','#1a5276');
+  document.getElementById('p-stripe').setAttribute('fill','#e74c3c');
+  document.getElementById('p-mainsail').setAttribute('fill','rgba(255,255,255,.92)');
+  // p-jib removed (Optimist tek yelkenlidir)
+  document.getElementById('p-mast').setAttribute('stroke','#fff');
+  document.getElementById('p-boom').setAttribute('stroke','#ddd');
+  document.getElementById('p-rudder').setAttribute('fill','#95a5a6');
+}
+function downloadBoat(){
+  const svg=document.getElementById('boatSvg');
+  const serializer=new XMLSerializer();
+  const svgStr=serializer.serializeToString(svg);
+  const canvas=document.createElement('canvas');
+  canvas.width=800;canvas.height=600;
+  const ctx=canvas.getContext('2d');
+  // Light background
+  ctx.fillStyle='#e8f4ff';
+  ctx.fillRect(0,0,800,600);
+  const img=new Image();
+  const blob=new Blob([svgStr],{type:'image/svg+xml'});
+  const url=URL.createObjectURL(blob);
+  img.onload=()=>{
+    ctx.drawImage(img,50,50,700,500);
+    const link=document.createElement('a');
+    link.download='benim-teknem.png';
+    link.href=canvas.toDataURL('image/png');
+    link.click();
+    URL.revokeObjectURL(url);
+  };
+  img.src=url;
+}
+// Activate first part by default
+document.querySelector('.part-btn').click();
+document.querySelector('.color-btn').click();
+</script>
+</body>
+</html>

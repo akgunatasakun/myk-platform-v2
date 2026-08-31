@@ -1,0 +1,214 @@
+<!DOCTYPE html>
+<html lang="tr">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Deniz Sözlüğü — Deniz Akademisi</title>
+<style>
+:root{--ocean:#0077b6;--deep:#023e8a;--mint:#00F5D4;--sun:#FFD700;--orange:#FF6B35;--dark:#0D2137;}
+*{margin:0;padding:0;box-sizing:border-box;}
+body{font-family:'Segoe UI',system-ui,sans-serif;background:linear-gradient(180deg,#010d1f,#023e8a);color:#fff;min-height:100vh;}
+@media(prefers-reduced-motion:reduce){*,*::before,*::after{animation-duration:.01ms!important;}}
+
+nav{display:flex;align-items:center;justify-content:space-between;padding:1rem 1.5rem;background:rgba(0,0,0,.3);backdrop-filter:blur(12px);position:sticky;top:0;z-index:100;}
+nav a{color:rgba(255,255,255,.8);text-decoration:none;font-size:.85rem;font-weight:600;}
+.back{background:rgba(255,255,255,.1);border:1px solid rgba(255,255,255,.2);padding:.4rem .9rem;border-radius:50px;}
+
+.wrap{max-width:800px;margin:0 auto;padding:2rem 1.5rem;}
+.title{text-align:center;margin-bottom:2rem;}
+.title h1{font-size:clamp(1.8rem,5vw,2.8rem);font-weight:900;margin-bottom:.4rem;}
+.title p{color:rgba(255,255,255,.6);font-size:.88rem;}
+
+/* Search + filter */
+.search-bar{position:relative;margin-bottom:1.25rem;}
+.search-bar input{width:100%;background:rgba(255,255,255,.1);border:1.5px solid rgba(255,255,255,.2);border-radius:14px;color:#fff;padding:.85rem 1rem .85rem 3rem;font-size:.92rem;outline:none;transition:border-color .2s;}
+.search-bar input::placeholder{color:rgba(255,255,255,.35);}
+.search-bar input:focus{border-color:rgba(0,245,212,.5);background:rgba(255,255,255,.13);}
+.search-ico{position:absolute;left:1rem;top:50%;transform:translateY(-50%);font-size:1.1rem;pointer-events:none;}
+.cats{display:flex;gap:.6rem;flex-wrap:wrap;margin-bottom:1.75rem;}
+.cat-btn{background:rgba(255,255,255,.08);border:1.5px solid rgba(255,255,255,.15);color:rgba(255,255,255,.7);border-radius:50px;padding:.4rem .9rem;font-size:.76rem;font-weight:700;cursor:pointer;transition:all .2s;}
+.cat-btn:hover,.cat-btn.active{background:rgba(0,245,212,.15);border-color:rgba(0,245,212,.45);color:var(--mint);}
+
+/* Term count */
+.count{font-size:.75rem;color:rgba(255,255,255,.35);margin-bottom:1rem;}
+
+/* Terms */
+.terms-grid{display:flex;flex-direction:column;gap:.75rem;}
+.term-card{background:rgba(255,255,255,.06);border:1.5px solid rgba(255,255,255,.1);border-radius:16px;overflow:hidden;transition:border-color .25s;}
+.term-card:hover{border-color:rgba(0,245,212,.3);}
+.term-q{width:100%;text-align:left;background:none;border:none;color:#fff;padding:1.1rem 1.25rem;display:flex;align-items:center;gap:.75rem;cursor:pointer;}
+.term-ico{font-size:1.4rem;flex-shrink:0;}
+.term-word{font-size:.95rem;font-weight:800;flex:1;}
+.term-cat-badge{font-size:.65rem;font-weight:700;text-transform:uppercase;letter-spacing:1px;padding:.2rem .6rem;border-radius:50px;flex-shrink:0;}
+.cat-yelken{background:rgba(0,119,182,.25);color:var(--mint);}
+.cat-yön{background:rgba(255,214,0,.15);color:var(--sun);}
+.cat-manevra{background:rgba(255,107,53,.2);color:var(--orange);}
+.cat-hava{background:rgba(39,174,96,.2);color:#2ecc71;}
+.cat-güvenlik{background:rgba(231,76,60,.2);color:#e74c3c;}
+.cat-tekne{background:rgba(155,89,182,.2);color:#c39bd3;}
+.term-arr{font-size:.8rem;color:rgba(255,255,255,.4);transition:transform .25s;flex-shrink:0;}
+.term-card.open .term-arr{transform:rotate(180deg);}
+.term-body{display:none;padding:0 1.25rem 1.25rem;}
+.term-def{font-size:.87rem;color:rgba(255,255,255,.7);line-height:1.75;margin-bottom:.65rem;}
+.term-example{font-size:.8rem;background:rgba(0,245,212,.08);border-left:3px solid var(--mint);padding:.6rem .9rem;border-radius:0 10px 10px 0;color:rgba(255,255,255,.65);line-height:1.6;font-style:italic;}
+.term-card.open .term-body{display:block;}
+
+/* Empty state */
+.empty{text-align:center;padding:4rem 2rem;color:rgba(255,255,255,.35);font-size:.9rem;}
+.empty .big{font-size:3rem;margin-bottom:.75rem;}
+
+/* Win */
+#winPanel{display:none;text-align:center;background:rgba(0,245,212,.08);border:2px solid rgba(0,245,212,.3);border-radius:20px;padding:2.5rem;margin-top:2rem;}
+#winPanel h2{color:var(--mint);font-size:1.6rem;margin-bottom:.4rem;}
+.btn-nxt{display:inline-block;background:linear-gradient(135deg,var(--orange),var(--sun));color:var(--dark);padding:.8rem 2rem;border-radius:50px;text-decoration:none;font-weight:800;font-size:.9rem;}
+</style>
+</head>
+<body>
+<nav>
+  <a href="/" class="nav-logo" style="display:flex;align-items:center;gap:.55rem;text-decoration:none;">
+    <svg width="34" height="38" viewBox="0 0 105 115" xmlns="http://www.w3.org/2000/svg">
+      <defs>
+        <linearGradient id="nl1" x1="0%" y1="0%" x2="100%" y2="0%"><stop offset="0%" stop-color="#152f88"/><stop offset="40%" stop-color="#60b0f0"/><stop offset="100%" stop-color="#1a3a8f"/></linearGradient>
+        <linearGradient id="nl2" x1="0%" y1="0%" x2="100%" y2="0%"><stop offset="0%" stop-color="#1535a0"/><stop offset="45%" stop-color="#b0dcf8"/><stop offset="100%" stop-color="#1a3c90"/></linearGradient>
+        <linearGradient id="nlh" x1="0%" y1="0%" x2="100%" y2="0%"><stop offset="0%" stop-color="#64c4f5"/><stop offset="50%" stop-color="#2d6be4"/><stop offset="100%" stop-color="#64c4f5"/></linearGradient>
+      </defs>
+      <path d="M 47,5 L 8,88 L 44,88 Z" fill="url(#nl1)"/>
+      <path d="M 48.5,22 L 25,89 L 57,89 Z" fill="url(#nl2)"/>
+      <path d="M 50,40 L 42,90 L 69,90 Z" fill="url(#nl2)"/>
+      <path d="M 51,57 L 56,90 L 77,90 Z" fill="url(#nl1)"/>
+      <path d="M 6,93 L 82,93 L 79,100 Q 44,108 11,100 Z" fill="url(#nlh)"/>
+    </svg>
+    <span style="color:#fff;font-size:.82rem;font-weight:800;line-height:1.2;">MYK<br><span style="font-weight:500;font-size:.65rem;opacity:.6;font-style:italic;">Mersin Yelken · 1987</span></span>
+  </a>
+  <button class="ham" id="ham" onclick="toggleNav()" aria-label="Menü" aria-expanded="false">☰</button>
+  <div class="nav-links" id="navLinks">
+    <a href="/akademi/">🎓 Akademi</a>
+    <a href="/egitimler.html">⛵ Eğitimler</a>
+    <a href="/hakkimizda.html">🏛 Hakkımızda</a>
+    <a href="/iletisim.html">📬 İletişim</a>
+  </div>
+  <div class="nav-actions" id="navActions">
+    <a href="https://panel.mersinyelken.org.tr/login?club=mersin-yelken" class="nav-btn-outline">Üye Girişi</a>
+    <a href="https://panel.mersinyelken.org.tr/login?club=mersin-yelken" class="nav-cta">Yönetici</a>
+  </div>
+</nav>
+
+<div class="wrap">
+  <div class="title">
+    <h1>📖 Deniz Sözlüğü</h1>
+    <p>Denizciler nasıl konuşur? Kelimelere tıkla, öğren!</p>
+  </div>
+
+  <div class="search-bar">
+    <span class="search-ico">🔍</span>
+    <input type="text" id="searchBox" placeholder="Terim ara… (ör: lodos, boma, iskele)" oninput="render()">
+  </div>
+  <div class="cats">
+    <button class="cat-btn active" data-cat="hepsi" onclick="setcat('hepsi',this)">Hepsi</button>
+    <button class="cat-btn" data-cat="yelken" onclick="setcat('yelken',this)">⛵ Yelken</button>
+    <button class="cat-btn" data-cat="yön" onclick="setcat('yön',this)">🧭 Yön</button>
+    <button class="cat-btn" data-cat="manevra" onclick="setcat('manevra',this)">🌀 Manevra</button>
+    <button class="cat-btn" data-cat="hava" onclick="setcat('hava',this)">🌬️ Hava</button>
+    <button class="cat-btn" data-cat="güvenlik" onclick="setcat('güvenlik',this)">🛡️ Güvenlik</button>
+    <button class="cat-btn" data-cat="tekne" onclick="setcat('tekne',this)">🚤 Tekne Parçaları</button>
+  </div>
+  <div class="count" id="count"></div>
+  <div class="terms-grid" id="termsGrid"></div>
+  <div class="empty" id="emptyState" style="display:none;"><div class="big">🤔</div>Bu terim sözlükte yok. Farklı bir kelime dene!</div>
+
+  <div id="winPanel">
+    <h2>📖 Sözlük Kâşifi!</h2>
+    <p>10'dan fazla terimi açtın! <strong>Deniz Dili</strong> rozetini kazandın!</p>
+    <a href="/" class="btn-nxt">🏅 Tüm Rozetlere →</a>
+  </div>
+</div>
+
+<script>
+const TERMS=[
+  {w:'İskele',cat:'yön',ico:'⬅️',def:'Teknenin sol tarafı. Denize bakarken kıç (arka) tarafa doğru döndüğünüzde sol elinizin tarafı.',ex:'Kaptanlar "iskele dümen" dediğinde tekne sola döner.'},
+  {w:'Sancak',cat:'yön',ico:'➡️',def:'Teknenin sağ tarafı. Denize bakarken sağ elinizin tarafı.',ex:'"Sancak tarafında kayalık var!" uyarısı, sağda tehlike olduğunu bildirir.'},
+  {w:'Pruva (Baş)',cat:'yön',ico:'⬆️',def:'Teknenin ön kısmı. "Baş" da denir. İtalyanca "prua"dan gelir. Dalgaları ilk kesen taraf budur.',ex:'Dalgalar "pruva"dan geldiğinde tekne daha çok sallanır.'},
+  {w:'Kıç (Pupa)',cat:'yön',ico:'⬇️',def:'Teknenin arka kısmı. "Pupa" da denir. Dümen ve motor genellikle burada bulunur.',ex:'Kaptan "kıç"ta durarak liman manevrası yönetir.'},
+  {w:'Direk',cat:'tekne',ico:'🏗️',def:'Teknenin tam ortasında dikilen, yelkeni taşıyan uzun metal ya da karbon boru.',ex:'Direk devrilirse tekne hareket edemez. Her zaman dik tutulmalı!'},
+  {w:'Bumba',cat:'tekne',ico:'📏',def:'Yelkenin alt kenarına bağlı, direke dik açıyla uzanan yatay spar. Tramola ve kavança sırasında borda değiştirirken hızla karşı tarafa geçer.',ex:'"Bumba\'ya dikkat!" uyarısı işitildiğinde hemen eğil!'},
+  {w:'İskota',cat:'yelken',ico:'🪢',def:'Yelkenin alt köşesini kontrol eden halat. İskotayı gevşetince yelken rüzgara döner (power azalır), sıkınca düzleşir (power artar).',ex:'Rüzgar sert estiğinde iskotayı biraz gevşetmek tekneyi dengeler.'},
+  {w:'Şalopa',cat:'güvenlik',ico:'🛶',def:'Büyük teknelerde taşınan küçük can kurtarma botu.',ex:'Acil durumda mürettebat şalopaya biner.'},
+  {w:'Lodos',cat:'hava',ico:'🌬️',def:'Güneybatıdan esen sıcak ve kuvvetli Akdeniz rüzgarı. Mersin\'de yoğun hissedilir.',ex:'Lodos estiğinde Optimist tekneleri ile denize çıkılmaz.'},
+  {w:'Poyraz',cat:'hava',ico:'💨',def:'Kuzeydoğudan esen soğuk ve kuru rüzgar. Yelken için iyidir.',ex:'Poyrazda deniz masmavi, yelken harika olur!'},
+  {w:'Meltem',cat:'hava',ico:'🌀',def:'Öğle saatlerinde denizden karaya doğru esen, serin mevsimlik rüzgar.',ex:'Yaz öğleden sonralarında meltem başlar — denizci\'nin favori rüzgarı!'},
+  {w:'İstemsiz tramola',cat:'manevra',ico:'⚠️',def:'Beklenmedik bir anda rüzgarın teknenin kıç kısmından karşı bordaya geçmesiyle bumbayı kontrolsüzce karşı tarafa fırlatan durum. Dikkatli olunmazsa yaralanmaya yol açabilir!',ex:'"Dikkat, istemsiz tramola!" duyunca hemen eğil — bumba kafadan geçebilir.'},
+  {w:'Kavança',cat:'manevra',ico:'⬆️',def:'Pruvanın (baş) rüzgara döndürülerek yapılan borda değişikliği. Yelkenler merkeze gelir, ardından karşı tarafa geçer. "Orsaya dönmek" de denir.',ex:'Kavança sırasında yelkenler flama gibi çırpınır — bu normaldir, sabırlı ol!'},
+  {w:'Pupa seyri',cat:'manevra',ico:'⬇️',def:'Rüzgara tam kıç vererek seyir. Yelken en geniş açıya açılır; bumba karşı tarafa alınır. Dikkat gerektirir.',ex:'Pupa seyirde yelken en fazla alan kaplar, bumba tam yana açılır.'},
+  {w:'Tramola',cat:'manevra',ico:'🔄',def:'Kıçın (pupa) rüzgara döndürülerek yapılan borda değişikliği. Bumba hızla karşı tarafa geçer — önceden uyarı zorunlu!',ex:'"Tramola!" uyarısından sonra herkes eğilir, bumba güvenli şekilde geçer.'},
+  {w:'Yelken',cat:'yelken',ico:'⛵',def:'Rüzgar enerjisini yakalayan, tekneyi ileriye taşıyan kumaş yüzey.',ex:'Optimist\'in bir ana yelkeni vardır; büyük teknelerde flok da eklenir.'},
+  {w:'Flok',cat:'yelken',ico:'🔼',def:'Direğin önüne bağlanan, baş taraftaki üçgen şekilli ikinci yelken.',ex:'Flok ve ana yelken birlikte kullanılınca hız artar.'},
+  {w:'Cankurtarma yeleği',cat:'güvenlik',ico:'🦺',def:'Suda batmamayı sağlayan köpük dolu, bağlanan yelek. Denizde zorunludur!',ex:'Her yaş için farklı boy yelek var. Küçükler için tasarlanmış olanlar daha iyi tutar.'},
+  {w:'Man Overboard',cat:'güvenlik',ico:'🆘',def:'Birinin denize düştüğünü bildiren uluslararası alarm ifadesi.',ex:'"Man Overboard!" duyunca hemen düşeni gözden kaybetme, parmakla göster!'},
+  {w:'Sabit bakma',cat:'güvenlik',ico:'👁️',def:'Denize düşen kişiyi hiç gözden kaçırmadan sabit şekilde izleme tekniği.',ex:'Biri düştüğünde bir kişi "sabit bakar", diğerleri tekneyi geri döndürür.'},
+  {w:'Beaufort',cat:'hava',ico:'📊',def:'Rüzgar hızını 0-12 arası puanlayan ölçüm sistemi. 0 = tam sakin, 12 = kasırga.',ex:'Beaufort 4\'te yelken eğlenceli, 6\'da tehlikeli olmaya başlar.'},
+  {w:'Rota',cat:'yön',ico:'🗺️',def:'Teknenin gideceği planlı yol. Pusula dereceleriyle ifade edilir.',ex:'"Rotamız 270 derece" derken batıya doğru gittiğimiz anlaşılır.'},
+  {w:'Demir',cat:'tekne',ico:'⚓',def:'Tekneyi deniz dibine sabitleyen ağır metal çapa. Sembolü ⚓.',ex:'Geceyi limanda geçirmeyeceksek demir atarak sabitleniriz.'},
+  {w:'Fener',cat:'güvenlik',ico:'🔦',def:'Geceleri teknenin konumunu bildirmek için yanması zorunlu renkli lambalar.',ex:'Baş tarafta kırmızı-yeşil, kıç tarafta beyaz fener olması kural gereği.'},
+  {w:'Safra',cat:'tekne',ico:'⚖️',def:'Teknenin altına yerleştirilen ağırlık; devrilmemesi için denge sağlar.',ex:'Safra olmayan tekne kolayca devrilir — denge hayat kurtarır.'},
+];
+
+let activeCat='hepsi';
+let openCount=0;
+let badgeGiven=false;
+
+function setcat(c,btn){
+  activeCat=c;
+  document.querySelectorAll('.cat-btn').forEach(b=>b.classList.remove('active'));
+  btn.classList.add('active');
+  render();
+}
+
+function render(){
+  const q=document.getElementById('searchBox').value.toLowerCase().trim();
+  const filtered=TERMS.filter(t=>{
+    const catOk=activeCat==='hepsi'||t.cat===activeCat;
+    const searchOk=!q||t.w.toLowerCase().includes(q)||t.def.toLowerCase().includes(q);
+    return catOk&&searchOk;
+  });
+
+  const grid=document.getElementById('termsGrid');
+  const empty=document.getElementById('emptyState');
+  document.getElementById('count').textContent=`${filtered.length} terim gösteriliyor`;
+
+  if(filtered.length===0){grid.innerHTML='';empty.style.display='block';return;}
+  empty.style.display='none';
+
+  grid.innerHTML=filtered.map(t=>`
+    <div class="term-card" data-word="${t.w}">
+      <button class="term-q" onclick="toggleTerm(this)">
+        <span class="term-ico">${t.ico}</span>
+        <span class="term-word">${t.w}</span>
+        <span class="term-cat-badge cat-${t.cat}">${t.cat}</span>
+        <span class="term-arr">▼</span>
+      </button>
+      <div class="term-body">
+        <div class="term-def">${t.def}</div>
+        <div class="term-example">"${t.ex}"</div>
+      </div>
+    </div>
+  `).join('');
+}
+
+function toggleTerm(btn){
+  const card=btn.closest('.term-card');
+  card.classList.toggle('open');
+  if(card.classList.contains('open')){
+    openCount++;
+    if(openCount>=10&&!badgeGiven){
+      badgeGiven=true;
+      localStorage.setItem('badge_terimler','1');
+      document.getElementById('winPanel').style.display='block';
+      document.getElementById('winPanel').scrollIntoView({behavior:'smooth'});
+    }
+  }
+}
+
+render();
+</script>
+</body>
+</html>
