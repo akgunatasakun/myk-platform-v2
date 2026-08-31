@@ -191,6 +191,11 @@ export default function ApplicationsPage() {
                     </td>
                     <td>
                       <StatusBadge status={app.status} />
+                      {app.program_preference && (
+                        <span className="badge badge-default" style={{ marginLeft: 6, fontSize: 11 }}>
+                          {app.program_preference.toUpperCase()}
+                        </span>
+                      )}
                     </td>
                   </tr>
                 ))}

@@ -25,6 +25,7 @@ export interface PublicApplicationData {
   emergency_contact_phone?: string
   guardian_name?: string
   guardian_phone?: string
+  program_preference?: string
 }
 
 export interface PublicApplicationResponse {

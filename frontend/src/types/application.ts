@@ -26,6 +26,7 @@ export interface MembershipApplication {
   blood_type?: string | null;
   guardian_name?: string | null;
   guardian_phone?: string | null;
+  program_preference?: string | null;
 
   // PDF / imza
   has_pdf: boolean;

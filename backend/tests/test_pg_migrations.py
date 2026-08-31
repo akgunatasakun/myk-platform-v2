@@ -86,7 +86,7 @@ async def test_current_revision_is_head(engine):
     async with engine.connect() as conn:
         r = await conn.execute(text("SELECT version_num FROM alembic_version"))
         rev = r.scalar_one()
-    assert rev == "0020", f"Beklenen '0020', alınan '{rev!r}'"
+    assert rev == "0021", f"Beklenen '0021', alınan '{rev!r}'"
 
 
 # ── 2. Şema doğrulama ─────────────────────────────────────────────────────────
@@ -290,7 +290,166 @@ async def test_0018_downgrade_removes_column(engine):
         run_alembic("upgrade", "head")
 
 
-# ── 5. Downgrade/upgrade döngüsü ─────────────────────────────────────────────
+# ── 5. Migration 0021: program_preference ────────────────────────────────────
+
+@pytest.mark.asyncio
+async def test_0021_column_exists_and_nullable(engine):
+    """0021 sonrası membership_applications.program_preference kolonu nullable VARCHAR(50)."""
+    async with engine.connect() as conn:
+        r = await conn.execute(text("""
+            SELECT data_type, character_maximum_length, is_nullable
+            FROM information_schema.columns
+            WHERE table_schema = 'public'
+              AND table_name   = 'membership_applications'
+              AND column_name  = 'program_preference'
+        """))
+        row = r.fetchone()
+    assert row is not None, "membership_applications.program_preference kolonu bulunamadı"
+    assert row[0] in ("character varying", "varchar"), f"Tip yanlış: {row[0]!r}"
+    assert row[1] == 50, f"Uzunluk 50 olmalı, alınan: {row[1]!r}"
+    assert row[2] == "YES", "program_preference nullable olmalı"
+
+
+@pytest.mark.asyncio
+async def test_0021_check_constraint_exists(engine):
+    """CHECK constraint ck_membership_applications_program_preference tanımlı olmalı."""
+    async with engine.connect() as conn:
+        r = await conn.execute(text("""
+            SELECT COUNT(*) FROM information_schema.table_constraints
+            WHERE table_schema    = 'public'
+              AND table_name      = 'membership_applications'
+              AND constraint_name = 'ck_membership_applications_program_preference'
+              AND constraint_type = 'CHECK'
+        """))
+        count = r.scalar()
+    assert count == 1, "CHECK constraint bulunamadı"
+
+
+@pytest.mark.asyncio
+async def test_0021_check_constraint_rejects_invalid_value(engine):
+    """DB CHECK constraint geçersiz program_preference değerini reddetmeli."""
+    import sqlalchemy.exc
+    import uuid as _uuid
+    club_id = _uuid.uuid4()
+    async with engine.begin() as conn:
+        await conn.execute(text("""
+            INSERT INTO clubs (id, slug, name, plan, is_active)
+            VALUES (:id, :slug, 'CHECK Test Kulübü', 'starter', true)
+        """), {"id": club_id, "slug": f"chk-{club_id.hex[:8]}"})
+
+    try:
+        # pytest.raises engine.begin() dışında sarmalıyor —
+        # IntegrityError transaction'dan çıkınca yakalanır, rollback doğal yapılır.
+        with pytest.raises(sqlalchemy.exc.IntegrityError):
+            async with engine.begin() as conn:
+                await conn.execute(text("""
+                    INSERT INTO membership_applications
+                      (id, club_id, status, program_preference)
+                    VALUES (:id, :club_id, 'submitted', 'gecersiz_deger')
+                """), {"id": _uuid.uuid4(), "club_id": club_id})
+    finally:
+        async with engine.begin() as conn:
+            await conn.execute(text("DELETE FROM clubs WHERE id = :id"), {"id": club_id})
+
+
+@pytest.mark.asyncio
+async def test_0021_check_constraint_accepts_valid_values(engine):
+    """CHECK constraint geçerli program_preference değerlerini kabul etmeli."""
+    import uuid as _uuid
+    club_id = _uuid.uuid4()
+    async with engine.begin() as conn:
+        await conn.execute(text("""
+            INSERT INTO clubs (id, slug, name, plan, is_active)
+            VALUES (:id, :slug, 'Valid Check Test', 'starter', true)
+        """), {"id": club_id, "slug": f"vld-{club_id.hex[:8]}"})
+
+    try:
+        async with engine.begin() as conn:
+            for val in ("optimist", "ilca", "420", "wing_foil", "para_yelken", None):
+                await conn.execute(text("""
+                    INSERT INTO membership_applications
+                      (id, club_id, status, program_preference)
+                    VALUES (:id, :club_id, 'submitted', :pp)
+                """), {"id": _uuid.uuid4(), "club_id": club_id, "pp": val})
+    finally:
+        # FK sırası: önce membership_applications, sonra clubs
+        async with engine.begin() as conn:
+            await conn.execute(
+                text("DELETE FROM membership_applications WHERE club_id = :id"),
+                {"id": club_id},
+            )
+            await conn.execute(text("DELETE FROM clubs WHERE id = :id"), {"id": club_id})
+
+
+def test_0021_roundtrip_downgrade_upgrade():
+    """0020'ye downgrade → 0021'e tekrar upgrade: revision + kolon + CHECK doğrulanır."""
+    try:
+        run_alembic("downgrade", "0020")
+        run_alembic("upgrade", "0021")
+
+        async def _check() -> None:
+            e = create_async_engine(DATABASE_URL, echo=False)
+            try:
+                async with e.connect() as conn:
+                    r = await conn.execute(text("SELECT version_num FROM alembic_version"))
+                    assert r.scalar_one() == "0021", "Roundtrip sonrası revision 0021 değil"
+
+                    r2 = await conn.execute(text("""
+                        SELECT COUNT(*) FROM information_schema.columns
+                        WHERE table_schema = 'public'
+                          AND table_name   = 'membership_applications'
+                          AND column_name  = 'program_preference'
+                    """))
+                    assert r2.scalar() == 1, "Roundtrip sonrası program_preference kolonu yok"
+
+                    r3 = await conn.execute(text("""
+                        SELECT COUNT(*) FROM information_schema.table_constraints
+                        WHERE table_schema    = 'public'
+                          AND table_name      = 'membership_applications'
+                          AND constraint_name = 'ck_membership_applications_program_preference'
+                          AND constraint_type = 'CHECK'
+                    """))
+                    assert r3.scalar() == 1, "Roundtrip sonrası CHECK constraint yok"
+            finally:
+                await e.dispose()
+
+        asyncio.get_event_loop().run_until_complete(_check())
+    finally:
+        # Assertion veya upgrade hatası olsa bile head'e dön
+        run_alembic("upgrade", "head")
+
+
+def test_0021_downgrade_removes_column_and_constraint():
+    """0021 downgrade: CHECK constraint ve kolon kaldırılmalı."""
+    run_alembic("downgrade", "0020")
+    try:
+        import asyncio
+        async def _check():
+            e = create_async_engine(DATABASE_URL, echo=False)
+            async with e.connect() as conn:
+                # Kolon gitmiş olmalı
+                r = await conn.execute(text("""
+                    SELECT COUNT(*) FROM information_schema.columns
+                    WHERE table_schema = 'public'
+                      AND table_name   = 'membership_applications'
+                      AND column_name  = 'program_preference'
+                """))
+                assert r.scalar() == 0, "Downgrade sonrası program_preference kolonu hâlâ var"
+                # Constraint gitmiş olmalı
+                r2 = await conn.execute(text("""
+                    SELECT COUNT(*) FROM information_schema.table_constraints
+                    WHERE table_schema    = 'public'
+                      AND table_name      = 'membership_applications'
+                      AND constraint_name = 'ck_membership_applications_program_preference'
+                """))
+                assert r2.scalar() == 0, "Downgrade sonrası CHECK constraint hâlâ var"
+            await e.dispose()
+        asyncio.get_event_loop().run_until_complete(_check())
+    finally:
+        run_alembic("upgrade", "head")
+
+
+# ── 6. Downgrade/upgrade döngüsü ─────────────────────────────────────────────
 
 def test_downgrade_then_upgrade_idempotent():
     """Downgrade 0016 → upgrade head tekrar sorunsuz çalışmalı (idempotency)."""

@@ -23,6 +23,7 @@ from app.core.audit import log_action
 from app.services.event_service import emit_event
 from app.core.security import hash_password
 from app.database import get_db
+from app.enums import ProgramPreference
 from app.models.club import Club
 from app.models.membership_application import MembershipApplication
 from app.models.user import PasswordResetToken, User
@@ -66,6 +67,9 @@ class PublicApplicationCreate(BaseModel):
     guardian_name: str | None = None
     guardian_phone: str | None = None
 
+    # Eğitim programı tercihi (opsiyonel) — tip ProgramPreference | None
+    program_preference: ProgramPreference | None = None
+
     # KVKK onayı zorunlu
     consent_accepted: bool
 
@@ -82,6 +86,20 @@ class PublicApplicationCreate(BaseModel):
         if not v.strip():
             raise ValueError("Bu alan boş bırakılamaz.")
         return v.strip()
+
+    @field_validator("program_preference", mode="before")
+    @classmethod
+    def normalize_program(cls, v: object) -> str | None:
+        """Enum dönüşümünden önce strip + lower + boş → None.
+
+        Pydantic bu dönüşümden sonra değeri ProgramPreference'a coerce eder;
+        geçersiz değerlerde ValidationError fırlar (allowlist'i burada tekrar etme).
+        """
+        if v is None or v == "":
+            return None
+        if not isinstance(v, str):
+            raise ValueError("Program tercihi metin olmalıdır.")
+        return v.strip().lower()
 
 
 @router.post(
@@ -145,6 +163,7 @@ async def public_create_application(
         emergency_contact_phone=body.emergency_contact_phone,
         guardian_name=body.guardian_name,
         guardian_phone=body.guardian_phone,
+        program_preference=body.program_preference.value if body.program_preference else None,
         submitted_at=now,
         consent_accepted_at=now,
         consent_text_version="v1",
@@ -152,6 +171,7 @@ async def public_create_application(
     db.add(app)
     await db.flush()
 
+    _pp_value = body.program_preference.value if body.program_preference else None
     await log_action(
         db,
         action="public_membership_application_submitted",
@@ -162,6 +182,7 @@ async def public_create_application(
             "status": "submitted",
             "application_number": app_number,
             "email": str(body.email),
+            "program_preference": _pp_value,
         },
         request=request,
     )
@@ -176,6 +197,7 @@ async def public_create_application(
             "application_number": app_number,
             "first_name": body.first_name,
             "last_name": body.last_name,
+            "program_preference": _pp_value,
         },
     )
 

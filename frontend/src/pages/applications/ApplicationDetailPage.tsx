@@ -352,6 +352,9 @@ export default function ApplicationDetailPage() {
               }
             />
             <DetailItem label="Kan Grubu" value={app.blood_type} />
+            {app.program_preference && (
+              <DetailItem label="Program Tercihi" value={app.program_preference.toUpperCase()} />
+            )}
           </SectionCard>
 
           {/* İletişim */}

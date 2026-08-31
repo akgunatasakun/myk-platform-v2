@@ -18,7 +18,12 @@ VALID_STATUSES = {"draft", "submitted", "approved", "rejected", "cancelled"}
 # ── Oluşturma ─────────────────────────────────────────────────────────────────
 
 class MembershipApplicationCreate(BaseModel):
-    """Yeni başvuru — draft olarak oluşturulur."""
+    """Yeni başvuru — draft olarak oluşturulur.
+
+    program_preference bu şemada YOK — tarihsel veri, yalnızca
+    PublicApplicationCreate ve MembershipApplicationOut'ta bulunur.
+    Admin draft oluştururken program tercihini belirlemez.
+    """
     person_id: Optional[uuid.UUID] = None
     first_name: Optional[str] = None
     last_name: Optional[str] = None
@@ -132,6 +137,7 @@ class MembershipApplicationOut(BaseModel):
     sports_branch_id: Optional[uuid.UUID] = None
     guardian_name: Optional[str] = None
     guardian_phone: Optional[str] = None
+    program_preference: Optional[str] = None
     consent_text_version: Optional[str] = None
     consent_accepted_at: Optional[datetime] = None
 

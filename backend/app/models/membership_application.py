@@ -79,6 +79,9 @@ class MembershipApplication(Base):
     guardian_name: Mapped[Optional[str]] = mapped_column(String(200), nullable=True)
     guardian_phone: Mapped[Optional[str]] = mapped_column(String(20), nullable=True)
 
+    # Başvuranın ilk program tercihi (yönetici sonradan sports_branch_id ile yönlendirir)
+    program_preference: Mapped[Optional[str]] = mapped_column(String(50), nullable=True)
+
     consent_text_version: Mapped[Optional[str]] = mapped_column(String(20), nullable=True)
     consent_accepted_at: Mapped[Optional[datetime]] = mapped_column(
         DateTime(timezone=True), nullable=True

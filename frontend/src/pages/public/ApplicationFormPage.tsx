@@ -4,9 +4,10 @@
  * Kimlik doğrulama gerektirmez. AppShell kullanılmaz.
  * POST /api/v1/public/membership-applications
  */
-import { useState } from 'react'
+import { useState, useMemo } from 'react'
 import { publicApi } from '@/api/public'
 import type { PublicApplicationData } from '@/api/public'
+import { calcAgeInYears, getProgramAgeHint, parseProgramParam, VALID_PROGRAMS } from '@/utils/programAge'
 
 // ─── Sabitler ────────────────────────────────────────────────────────────────
 
@@ -18,6 +19,19 @@ const GENDER_OPTIONS = [
   { value: 'kadin', label: 'Kadın' },
   { value: 'belirtilmedi', label: 'Belirtilmedi' },
 ]
+
+const PROGRAM_OPTIONS = [
+  { value: '', label: 'Seçiniz (opsiyonel)' },
+  { value: 'optimist', label: 'Optimist' },
+  { value: 'ilca', label: 'ILCA (Laser)' },
+  { value: '420', label: '420' },
+  { value: 'wing_foil', label: 'Wing Foil' },
+  { value: 'para_yelken', label: 'Para Yelken' },
+]
+
+// VALID_PROGRAMS programAge.ts'den import edildi — çift tanım yok
+
+// Yaş–program uyumluluk için programAge.ts util kullanılıyor
 
 const BLOOD_TYPE_OPTIONS = [
   { value: '', label: 'Seçiniz' },
@@ -47,6 +61,7 @@ interface FormFields {
   emergency_contact_phone: string
   guardian_name: string
   guardian_phone: string
+  program_preference: string
   consent_accepted: boolean
 }
 
@@ -66,6 +81,7 @@ const INITIAL: FormFields = {
   emergency_contact_phone: '',
   guardian_name: '',
   guardian_phone: '',
+  program_preference: '',
   consent_accepted: false,
 }
 
@@ -177,11 +193,30 @@ function SuccessScreen({ applicationNumber }: { applicationNumber: string | null
 // ─── Ana bileşen ──────────────────────────────────────────────────────────────
 
 export default function ApplicationFormPage() {
-  const [fields, setFields] = useState<FormFields>(INITIAL)
+  // ?program= URL param — pre-fill program_preference if valid; flag if invalid
+  const { urlProgram, urlParamInvalid } = useMemo(() => {
+    const param = new URLSearchParams(window.location.search).get('program')
+    const { program, invalid } = parseProgramParam(param)
+    return { urlProgram: program, urlParamInvalid: invalid }
+  }, [])
+
+  const [fields, setFields] = useState<FormFields>({ ...INITIAL, program_preference: urlProgram })
   const [errors, setErrors] = useState<FieldErrors>({})
   const [submitting, setSubmitting] = useState(false)
   const [apiError, setApiError] = useState<string | null>(null)
   const [successNumber, setSuccessNumber] = useState<string | null | undefined>(undefined)
+
+  // Tam yıl yaş — helper util
+  const ageInYears = useMemo(() => calcAgeInYears(fields.birth_date), [fields.birth_date])
+
+  // 18 yaş altı → veli bilgisi uyarısı
+  const isMinor = ageInYears !== null && ageInYears < 18
+
+  // Program–yaş uyumluluk uyarısı (soft — submit engellenmez, bucket bazlı)
+  const programAgeHint = useMemo(() => {
+    if (!fields.program_preference || ageInYears === null) return null
+    return getProgramAgeHint(fields.program_preference, ageInYears)
+  }, [fields.program_preference, ageInYears])
 
   const submitted = successNumber !== undefined
 
@@ -230,6 +265,8 @@ export default function ApplicationFormPage() {
       if (fields.guardian_name.trim()) payload.guardian_name = fields.guardian_name.trim()
       if (fields.guardian_phone.trim())
         payload.guardian_phone = normalizePhone(fields.guardian_phone)
+      if (fields.program_preference && VALID_PROGRAMS.has(fields.program_preference))
+        payload.program_preference = fields.program_preference
 
       const resp = await publicApi.submitApplication(payload)
       setSuccessNumber(resp.data.application_number)
@@ -444,6 +481,12 @@ export default function ApplicationFormPage() {
                   <p className="public-section-desc">
                     18 yaş altı sporcular için veli bilgilerini giriniz.
                   </p>
+                  {isMinor && (
+                    <div className="alert alert-warning" style={{ marginBottom: 12 }}>
+                      <span>ℹ️</span>
+                      <span>Doğum tarihinize göre 18 yaşın altındasınız. Lütfen veli bilgilerini doldurunuz.</span>
+                    </div>
+                  )}
                   <div className="public-form-grid">
                     <FormField label="Veli Adı Soyadı" error={errors.guardian_name}>
                       <input
@@ -469,6 +512,40 @@ export default function ApplicationFormPage() {
                       />
                     </FormField>
                   </div>
+                </section>
+
+                {/* Program Tercihi */}
+                <section className="public-section">
+                  <h2 className="public-section-title">Eğitim Programı Tercihi</h2>
+                  <p className="public-section-desc">
+                    Katılmak istediğiniz programı seçin (opsiyonel). Yönetici kayıt sırasında yönlendirme yapacaktır.
+                  </p>
+                  {urlParamInvalid && (
+                    <div className="alert alert-warning" style={{ marginBottom: 12 }}>
+                      <span>ℹ️</span>
+                      <span>Bağlantıdaki program kodu tanınmadı. Lütfen aşağıdan bir program seçin.</span>
+                    </div>
+                  )}
+                  <div className="public-form-grid">
+                    <FormField label="Program Tercihi">
+                      <select
+                        id="field-program_preference"
+                        className="form-select"
+                        value={fields.program_preference}
+                        onChange={(e) => set('program_preference', e.target.value)}
+                      >
+                        {PROGRAM_OPTIONS.map((o) => (
+                          <option key={o.value} value={o.value}>{o.label}</option>
+                        ))}
+                      </select>
+                    </FormField>
+                  </div>
+                  {programAgeHint && (
+                    <div className="alert alert-warning" style={{ marginTop: 8 }}>
+                      <span>⚠️</span>
+                      <span>{programAgeHint} Submit'e basabilirsiniz; yönetici onay sürecinde yönlendirecektir.</span>
+                    </div>
+                  )}
                 </section>
 
                 {/* KVKK */}
