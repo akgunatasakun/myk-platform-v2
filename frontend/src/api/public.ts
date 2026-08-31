@@ -26,6 +26,7 @@ export interface PublicApplicationData {
   guardian_name?: string
   guardian_phone?: string
   program_preference?: string
+  preferred_course_id?: string
 }
 
 export interface PublicApplicationResponse {
@@ -34,9 +35,27 @@ export interface PublicApplicationResponse {
   status: string
   first_name: string | null
   last_name: string | null
+  preferred_course_id?: string | null
+  preferred_course_name?: string | null
+}
+
+export interface PublicTrainingCourse {
+  id: string
+  name: string
+  class_name?: string | null
+  level?: string | null
+  start_date?: string | null
+  end_date?: string | null
+  schedule_text?: string | null
+  fee: string | number
 }
 
 export const publicApi = {
+  listTrainingCourses: (clubSlug: string) =>
+    publicClient.get<PublicTrainingCourse[]>('/training-courses', {
+      params: { club_slug: clubSlug },
+    }),
+
   submitApplication: (data: PublicApplicationData) =>
     publicClient.post<PublicApplicationResponse>('/membership-applications', data),
 }

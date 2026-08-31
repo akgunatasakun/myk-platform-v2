@@ -1,12 +1,12 @@
 /**
- * Public üyelik başvuru formu — /basvuru
+ * Public kurs başvuru formu — /basvuru
  *
  * Kimlik doğrulama gerektirmez. AppShell kullanılmaz.
  * POST /api/v1/public/membership-applications
  */
-import { useState, useMemo } from 'react'
+import { useEffect, useMemo, useState } from 'react'
 import { publicApi } from '@/api/public'
-import type { PublicApplicationData } from '@/api/public'
+import type { PublicApplicationData, PublicTrainingCourse } from '@/api/public'
 import { calcAgeInYears, getProgramAgeHint, parseProgramParam, VALID_PROGRAMS } from '@/utils/programAge'
 
 // ─── Sabitler ────────────────────────────────────────────────────────────────
@@ -62,6 +62,7 @@ interface FormFields {
   guardian_name: string
   guardian_phone: string
   program_preference: string
+  preferred_course_id: string
   consent_accepted: boolean
 }
 
@@ -82,6 +83,7 @@ const INITIAL: FormFields = {
   guardian_name: '',
   guardian_phone: '',
   program_preference: '',
+  preferred_course_id: '',
   consent_accepted: false,
 }
 
@@ -173,7 +175,7 @@ function SuccessScreen({ applicationNumber }: { applicationNumber: string | null
       <div className="public-success-icon">⛵</div>
       <h2 className="public-success-title">Başvurunuz Alındı!</h2>
       <p className="public-success-desc">
-        Üyelik başvurunuz başarıyla iletildi. Yetkili tarafından incelendikten sonra
+        Kurs başvurunuz başarıyla iletildi. Yetkili tarafından incelendikten sonra
         e-posta adresinize bilgilendirme yapılacaktır.
       </p>
       {applicationNumber && (
@@ -205,6 +207,24 @@ export default function ApplicationFormPage() {
   const [submitting, setSubmitting] = useState(false)
   const [apiError, setApiError] = useState<string | null>(null)
   const [successNumber, setSuccessNumber] = useState<string | null | undefined>(undefined)
+  const [courses, setCourses] = useState<PublicTrainingCourse[]>([])
+  const [coursesLoading, setCoursesLoading] = useState(true)
+  const [coursesError, setCoursesError] = useState<string | null>(null)
+
+  useEffect(() => {
+    let active = true
+    publicApi.listTrainingCourses(CLUB_SLUG)
+      .then((response) => {
+        if (active) setCourses(response.data)
+      })
+      .catch(() => {
+        if (active) setCoursesError('Tanımlı eğitimler şu anda yüklenemedi. Seçmeden devam edebilirsiniz.')
+      })
+      .finally(() => {
+        if (active) setCoursesLoading(false)
+      })
+    return () => { active = false }
+  }, [])
 
   // Tam yıl yaş — helper util
   const ageInYears = useMemo(() => calcAgeInYears(fields.birth_date), [fields.birth_date])
@@ -267,6 +287,7 @@ export default function ApplicationFormPage() {
         payload.guardian_phone = normalizePhone(fields.guardian_phone)
       if (fields.program_preference && VALID_PROGRAMS.has(fields.program_preference))
         payload.program_preference = fields.program_preference
+      if (fields.preferred_course_id) payload.preferred_course_id = fields.preferred_course_id
 
       const resp = await publicApi.submitApplication(payload)
       setSuccessNumber(resp.data.application_number)
@@ -283,10 +304,14 @@ export default function ApplicationFormPage() {
       <header className="public-header">
         <div className="public-header-inner">
           <div className="public-header-logo">
-            <span className="public-header-logo-icon">⛵</span>
+            <img
+              src="/logo-icon.png"
+              alt="Mersin Yelken Kulübü logosu"
+              className="public-header-logo-image"
+            />
             <div>
               <div className="public-header-club">Mersin Yelken Kulübü</div>
-              <div className="public-header-sub">Üyelik Başvurusu</div>
+              <div className="public-header-sub">Kurs Başvurusu</div>
             </div>
           </div>
         </div>
@@ -300,7 +325,7 @@ export default function ApplicationFormPage() {
           ) : (
             <>
               <div className="public-card-title">
-                <h1>Üyelik Başvuru Formu</h1>
+                <h1>Kurs Başvuru Formu</h1>
                 <p className="public-card-desc">
                   Aşağıdaki formu eksiksiz doldurun. Yıldızlı alanlar (<span className="required-star">*</span>) zorunludur.
                 </p>
@@ -516,7 +541,7 @@ export default function ApplicationFormPage() {
 
                 {/* Program Tercihi */}
                 <section className="public-section">
-                  <h2 className="public-section-title">Eğitim Programı Tercihi</h2>
+                  <h2 className="public-section-title">Eğitim ve Program Tercihi</h2>
                   <p className="public-section-desc">
                     Katılmak istediğiniz programı seçin (opsiyonel). Yönetici kayıt sırasında yönlendirme yapacaktır.
                   </p>
@@ -546,6 +571,33 @@ export default function ApplicationFormPage() {
                       <span>{programAgeHint} Submit'e basabilirsiniz; yönetici onay sürecinde yönlendirecektir.</span>
                     </div>
                   )}
+                  <div className="public-form-grid" style={{ marginTop: 16 }}>
+                    <FormField label="Tanımlı Eğitim">
+                      <select
+                        id="field-preferred_course_id"
+                        className="form-select"
+                        value={fields.preferred_course_id}
+                        onChange={(e) => set('preferred_course_id', e.target.value)}
+                        disabled={coursesLoading}
+                      >
+                        <option value="">
+                          {coursesLoading ? 'Eğitimler yükleniyor…' : 'Henüz karar vermedim / Sonra seçmek istiyorum'}
+                        </option>
+                        {courses.map((course) => (
+                          <option key={course.id} value={course.id}>
+                            {course.name}
+                            {course.class_name ? ` · ${course.class_name}` : ''}
+                            {course.schedule_text ? ` · ${course.schedule_text}` : ''}
+                          </option>
+                        ))}
+                      </select>
+                    </FormField>
+                  </div>
+                  {coursesError && (
+                    <div className="alert alert-warning" style={{ marginTop: 8 }}>
+                      <span>ℹ️</span><span>{coursesError}</span>
+                    </div>
+                  )}
                 </section>
 
                 {/* KVKK */}
@@ -564,7 +616,7 @@ export default function ApplicationFormPage() {
                       />
                       <span>
                         6698 sayılı KVKK kapsamında kişisel verilerimin Mersin Yelken Kulübü
-                        tarafından üyelik işlemleri amacıyla işlenmesine ilişkin{' '}
+                        tarafından kurs başvurusu ve kayıt işlemleri amacıyla işlenmesine ilişkin{' '}
                         <strong>Aydınlatma Metni</strong>'ni okudum ve anladım. Verilerimin
                         işlenmesini kabul ediyorum.{' '}
                         <span className="required-star">*</span>

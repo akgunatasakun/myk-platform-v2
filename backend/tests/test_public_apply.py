@@ -24,8 +24,11 @@ from httpx import AsyncClient
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from decimal import Decimal
+
 from app.models.club import Club
 from app.models.membership_application import MembershipApplication
+from app.models.training import TrainingCourse, TrainingEnrollment
 from app.models.user import PasswordResetToken, User
 
 
@@ -461,6 +464,407 @@ async def test_program_preference_not_changed_by_status_update(
     assert saved is not None
     assert saved.program_preference == "420", (
         f"Status update program_preference'ı değiştirdi! Alınan: {saved.program_preference!r}"
+    )
+
+
+# ─── Testler — preferred_course_id ───────────────────────────────────────────
+
+def _make_course(
+    club_id: uuid.UUID,
+    *,
+    name: str = "Test Kurs",
+    status: str = "planlandi",
+    is_active: bool = True,
+    is_deleted: bool = False,
+) -> TrainingCourse:
+    return TrainingCourse(
+        id=uuid.uuid4(),
+        club_id=club_id,
+        name=name,
+        status=status,
+        is_active=is_active,
+        is_deleted=is_deleted,
+        fee=Decimal("0"),
+    )
+
+
+@pytest.mark.asyncio
+async def test_public_course_list_tenant_filter(
+    client: AsyncClient,
+    db_session: AsyncSession,
+    test_club: Club,
+) -> None:
+    """Sadece aynı kulübün açık eğitimleri listelenmeli; başka kulübünkiler görünmemeli."""
+    # İkinci kulüp + kurs
+    club2 = Club(
+        id=uuid.uuid4(), name="Diğer Kulüp",
+        slug=f"diger-{uuid.uuid4().hex[:6]}", plan="starter", is_active=True,
+    )
+    db_session.add(club2)
+    course_own = _make_course(test_club.id, name="Kendi Kurs")
+    course_other = _make_course(club2.id, name="Başka Kulüp Kursu")
+    db_session.add_all([course_own, course_other])
+    await db_session.flush()
+
+    resp = await client.get(
+        "/api/v1/public/training-courses",
+        params={"club_slug": test_club.slug},
+    )
+    assert resp.status_code == 200
+    ids = {c["id"] for c in resp.json()}
+    assert str(course_own.id) in ids, "Kendi kursu listede olmalı"
+    assert str(course_other.id) not in ids, "Başka kulübün kursu listede olmamalı"
+
+
+@pytest.mark.asyncio
+async def test_public_course_list_status_filter(
+    client: AsyncClient,
+    db_session: AsyncSession,
+    test_club: Club,
+) -> None:
+    """Pasif / silinmiş / tamamlanmış kurslar listelenmemeli."""
+    active = _make_course(test_club.id, name="Aktif Kurs", status="aktif")
+    planned = _make_course(test_club.id, name="Planlanan Kurs", status="planlandi")
+    inactive = _make_course(test_club.id, name="Pasif Kurs", is_active=False)
+    deleted = _make_course(test_club.id, name="Silinmiş Kurs", is_deleted=True)
+    completed = _make_course(test_club.id, name="Tamamlanan Kurs", status="tamamlandi")
+    db_session.add_all([active, planned, inactive, deleted, completed])
+    await db_session.flush()
+
+    resp = await client.get(
+        "/api/v1/public/training-courses",
+        params={"club_slug": test_club.slug},
+    )
+    assert resp.status_code == 200
+    ids = {c["id"] for c in resp.json()}
+    assert str(active.id) in ids
+    assert str(planned.id) in ids
+    assert str(inactive.id) not in ids, "Pasif kurs görünmemeli"
+    assert str(deleted.id) not in ids, "Silinmiş kurs görünmemeli"
+    assert str(completed.id) not in ids, "Tamamlanan kurs görünmemeli"
+
+
+@pytest.mark.asyncio
+async def test_submit_with_valid_preferred_course(
+    client: AsyncClient,
+    db_session: AsyncSession,
+    test_club: Club,
+) -> None:
+    """Geçerli preferred_course_id → 201, alan response'ta mevcut."""
+    course = _make_course(test_club.id, name="Geçerli Kurs")
+    db_session.add(course)
+    await db_session.flush()
+
+    resp = await client.post(
+        "/api/v1/public/membership-applications",
+        json={
+            "club_slug": test_club.slug,
+            "first_name": "Valid", "last_name": "Course",
+            "email": f"vc-{uuid.uuid4().hex[:6]}@test.com",
+            "phone": "05320001001", "consent_accepted": True,
+            "preferred_course_id": str(course.id),
+        },
+    )
+    assert resp.status_code == 201
+    data = resp.json()
+    assert data["preferred_course_id"] == str(course.id)
+    assert data["preferred_course_name"] == "Geçerli Kurs"
+
+
+@pytest.mark.asyncio
+async def test_submit_with_null_preferred_course(
+    client: AsyncClient,
+    test_club: Club,
+) -> None:
+    """preferred_course_id=null → 201, alan response'ta null."""
+    resp = await client.post(
+        "/api/v1/public/membership-applications",
+        json={
+            "club_slug": test_club.slug,
+            "first_name": "Null", "last_name": "Course",
+            "email": f"nc-{uuid.uuid4().hex[:6]}@test.com",
+            "phone": "05320001002", "consent_accepted": True,
+            "preferred_course_id": None,
+        },
+    )
+    assert resp.status_code == 201
+    assert resp.json()["preferred_course_id"] is None
+
+
+@pytest.mark.asyncio
+async def test_submit_with_fake_uuid_422(
+    client: AsyncClient,
+    test_club: Club,
+) -> None:
+    """Uydurma UUID → 422 (kurs bulunamaz)."""
+    resp = await client.post(
+        "/api/v1/public/membership-applications",
+        json={
+            "club_slug": test_club.slug,
+            "first_name": "Fake", "last_name": "UUID",
+            "email": f"fu-{uuid.uuid4().hex[:6]}@test.com",
+            "phone": "05320001003", "consent_accepted": True,
+            "preferred_course_id": str(uuid.uuid4()),
+        },
+    )
+    assert resp.status_code == 422
+
+
+@pytest.mark.asyncio
+async def test_submit_with_foreign_club_course_422(
+    client: AsyncClient,
+    db_session: AsyncSession,
+    test_club: Club,
+) -> None:
+    """Başka kulübün kursu → 422."""
+    club2 = Club(
+        id=uuid.uuid4(), name="Yabancı Kulüp",
+        slug=f"yab-{uuid.uuid4().hex[:6]}", plan="starter", is_active=True,
+    )
+    db_session.add(club2)
+    course_other = _make_course(club2.id, name="Yabancı Kurs")
+    db_session.add(course_other)
+    await db_session.flush()
+
+    resp = await client.post(
+        "/api/v1/public/membership-applications",
+        json={
+            "club_slug": test_club.slug,
+            "first_name": "Foreign", "last_name": "Club",
+            "email": f"fc-{uuid.uuid4().hex[:6]}@test.com",
+            "phone": "05320001004", "consent_accepted": True,
+            "preferred_course_id": str(course_other.id),
+        },
+    )
+    assert resp.status_code == 422
+
+
+@pytest.mark.asyncio
+async def test_submit_with_inactive_course_422(
+    client: AsyncClient,
+    db_session: AsyncSession,
+    test_club: Club,
+) -> None:
+    """is_active=False kurs → 422."""
+    course = _make_course(test_club.id, name="Pasif Kurs", is_active=False)
+    db_session.add(course)
+    await db_session.flush()
+
+    resp = await client.post(
+        "/api/v1/public/membership-applications",
+        json={
+            "club_slug": test_club.slug,
+            "first_name": "Inactive", "last_name": "Course",
+            "email": f"ic-{uuid.uuid4().hex[:6]}@test.com",
+            "phone": "05320001005", "consent_accepted": True,
+            "preferred_course_id": str(course.id),
+        },
+    )
+    assert resp.status_code == 422
+
+
+@pytest.mark.asyncio
+async def test_submit_with_deleted_course_422(
+    client: AsyncClient,
+    db_session: AsyncSession,
+    test_club: Club,
+) -> None:
+    """is_deleted=True kurs → 422."""
+    course = _make_course(test_club.id, name="Silinmiş Kurs", is_deleted=True)
+    db_session.add(course)
+    await db_session.flush()
+
+    resp = await client.post(
+        "/api/v1/public/membership-applications",
+        json={
+            "club_slug": test_club.slug,
+            "first_name": "Deleted", "last_name": "Course",
+            "email": f"dc-{uuid.uuid4().hex[:6]}@test.com",
+            "phone": "05320001006", "consent_accepted": True,
+            "preferred_course_id": str(course.id),
+        },
+    )
+    assert resp.status_code == 422
+
+
+@pytest.mark.asyncio
+async def test_form_data_does_not_contain_preferred_course_id(
+    client: AsyncClient,
+    db_session: AsyncSession,
+    test_club: Club,
+) -> None:
+    """form_data alanı preferred_course_id içermemeli — üst düzeyde kolon olarak tutulur."""
+    course = _make_course(test_club.id, name="Form Data Kurs")
+    db_session.add(course)
+    await db_session.flush()
+
+    resp = await client.post(
+        "/api/v1/public/membership-applications",
+        json={
+            "club_slug": test_club.slug,
+            "first_name": "FormData2", "last_name": "Test",
+            "email": f"fd2-{uuid.uuid4().hex[:6]}@test.com",
+            "phone": "05320001007", "consent_accepted": True,
+            "preferred_course_id": str(course.id),
+        },
+    )
+    assert resp.status_code == 201
+    app_id = resp.json()["id"]
+
+    result = await db_session.execute(
+        select(MembershipApplication).where(MembershipApplication.id == uuid.UUID(app_id))
+    )
+    saved = result.scalar_one_or_none()
+    assert saved is not None
+    form_data = saved.form_data or {}
+    assert "preferred_course_id" not in form_data, (
+        f"form_data içinde preferred_course_id olmamalı: {form_data}"
+    )
+
+
+@pytest.mark.asyncio
+async def test_admin_list_includes_preferred_course_name(
+    client: AsyncClient,
+    db_session: AsyncSession,
+    test_club: Club,
+    yonetici_token: str,
+) -> None:
+    """Admin list yanıtı preferred_course_id + preferred_course_name içermeli."""
+    course = _make_course(test_club.id, name="Admin List Kursu")
+    db_session.add(course)
+    await db_session.flush()
+
+    create_resp = await client.post(
+        "/api/v1/public/membership-applications",
+        json={
+            "club_slug": test_club.slug,
+            "first_name": "AdminCourse", "last_name": "List",
+            "email": f"acl-{uuid.uuid4().hex[:6]}@test.com",
+            "phone": "05320001008", "consent_accepted": True,
+            "preferred_course_id": str(course.id),
+        },
+    )
+    assert create_resp.status_code == 201
+    app_id = create_resp.json()["id"]
+
+    list_resp = await client.get(
+        "/api/v1/membership-applications",
+        headers={"Authorization": f"Bearer {yonetici_token}"},
+    )
+    assert list_resp.status_code == 200
+    items = list_resp.json().get("items", list_resp.json())
+    target = next((x for x in items if x["id"] == app_id), None)
+    assert target is not None
+    assert target.get("preferred_course_id") == str(course.id)
+    assert target.get("preferred_course_name") == "Admin List Kursu"
+
+
+@pytest.mark.asyncio
+async def test_admin_detail_includes_preferred_course_name(
+    client: AsyncClient,
+    db_session: AsyncSession,
+    test_club: Club,
+    yonetici_token: str,
+) -> None:
+    """Admin detail preferred_course_name'i de döndürmeli."""
+    course = _make_course(test_club.id, name="Detail Kursu Adı")
+    db_session.add(course)
+    await db_session.flush()
+
+    create_resp = await client.post(
+        "/api/v1/public/membership-applications",
+        json={
+            "club_slug": test_club.slug,
+            "first_name": "DetailCourse", "last_name": "Name",
+            "email": f"dcn-{uuid.uuid4().hex[:6]}@test.com",
+            "phone": "05320001009", "consent_accepted": True,
+            "preferred_course_id": str(course.id),
+        },
+    )
+    assert create_resp.status_code == 201
+    app_id = create_resp.json()["id"]
+
+    detail_resp = await client.get(
+        f"/api/v1/membership-applications/{app_id}",
+        headers={"Authorization": f"Bearer {yonetici_token}"},
+    )
+    assert detail_resp.status_code == 200
+    data = detail_resp.json()
+    assert data.get("preferred_course_id") == str(course.id)
+    assert data.get("preferred_course_name") == "Detail Kursu Adı"
+
+
+@pytest.mark.asyncio
+async def test_status_patch_does_not_change_preferred_course(
+    client: AsyncClient,
+    db_session: AsyncSession,
+    test_club: Club,
+    yonetici_token: str,
+) -> None:
+    """Status PATCH preferred_course_id'yi değiştirmemeli."""
+    course = _make_course(test_club.id, name="Sabit Kurs")
+    db_session.add(course)
+    await db_session.flush()
+
+    create_resp = await client.post(
+        "/api/v1/public/membership-applications",
+        json={
+            "club_slug": test_club.slug,
+            "first_name": "StatusPatch", "last_name": "Course",
+            "email": f"spc-{uuid.uuid4().hex[:6]}@test.com",
+            "phone": "05320001010", "consent_accepted": True,
+            "preferred_course_id": str(course.id),
+        },
+    )
+    assert create_resp.status_code == 201
+    app_id = create_resp.json()["id"]
+
+    patch_resp = await client.patch(
+        f"/api/v1/membership-applications/{app_id}/status",
+        json={"to_status": "approved"},
+        headers={"Authorization": f"Bearer {yonetici_token}"},
+    )
+    assert patch_resp.status_code == 200
+
+    result = await db_session.execute(
+        select(MembershipApplication).where(MembershipApplication.id == uuid.UUID(app_id))
+    )
+    saved = result.scalar_one_or_none()
+    assert saved is not None
+    assert saved.preferred_course_id == course.id, (
+        f"Status PATCH preferred_course_id değiştirdi! Alınan: {saved.preferred_course_id!r}"
+    )
+
+
+@pytest.mark.asyncio
+async def test_no_enrollment_created_on_submit(
+    client: AsyncClient,
+    db_session: AsyncSession,
+    test_club: Club,
+) -> None:
+    """Başvuru submit'i TrainingEnrollment oluşturmamalı — bu ayrı 'Eğitime Kaydet' adımı."""
+    course = _make_course(test_club.id, name="Enrollment Yok Kursu")
+    db_session.add(course)
+    await db_session.flush()
+
+    resp = await client.post(
+        "/api/v1/public/membership-applications",
+        json={
+            "club_slug": test_club.slug,
+            "first_name": "NoEnroll", "last_name": "Test",
+            "email": f"ne-{uuid.uuid4().hex[:6]}@test.com",
+            "phone": "05320001011", "consent_accepted": True,
+            "preferred_course_id": str(course.id),
+        },
+    )
+    assert resp.status_code == 201
+
+    result = await db_session.execute(
+        select(TrainingEnrollment).where(TrainingEnrollment.course_id == course.id)
+    )
+    enrollments = result.scalars().all()
+    assert len(enrollments) == 0, (
+        f"Submit TrainingEnrollment oluşturmamalı, {len(enrollments)} kayıt bulundu"
     )
 
 

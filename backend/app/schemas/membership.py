@@ -138,6 +138,8 @@ class MembershipApplicationOut(BaseModel):
     guardian_name: Optional[str] = None
     guardian_phone: Optional[str] = None
     program_preference: Optional[str] = None
+    preferred_course_id: Optional[uuid.UUID] = None
+    preferred_course_name: Optional[str] = None
     consent_text_version: Optional[str] = None
     consent_accepted_at: Optional[datetime] = None
 

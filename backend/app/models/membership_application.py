@@ -3,7 +3,7 @@ import uuid
 from datetime import date, datetime
 from typing import TYPE_CHECKING, Any, Optional
 
-from sqlalchemy import Boolean, Date, DateTime, ForeignKey, String, Text, UniqueConstraint, func
+from sqlalchemy import Boolean, Date, DateTime, ForeignKey, Index, String, Text, UniqueConstraint, func
 from sqlalchemy.dialects.postgresql import JSONB
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 from sqlalchemy.types import JSON
@@ -46,6 +46,13 @@ def requires_approval(from_status: str, to_status: str) -> bool:
 
 class MembershipApplication(Base):
     __tablename__ = "membership_applications"
+    __table_args__ = (
+        Index(
+            "ix_membership_applications_club_preferred_course",
+            "club_id",
+            "preferred_course_id",
+        ),
+    )
 
     id: Mapped[uuid.UUID] = mapped_column(primary_key=True, default=uuid.uuid4)
     club_id: Mapped[uuid.UUID] = mapped_column(
@@ -81,6 +88,9 @@ class MembershipApplication(Base):
 
     # Başvuranın ilk program tercihi (yönetici sonradan sports_branch_id ile yönlendirir)
     program_preference: Mapped[Optional[str]] = mapped_column(String(50), nullable=True)
+    preferred_course_id: Mapped[Optional[uuid.UUID]] = mapped_column(
+        ForeignKey("training_courses.id", ondelete="SET NULL"), nullable=True
+    )
 
     consent_text_version: Mapped[Optional[str]] = mapped_column(String(20), nullable=True)
     consent_accepted_at: Mapped[Optional[datetime]] = mapped_column(

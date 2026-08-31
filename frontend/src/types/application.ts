@@ -27,6 +27,8 @@ export interface MembershipApplication {
   guardian_name?: string | null;
   guardian_phone?: string | null;
   program_preference?: string | null;
+  preferred_course_id?: string | null;
+  preferred_course_name?: string | null;
 
   // PDF / imza
   has_pdf: boolean;

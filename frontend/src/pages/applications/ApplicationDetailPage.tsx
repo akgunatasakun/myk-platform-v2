@@ -355,6 +355,7 @@ export default function ApplicationDetailPage() {
             {app.program_preference && (
               <DetailItem label="Program Tercihi" value={app.program_preference.toUpperCase()} />
             )}
+            <DetailItem label="Tercih Edilen Eğitim" value={app.preferred_course_name} />
           </SectionCard>
 
           {/* İletişim */}

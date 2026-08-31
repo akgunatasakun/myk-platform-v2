@@ -10,9 +10,10 @@ import hashlib
 import logging
 import secrets
 import uuid
-from datetime import datetime, timedelta, timezone
+from datetime import date, datetime, timedelta, timezone
+from decimal import Decimal
 
-from fastapi import APIRouter, Depends, HTTPException, Request, status
+from fastapi import APIRouter, Depends, HTTPException, Query, Request, status
 from fastapi.responses import Response
 from pydantic import BaseModel, EmailStr, field_validator
 from sqlalchemy import select
@@ -26,6 +27,7 @@ from app.database import get_db
 from app.enums import ProgramPreference
 from app.models.club import Club
 from app.models.membership_application import MembershipApplication
+from app.models.training import TrainingCourse
 from app.models.user import PasswordResetToken, User
 from app.schemas.membership import MembershipApplicationOut
 from app.services.email_service import send_password_reset_email
@@ -69,6 +71,7 @@ class PublicApplicationCreate(BaseModel):
 
     # Eğitim programı tercihi (opsiyonel) — tip ProgramPreference | None
     program_preference: ProgramPreference | None = None
+    preferred_course_id: uuid.UUID | None = None
 
     # KVKK onayı zorunlu
     consent_accepted: bool
@@ -102,6 +105,51 @@ class PublicApplicationCreate(BaseModel):
         return v.strip().lower()
 
 
+class PublicTrainingCourseOut(BaseModel):
+    """Public başvuru formunda gösterilebilecek güvenli eğitim özeti."""
+
+    id: uuid.UUID
+    name: str
+    class_name: str | None = None
+    level: str | None = None
+    start_date: date | None = None
+    end_date: date | None = None
+    schedule_text: str | None = None
+    fee: Decimal
+
+
+@router.get(
+    "/public/training-courses",
+    response_model=list[PublicTrainingCourseOut],
+    summary="Başvuruya açık eğitimleri listele",
+)
+async def public_list_training_courses(
+    club_slug: str = Query(..., min_length=1),
+    db: AsyncSession = Depends(get_db),
+) -> list[PublicTrainingCourseOut]:
+    club_id = (
+        await db.execute(
+            select(Club.id).where(Club.slug == club_slug, Club.is_active.is_(True))
+        )
+    ).scalar_one_or_none()
+    if club_id is None:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Kulüp bulunamadı.")
+
+    courses = (
+        await db.execute(
+            select(TrainingCourse)
+            .where(
+                TrainingCourse.club_id == club_id,
+                TrainingCourse.is_active.is_(True),
+                TrainingCourse.is_deleted.is_(False),
+                TrainingCourse.status.in_(["planlandi", "aktif"]),
+            )
+            .order_by(TrainingCourse.start_date.asc().nullslast(), TrainingCourse.name)
+        )
+    ).scalars().all()
+    return [PublicTrainingCourseOut.model_validate(course, from_attributes=True) for course in courses]
+
+
 @router.post(
     "/public/membership-applications",
     response_model=MembershipApplicationOut,
@@ -127,6 +175,25 @@ async def public_create_application(
             status_code=status.HTTP_404_NOT_FOUND,
             detail="Kulüp bulunamadı.",
         )
+
+    preferred_course: TrainingCourse | None = None
+    if body.preferred_course_id is not None:
+        preferred_course = (
+            await db.execute(
+                select(TrainingCourse).where(
+                    TrainingCourse.id == body.preferred_course_id,
+                    TrainingCourse.club_id == club.id,
+                    TrainingCourse.is_active.is_(True),
+                    TrainingCourse.is_deleted.is_(False),
+                    TrainingCourse.status.in_(["planlandi", "aktif"]),
+                )
+            )
+        ).scalar_one_or_none()
+        if preferred_course is None:
+            raise HTTPException(
+                status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+                detail="Seçilen eğitim başvuruya açık değil.",
+            )
 
     now = datetime.now(timezone.utc)
 
@@ -164,6 +231,7 @@ async def public_create_application(
         guardian_name=body.guardian_name,
         guardian_phone=body.guardian_phone,
         program_preference=body.program_preference.value if body.program_preference else None,
+        preferred_course_id=body.preferred_course_id,
         submitted_at=now,
         consent_accepted_at=now,
         consent_text_version="v1",
@@ -183,6 +251,7 @@ async def public_create_application(
             "application_number": app_number,
             "email": str(body.email),
             "program_preference": _pp_value,
+            "preferred_course_id": str(body.preferred_course_id) if body.preferred_course_id else None,
         },
         request=request,
     )
@@ -198,12 +267,15 @@ async def public_create_application(
             "first_name": body.first_name,
             "last_name": body.last_name,
             "program_preference": _pp_value,
+            "preferred_course_id": str(body.preferred_course_id) if body.preferred_course_id else None,
         },
     )
 
     await db.commit()
     await db.refresh(app)
-    return MembershipApplicationOut.from_orm_safe(app)
+    out = MembershipApplicationOut.from_orm_safe(app)
+    out.preferred_course_name = preferred_course.name if preferred_course else None
+    return out
 
 
 # ══════════════════════════════════════════════════════════════════════════════

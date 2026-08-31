@@ -196,6 +196,11 @@ export default function ApplicationsPage() {
                           {app.program_preference.toUpperCase()}
                         </span>
                       )}
+                      {app.preferred_course_name && (
+                        <div style={{ marginTop: 5, fontSize: 12, color: 'var(--color-muted)' }}>
+                          Eğitim: {app.preferred_course_name}
+                        </div>
+                      )}
                     </td>
                   </tr>
                 ))}

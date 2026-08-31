@@ -834,6 +834,13 @@ html, body {
   line-height: 1;
 }
 
+.public-header-logo-image {
+  width: 44px;
+  height: 44px;
+  object-fit: contain;
+  flex-shrink: 0;
+}
+
 .public-header-club {
   font-size: 17px;
   font-weight: 700;

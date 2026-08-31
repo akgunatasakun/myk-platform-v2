@@ -86,7 +86,7 @@ async def test_current_revision_is_head(engine):
     async with engine.connect() as conn:
         r = await conn.execute(text("SELECT version_num FROM alembic_version"))
         rev = r.scalar_one()
-    assert rev == "0021", f"Beklenen '0021', alınan '{rev!r}'"
+    assert rev == "0022", f"Beklenen '0022', alınan '{rev!r}'"
 
 
 # ── 2. Şema doğrulama ─────────────────────────────────────────────────────────
@@ -449,7 +449,120 @@ def test_0021_downgrade_removes_column_and_constraint():
         run_alembic("upgrade", "head")
 
 
-# ── 6. Downgrade/upgrade döngüsü ─────────────────────────────────────────────
+# ── 6. Migration 0022: preferred_course_id ───────────────────────────────────
+
+@pytest.mark.asyncio
+async def test_0022_column_exists_and_nullable(engine):
+    """0022 sonrası membership_applications.preferred_course_id kolonu nullable UUID."""
+    async with engine.connect() as conn:
+        r = await conn.execute(text("""
+            SELECT data_type, is_nullable
+            FROM information_schema.columns
+            WHERE table_schema = 'public'
+              AND table_name   = 'membership_applications'
+              AND column_name  = 'preferred_course_id'
+        """))
+        row = r.fetchone()
+    assert row is not None, "membership_applications.preferred_course_id kolonu bulunamadı"
+    assert row[0] == "uuid", f"Tip UUID olmalı, alınan: {row[0]!r}"
+    assert row[1] == "YES", "preferred_course_id nullable olmalı"
+
+
+@pytest.mark.asyncio
+async def test_0022_fk_to_training_courses(engine):
+    """preferred_course_id → training_courses.id FK tanımlı olmalı."""
+    async with engine.connect() as conn:
+        r = await conn.execute(text("""
+            SELECT COUNT(*)
+            FROM information_schema.referential_constraints rc
+            JOIN information_schema.table_constraints src
+              ON src.constraint_name = rc.constraint_name
+             AND src.table_name = 'membership_applications'
+             AND src.table_schema = 'public'
+            JOIN information_schema.table_constraints ref
+              ON ref.constraint_name = rc.unique_constraint_name
+             AND ref.table_name = 'training_courses'
+             AND ref.table_schema = 'public'
+        """))
+        count = r.scalar()
+    assert count >= 1, "preferred_course_id → training_courses FK bulunamadı"
+
+
+@pytest.mark.asyncio
+async def test_0022_composite_index_exists(engine):
+    """(club_id, preferred_course_id) composite index tanımlı olmalı."""
+    async with engine.connect() as conn:
+        r = await conn.execute(text("""
+            SELECT COUNT(*) FROM pg_indexes
+            WHERE schemaname = 'public'
+              AND tablename  = 'membership_applications'
+              AND indexname  = 'ix_membership_applications_club_preferred_course'
+        """))
+        count = r.scalar()
+    assert count == 1, "ix_membership_applications_club_preferred_course index bulunamadı"
+
+
+@pytest.mark.asyncio
+async def test_0022_null_accepted(engine):
+    """preferred_course_id=NULL başarıyla eklenmeli."""
+    import uuid as _uuid
+    club_id = _uuid.uuid4()
+    async with engine.begin() as conn:
+        await conn.execute(text("""
+            INSERT INTO clubs (id, slug, name, plan, is_active)
+            VALUES (:id, :slug, '0022 NULL Test', 'starter', true)
+        """), {"id": club_id, "slug": f"null22-{club_id.hex[:8]}"})
+    try:
+        async with engine.begin() as conn:
+            app_id = _uuid.uuid4()
+            await conn.execute(text("""
+                INSERT INTO membership_applications (id, club_id, status, preferred_course_id)
+                VALUES (:id, :club_id, 'submitted', NULL)
+            """), {"id": app_id, "club_id": club_id})
+        async with engine.connect() as conn:
+            r = await conn.execute(text(
+                "SELECT preferred_course_id FROM membership_applications WHERE id = :id"
+            ), {"id": app_id})
+            assert r.scalar() is None, "preferred_course_id NULL olmalı"
+    finally:
+        async with engine.begin() as conn:
+            await conn.execute(text("DELETE FROM membership_applications WHERE club_id = :id"), {"id": club_id})
+            await conn.execute(text("DELETE FROM clubs WHERE id = :id"), {"id": club_id})
+
+
+def test_0022_downgrade_removes_column_index_fk():
+    """0022 downgrade: kolon, index ve FK kaldırılmalı."""
+    try:
+        run_alembic("downgrade", "0021")
+
+        async def _check() -> None:
+            e = create_async_engine(DATABASE_URL, echo=False)
+            try:
+                async with e.connect() as conn:
+                    r = await conn.execute(text("""
+                        SELECT COUNT(*) FROM information_schema.columns
+                        WHERE table_schema = 'public'
+                          AND table_name   = 'membership_applications'
+                          AND column_name  = 'preferred_course_id'
+                    """))
+                    assert r.scalar() == 0, "Downgrade sonrası preferred_course_id kolonu hâlâ var"
+
+                    r2 = await conn.execute(text("""
+                        SELECT COUNT(*) FROM pg_indexes
+                        WHERE schemaname = 'public'
+                          AND tablename  = 'membership_applications'
+                          AND indexname  = 'ix_membership_applications_club_preferred_course'
+                    """))
+                    assert r2.scalar() == 0, "Downgrade sonrası composite index hâlâ var"
+            finally:
+                await e.dispose()
+
+        asyncio.get_event_loop().run_until_complete(_check())
+    finally:
+        run_alembic("upgrade", "head")
+
+
+# ── 8. Downgrade/upgrade döngüsü ─────────────────────────────────────────────
 
 def test_downgrade_then_upgrade_idempotent():
     """Downgrade 0016 → upgrade head tekrar sorunsuz çalışmalı (idempotency)."""

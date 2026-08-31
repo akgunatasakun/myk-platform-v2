@@ -34,12 +34,13 @@ from app.core.tenant import get_club_id
 from app.database import get_db
 from app.dependencies.storage import get_storage
 from app.models.membership_application import (
+    APPROVE_REQUIRED_TRANSITIONS,
     MembershipApplication,
     NO_DELETE_STATUSES,
-    APPROVE_REQUIRED_TRANSITIONS,
     is_valid_transition,
     requires_approval,
 )
+from app.models.training import TrainingCourse
 from app.schemas.auth import TokenPayload
 from app.schemas.membership import (
     MembershipApplicationCreate,
@@ -150,8 +151,30 @@ def _build_out(
     app: MembershipApplication,
     pdf_url: Optional[str] = None,
     signature_url: Optional[str] = None,
+    preferred_course_name: Optional[str] = None,
 ) -> MembershipApplicationOut:
-    return MembershipApplicationOut.from_orm_safe(app, pdf_url=pdf_url, signature_url=signature_url)
+    out = MembershipApplicationOut.from_orm_safe(
+        app, pdf_url=pdf_url, signature_url=signature_url
+    )
+    out.preferred_course_name = preferred_course_name
+    return out
+
+
+async def _preferred_course_name(
+    app: MembershipApplication,
+    club_id: uuid.UUID,
+    db: AsyncSession,
+) -> Optional[str]:
+    if app.preferred_course_id is None:
+        return None
+    return (
+        await db.execute(
+            select(TrainingCourse.name).where(
+                TrainingCourse.id == app.preferred_course_id,
+                TrainingCourse.club_id == club_id,
+            )
+        )
+    ).scalar_one_or_none()
 
 
 # ── POST /membership-applications ────────────────────────────────────────────
@@ -214,6 +237,20 @@ async def list_applications(
     q = q.offset(skip).limit(limit).order_by(MembershipApplication.created_at.desc())
     rows = (await db.execute(q)).scalars().all()
 
+    course_ids = {r.preferred_course_id for r in rows if r.preferred_course_id}
+    course_names: dict[uuid.UUID, str] = {}
+    if course_ids:
+        course_names = dict(
+            (
+                await db.execute(
+                    select(TrainingCourse.id, TrainingCourse.name).where(
+                        TrainingCourse.club_id == club_id,
+                        TrainingCourse.id.in_(course_ids),
+                    )
+                )
+            ).all()
+        )
+
     # Batch pre-signed URL üretimi
     pdf_keys = [r.pdf_object_key for r in rows if r.pdf_object_key]
     sig_keys = [r.signature_object_key for r in rows if r.signature_object_key]
@@ -227,6 +264,7 @@ async def list_applications(
             r,
             pdf_url=url_map.get(r.pdf_object_key) if r.pdf_object_key else None,
             signature_url=url_map.get(r.signature_object_key) if r.signature_object_key else None,
+            preferred_course_name=course_names.get(r.preferred_course_id),
         )
         for r in rows
     ]
@@ -253,7 +291,12 @@ async def get_application(
     if app.signature_object_key:
         sig_url = await storage.presigned_url(app.signature_object_key, expires=PDF_SIG_URL_EXPIRES)
 
-    return _build_out(app, pdf_url=pdf_url, signature_url=sig_url)
+    return _build_out(
+        app,
+        pdf_url=pdf_url,
+        signature_url=sig_url,
+        preferred_course_name=await _preferred_course_name(app, club_id, db),
+    )
 
 
 # ── PATCH /membership-applications/{id} (alan güncelleme) ─────────────────────
