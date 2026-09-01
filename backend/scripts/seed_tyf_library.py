@@ -149,7 +149,8 @@ DOCUMENTS = [
 
 SOURCE = "Türkiye Yelken Federasyonu"
 MINIO_PREFIX = "academy/tyf"
-OWNER_TYPE = "tyf_library"   # list_documents ?owner_type=tyf_library ile filtrelenir
+# Kütüphane ayrımı owner_type değil, category_code (tyf-dingi/kite/wing/staff) ile yapılır.
+# owner_type=None → DB check constraint ihlali yok (nullable kolon).
 
 
 # ── Yardımcılar ───────────────────────────────────────────────────────────────
@@ -222,7 +223,7 @@ async def _seed_document(
     storage_key = f"{MINIO_PREFIX}/{doc_def['filename']}"
 
     # MinIO'ya yükle
-    log.info("  MinIO'ya yükleniyor: %s → %s/%s", doc_def["filename"], bucket, storage_key)
+    log.info("  MinIO'ya yükleniyor: %s → %s", doc_def["filename"], storage_key)
     with open(pdf_path, "rb") as f:
         data = f.read()
     await storage.upload(storage_key, data, "application/pdf")
@@ -235,7 +236,7 @@ async def _seed_document(
         title=doc_def["title"],
         document_type="egitim_materyali",
         content_status="tamamlandi",
-        owner_type=OWNER_TYPE,
+        owner_type=None,
         owner_id=None,
         is_active=True,
         is_deleted=False,
