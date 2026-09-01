@@ -19,20 +19,20 @@ PERMISSIONS: dict[str, set[str]] = {
         "kulup:*", "kullanici:*", "sporcu:*", "egitim:*", "odeme:*",
         "ekipman:*", "belge:*", "deniz_log:*", "yoklama:*", "ajan:*",
         "rapor:*", "audit:read", "uygunsuzluk:*", "rezervasyon:*",
-        "etkinlik:*", "bakim:*", "kisi:*",
+        "etkinlik:*", "bakim:*", "kisi:*", "kutuphane:read",
     },
 
     "baskan": {
         "rapor:*", "kullanici:read", "sporcu:read", "egitim:read",
-        "odeme:read", "audit:read", "belge:read",
+        "odeme:read", "audit:read", "belge:read", "kutuphane:read",
     },
 
     "yk_uyesi": {
-        "rapor:read", "belge:read", "audit:read",
+        "rapor:read", "belge:read", "audit:read", "kutuphane:read",
     },
 
     "genel_sekreter": {
-        "kullanici:*", "belge:*", "etkinlik:*", "rapor:read",
+        "kullanici:*", "belge:*", "etkinlik:*", "rapor:read", "kutuphane:read",
     },
 
     "muhasebe": {
