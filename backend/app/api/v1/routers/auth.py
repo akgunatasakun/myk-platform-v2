@@ -43,7 +43,13 @@ _COOKIE_KWARGS = {
     "httponly": True,
     "samesite": "lax",
     "secure": settings.myk_env == "production",
+    "path": "/",
 }
+
+# Access token cookie'si JWT expire süresinden bağımsız olarak refresh süresi kadar yaşar.
+# JWT süresi dolunca server 401 → interceptor refresh tetikler — cookie'nin oturması flow'u sağlar.
+_ACCESS_COOKIE_MAX_AGE = settings.jwt_refresh_token_expire_days * 86400  # 7 gün
+_REFRESH_COOKIE_MAX_AGE = settings.jwt_refresh_token_expire_days * 86400  # 7 gün
 
 
 # ─── helpers ──────────────────────────────────────────────────────────────────
@@ -52,20 +58,20 @@ def _set_auth_cookies(response: Response, access_token: str, refresh_token: str)
     response.set_cookie(
         _ACCESS_COOKIE,
         access_token,
-        max_age=settings.jwt_access_token_expire_minutes * 60,
+        max_age=_ACCESS_COOKIE_MAX_AGE,
         **_COOKIE_KWARGS,
     )
     response.set_cookie(
         _REFRESH_COOKIE,
         refresh_token,
-        max_age=settings.jwt_refresh_token_expire_days * 86400,
+        max_age=_REFRESH_COOKIE_MAX_AGE,
         **_COOKIE_KWARGS,
     )
 
 
 def _clear_auth_cookies(response: Response) -> None:
-    response.delete_cookie(_ACCESS_COOKIE)
-    response.delete_cookie(_REFRESH_COOKIE)
+    response.delete_cookie(_ACCESS_COOKIE, path="/")
+    response.delete_cookie(_REFRESH_COOKIE, path="/")
 
 
 # ─── endpoints ────────────────────────────────────────────────────────────────
