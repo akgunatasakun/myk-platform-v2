@@ -234,7 +234,7 @@ async def _seed_document(
         code=doc_def["code"],
         title=doc_def["title"],
         document_type="egitim_materyali",
-        content_status="yayinda",
+        content_status="tamamlandi",
         owner_type=OWNER_TYPE,
         owner_id=None,
         is_active=True,
