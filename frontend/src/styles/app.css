@@ -559,13 +559,14 @@ html, body {
   animation: fadeIn 0.15s ease;
 }
 
-.modal-box {
+.modal-box,
+.modal {
   background-color: var(--color-white);
   border-radius: 12px;
   box-shadow: var(--shadow-lg);
   width: 100%;
   max-width: 680px;
-  max-height: 90vh;
+  max-height: min(90vh, 100dvh - 32px);
   display: flex;
   flex-direction: column;
   animation: slideUp 0.2s ease;
