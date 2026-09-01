@@ -42,6 +42,13 @@ export const documentsApi = {
   get: (id: string) =>
     apiClient.get<Document>(`/documents/${id}`),
 
+  // ── Eğitim Kütüphanesi (kutuphane:read) ─────────────────────────────────────
+  kutuphaneList: (q?: string) =>
+    apiClient.get<Document[]>('/documents/kutuphane', { params: q ? { q } : undefined }),
+
+  kutuphaneGet: (id: string) =>
+    apiClient.get<Document>(`/documents/kutuphane/${id}`),
+
   create: (data: DocumentCreate) =>
     apiClient.post<Document>('/documents', data),
 

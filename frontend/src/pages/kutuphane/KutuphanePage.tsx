@@ -31,7 +31,7 @@ export default function KutuphanePage() {
 
   useEffect(() => {
     documentsApi
-      .list({ owner_type: 'tyf_library' })
+      .kutuphaneList()
       .then((res) => setDocs(res.data))
       .catch(() => setError('Kütüphane yüklenemedi.'))
       .finally(() => setLoading(false))
@@ -46,7 +46,7 @@ export default function KutuphanePage() {
     const key = `${doc.id}-${action}`
     setActionLoading(key)
     try {
-      const detail = (await documentsApi.get(doc.id)).data
+      const detail = (await documentsApi.kutuphaneGet(doc.id)).data
       const rev = detail.revisions?.find((r) => r.is_current) ?? detail.revisions?.[0]
       if (!rev) { alert('Revizyon bulunamadı.'); return }
       const file = rev.files.find((f) => f.is_primary) ?? rev.files[0]

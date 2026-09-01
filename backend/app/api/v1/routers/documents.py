@@ -34,7 +34,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import selectinload
 
 from app.config import get_settings
-from app.core.rbac import require_permission, is_own_scope_only
+from app.core.rbac import has_permission, require_permission, is_own_scope_only
 from app.core.security import get_current_user
 from app.core.tenant import get_club_id
 from app.database import get_db
@@ -192,6 +192,46 @@ async def list_documents(
     result = await db.execute(stmt.order_by(Document.code.asc()))
     docs = result.scalars().all()
     return [DocumentOut.model_validate(d) for d in docs]
+
+
+# ── Eğitim Kütüphanesi (kutuphane:read) ──────────────────────────────────────
+# Bu rotalar /{document_id}'den önce tanımlanmalı (literal path önceliği).
+
+TYF_CODE_PREFIX = "TYF-"
+
+
+@router.get("/kutuphane", response_model=List[DocumentOut])
+async def list_kutuphane_documents(
+    q: Optional[str] = Query(default=None),
+    club_id: uuid.UUID = Depends(get_club_id),
+    _: None = Depends(require_permission("kutuphane:read")),
+    db: AsyncSession = Depends(get_db),
+) -> List[DocumentOut]:
+    """TYF Eğitim Kütüphanesi — yalnızca TYF-* kodlu dokümanlar."""
+    stmt = select(Document).where(
+        Document.club_id == club_id,
+        Document.is_deleted.is_(False),
+        Document.code.like(f"{TYF_CODE_PREFIX}%"),
+    )
+    if q:
+        like = f"%{q}%"
+        stmt = stmt.where(Document.title.ilike(like) | Document.code.ilike(like))
+    result = await db.execute(stmt.order_by(Document.code.asc()))
+    return [DocumentOut.model_validate(d) for d in result.scalars().all()]
+
+
+@router.get("/kutuphane/{document_id}", response_model=DocumentDetailOut)
+async def get_kutuphane_document(
+    document_id: uuid.UUID,
+    club_id: uuid.UUID = Depends(get_club_id),
+    _: None = Depends(require_permission("kutuphane:read")),
+    db: AsyncSession = Depends(get_db),
+) -> DocumentDetailOut:
+    """TYF Eğitim Kütüphanesi — tek doküman detayı (revizyon + dosyalar)."""
+    doc = await _get_document_or_404(document_id, club_id, db, load_revisions=True)
+    if not doc.code.startswith(TYF_CODE_PREFIX):
+        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Bu belge kütüphane kapsamında değil.")
+    return DocumentDetailOut.model_validate(doc)
 
 
 # ── Belge detayı ──────────────────────────────────────────────────────────────
@@ -527,7 +567,6 @@ async def download_revision_file(
     inline: bool = Query(False, description="True ise PDF'ler tarayıcıda inline açılır."),
     club_id: uuid.UUID = Depends(get_club_id),
     current_user: TokenPayload = Depends(get_current_user),
-    _: None = Depends(require_permission("belge:read")),
     db: AsyncSession = Depends(get_db),
     storage: ObjectStorageService = Depends(get_dms_storage),
 ) -> Response:
@@ -540,9 +579,17 @@ async def download_revision_file(
       inline=true  → PDF'ler Content-Disposition: inline olarak döner (browser içi görüntüleme).
                      DOCX ve diğer türler her zaman attachment olarak döner.
     """
-    # Tenant + own-scope kontrolü
+    # Tenant + izin kontrolü
     doc = await _get_document_or_404(document_id, club_id, db)
-    if is_own_scope_only(current_user.role, "belge:read"):
+    has_belge = has_permission(current_user.role, "belge:read")
+    has_kutuphane = has_permission(current_user.role, "kutuphane:read")
+    if not has_belge and not has_kutuphane:
+        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Yetkiniz yok.")
+    if has_kutuphane and not has_belge:
+        # Kütüphane erişimi: yalnızca TYF dokümanları
+        if not doc.code.startswith(TYF_CODE_PREFIX):
+            raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Bu dosyaya erişim yetkiniz yok.")
+    elif has_belge and is_own_scope_only(current_user.role, "belge:read"):
         person_ids = await _get_doc_person_ids(
             uuid.UUID(current_user.sub), club_id, db, current_user.role
         )

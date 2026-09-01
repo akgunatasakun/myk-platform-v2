@@ -43,17 +43,17 @@ PERMISSIONS: dict[str, set[str]] = {
 
     "sportif_direktor": {
         "sporcu:*", "egitim:*", "ekipman:read", "yoklama:*",
-        "rapor:read", "ajan:read", "belge:read", "deniz_log:read",
+        "rapor:read", "ajan:read", "belge:read", "deniz_log:read", "kutuphane:read",
     },
 
     "basantrenor": {
         "sporcu:read", "egitim:*", "yoklama:*", "ekipman:read",
-        "deniz_log:*", "rapor:read", "belge:read",  # Eğitim Kütüphanesi erişimi
+        "deniz_log:*", "rapor:read", "kutuphane:read",
     },
 
     "antrenor": {
         "yoklama:*", "sporcu:read", "egitim:read",
-        "ekipman:read", "deniz_log:*", "kisi:read", "belge:read",  # Eğitim Kütüphanesi erişimi
+        "ekipman:read", "deniz_log:*", "kisi:read", "kutuphane:read",
     },
 
     "personel": {
