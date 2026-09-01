@@ -11,6 +11,7 @@ export interface DocumentListParams {
   q?: string
   document_type?: string
   content_status?: string
+  owner_type?: string
 }
 
 /** Authorization başlığını taşıyarak dosyayı indir ve Blob URL döndür. */

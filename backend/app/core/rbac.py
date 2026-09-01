@@ -48,12 +48,12 @@ PERMISSIONS: dict[str, set[str]] = {
 
     "basantrenor": {
         "sporcu:read", "egitim:*", "yoklama:*", "ekipman:read",
-        "deniz_log:*", "rapor:read",
+        "deniz_log:*", "rapor:read", "belge:read",  # Eğitim Kütüphanesi erişimi
     },
 
     "antrenor": {
         "yoklama:*", "sporcu:read", "egitim:read",
-        "ekipman:read", "deniz_log:*", "kisi:read",
+        "ekipman:read", "deniz_log:*", "kisi:read", "belge:read",  # Eğitim Kütüphanesi erişimi
     },
 
     "personel": {

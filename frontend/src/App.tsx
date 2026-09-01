@@ -32,6 +32,7 @@ import NotificationsPage from '@/pages/notifications/NotificationsPage'
 import CalendarPage from '@/pages/calendar/CalendarPage'
 import DocumentsPage from '@/pages/documents/DocumentsPage'
 import DocumentDetailPage from '@/pages/documents/DocumentDetailPage'
+import KutuphanePage from '@/pages/kutuphane/KutuphanePage'
 import UsersPage from '@/pages/users/UsersPage'
 import AuditPage from '@/pages/audit/AuditPage'
 import Forbidden from '@/pages/Forbidden'
@@ -72,6 +73,7 @@ const ROUTE_ROLES: Record<string, string[]> = {
   '/odemeler':            [...SECRETARIAT, 'sporcu', 'veli', 'uye'],
   '/raporlar':            SECRETARIAT,
   '/takvim':              [...STAFF, 'sporcu', 'veli', 'uye'],
+  '/kutuphane':           [...MANAGEMENT, 'sportif_direktor', 'basantrenor', 'antrenor', 'genel_sekreter'],
   '/ayarlar':             ADMIN,
 }
 
@@ -382,6 +384,15 @@ export default function App() {
           element={
             <ProtectedRoute>
               <DocumentDetailPage />
+            </ProtectedRoute>
+          }
+        />
+        {/* Eğitim Kütüphanesi — antrenör/yönetici */}
+        <Route
+          path="/kutuphane"
+          element={
+            <ProtectedRoute>
+              <KutuphanePage />
             </ProtectedRoute>
           }
         />

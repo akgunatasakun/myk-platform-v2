@@ -156,6 +156,7 @@ async def list_documents(
     q: Optional[str] = Query(default=None),
     document_type: Optional[str] = Query(default=None),
     content_status: Optional[str] = Query(default=None),
+    owner_type: Optional[str] = Query(default=None),
     club_id: uuid.UUID = Depends(get_club_id),
     current_user: TokenPayload = Depends(get_current_user),
     _: None = Depends(require_permission("belge:read")),
@@ -183,6 +184,8 @@ async def list_documents(
         )
     if document_type:
         stmt = stmt.where(Document.document_type == document_type)
+    if owner_type:
+        stmt = stmt.where(Document.owner_type == owner_type)
     if content_status:
         stmt = stmt.where(Document.content_status == content_status)
 
