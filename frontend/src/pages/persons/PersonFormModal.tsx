@@ -2,6 +2,13 @@ import { useEffect, useRef, useState } from 'react'
 import { personsApi } from '@/api/persons'
 import type { Person, PersonCreate, PersonRoleCode, Gender, BloodType } from '@/types/person'
 
+// Sprint 2.3: hesap açılabilir roller
+const ACCOUNT_ELIGIBLE_ROLES = new Set<PersonRoleCode>(['antrenor', 'veli', 'uye'])
+function shouldDefaultCreateAccount(roles: PersonRoleCode[], email: string): boolean {
+  if (!email) return false
+  return roles.some((r) => ACCOUNT_ELIGIBLE_ROLES.has(r))
+}
+
 const ROLE_OPTIONS: { code: PersonRoleCode; label: string }[] = [
   { code: 'sporcu', label: 'Sporcu' },
   { code: 'uye', label: 'Üye' },
@@ -86,6 +93,9 @@ export default function PersonFormModal({ isOpen, onClose, person, onSaved, titl
   const [apiError, setApiError] = useState<string | null>(null)
   const [saving, setSaving] = useState(false)
   const isDirty = useRef(false)
+  // Sprint 2.3: opsiyonel hesap oluşturma
+  const [createAccount, setCreateAccount] = useState(false)
+  const [tempPasswordModal, setTempPasswordModal] = useState<{ email: string; password: string } | null>(null)
 
   useEffect(() => {
     if (isOpen) {
@@ -98,6 +108,10 @@ export default function PersonFormModal({ isOpen, onClose, person, onSaved, titl
       setErrors({})
       setApiError(null)
       isDirty.current = false
+      // Yeni kişi: akıllı default; düzenleme: hesap zaten var, checkbox gösterme
+      if (!person) {
+        setCreateAccount(shouldDefaultCreateAccount(initial.role_codes, initial.email))
+      }
     }
   }, [isOpen, person, forcedRole])
 
@@ -106,7 +120,14 @@ export default function PersonFormModal({ isOpen, onClose, person, onSaved, titl
   ) => {
     isDirty.current = true
     const { name, value } = e.target
-    setForm((prev) => ({ ...prev, [name]: value }))
+    setForm((prev) => {
+      const next = { ...prev, [name]: value }
+      // E-posta değişince checkbox default'unu güncelle (yalnız kullanıcı kapatmadıysa)
+      if (name === 'email' && !person) {
+        setCreateAccount(shouldDefaultCreateAccount(next.role_codes, value))
+      }
+      return next
+    })
     setErrors((prev) => ({ ...prev, [name]: undefined }))
   }
 
@@ -114,12 +135,19 @@ export default function PersonFormModal({ isOpen, onClose, person, onSaved, titl
     // forcedRole kaldırılamaz
     if (code === forcedRole) return
     isDirty.current = true
-    setForm((prev) => ({
-      ...prev,
-      role_codes: prev.role_codes.includes(code)
-        ? prev.role_codes.filter((r) => r !== code)
-        : [...prev.role_codes, code],
-    }))
+    setForm((prev) => {
+      const next = {
+        ...prev,
+        role_codes: prev.role_codes.includes(code)
+          ? prev.role_codes.filter((r) => r !== code)
+          : [...prev.role_codes, code],
+      }
+      // Rol değişince checkbox default'unu güncelle
+      if (!person) {
+        setCreateAccount(shouldDefaultCreateAccount(next.role_codes, next.email))
+      }
+      return next
+    })
   }
 
   const validate = (): boolean => {
@@ -165,6 +193,8 @@ export default function PersonFormModal({ isOpen, onClose, person, onSaved, titl
       ...(form.blood_type ? { blood_type: form.blood_type as BloodType } : {}),
       ...(form.notes ? { notes: form.notes } : {}),
       role_codes: form.role_codes,
+      // Sprint 2.3: yalnız yeni kişi oluşturmada geçerli
+      ...(!person && createAccount ? { create_account: true } : {}),
     }
 
     try {
@@ -175,6 +205,17 @@ export default function PersonFormModal({ isOpen, onClose, person, onSaved, titl
       } else {
         const resp = await personsApi.create(payload)
         saved = resp.data
+        // Sprint 2.3: temp_password gelirse tek seferlik modal
+        let hasTempPassword = false
+        if (resp.data.temp_password && resp.data.email) {
+          setTempPasswordModal({ email: resp.data.email, password: resp.data.temp_password })
+          hasTempPassword = true
+        }
+        isDirty.current = false
+        onSaved(saved)
+        // temp_password modal varsa form açık kalsın; kullanıcı modal'ı kapatınca form da kapanır
+        if (!hasTempPassword) onClose()
+        return
       }
       isDirty.current = false
       onSaved(saved)
@@ -190,6 +231,53 @@ export default function PersonFormModal({ isOpen, onClose, person, onSaved, titl
   }
 
   if (!isOpen) return null
+
+  // Sprint 2.3: geçici parola tek seferlik gösterim modal'ı
+  if (tempPasswordModal) {
+    return (
+      <div className="modal-overlay">
+        <div className="modal" style={{ maxWidth: 460 }} onClick={(e) => e.stopPropagation()}>
+          <div className="modal-header">
+            <h2 className="modal-title">Panel Hesabı Oluşturuldu</h2>
+          </div>
+          <div className="modal-body">
+            <p style={{ marginBottom: 12 }}>
+              <strong>{tempPasswordModal.email}</strong> için geçici parola oluşturuldu.
+              Bu pencereyi kapattıktan sonra parola bir daha gösterilmez.
+            </p>
+            <div style={{
+              background: 'var(--color-bg-subtle, #f5f5f5)',
+              border: '1px solid var(--color-border)',
+              borderRadius: 6,
+              padding: '12px 16px',
+              fontFamily: 'monospace',
+              fontSize: 16,
+              letterSpacing: 1,
+              wordBreak: 'break-all',
+              marginBottom: 12,
+            }}>
+              {tempPasswordModal.password}
+            </div>
+            <button
+              className="btn btn-secondary"
+              style={{ fontSize: 12 }}
+              onClick={() => navigator.clipboard?.writeText(tempPasswordModal.password)}
+            >
+              Kopyala
+            </button>
+          </div>
+          <div className="modal-footer">
+            <button
+              className="btn btn-primary"
+              onClick={() => { setTempPasswordModal(null); onClose() }}
+            >
+              Anladım, Kapat
+            </button>
+          </div>
+        </div>
+      </div>
+    )
+  }
 
   return (
     <div className="modal-overlay" onClick={(e) => e.target === e.currentTarget && handleClose()}>
@@ -386,6 +474,31 @@ export default function PersonFormModal({ isOpen, onClose, person, onSaved, titl
                 rows={2}
               />
             </div>
+
+            {/* Sprint 2.3: opsiyonel hesap oluşturma — yalnız yeni kişi oluşturmada */}
+            {!person && (
+              <div className="form-group" style={{ borderTop: '1px solid var(--color-border)', paddingTop: 12, marginTop: 4 }}>
+                <label style={{ display: 'flex', alignItems: 'flex-start', gap: 10, cursor: 'pointer' }}>
+                  <input
+                    type="checkbox"
+                    checked={createAccount}
+                    onChange={(e) => setCreateAccount(e.target.checked)}
+                    style={{ marginTop: 3, width: 16, height: 16, accentColor: 'var(--color-primary)' }}
+                  />
+                  <span>
+                    <strong>Panel hesabı oluştur</strong>
+                    <span style={{ display: 'block', fontSize: 12, color: 'var(--color-text-muted)', marginTop: 2 }}>
+                      Geçici parola oluşturulur; kişi ilk girişte değiştirmelidir.
+                    </span>
+                  </span>
+                </label>
+                {createAccount && !form.email && (
+                  <div style={{ marginTop: 6, fontSize: 12, color: 'var(--color-error, #c0392b)', paddingLeft: 26 }}>
+                    ⚠ Hesap için e-posta zorunludur.
+                  </div>
+                )}
+              </div>
+            )}
 
             <div className="form-group">
               <label className="form-label">Roller</label>

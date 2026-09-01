@@ -23,6 +23,7 @@ from app.schemas.person import (
     PersonCreate,
     PersonCreateAccountRequest,
     PersonCreateAccountResponse,
+    PersonCreateOut,
     PersonListOut,
     PersonOut,
     PersonUpdate,
@@ -47,6 +48,21 @@ def _should_mask(role: str) -> bool:
 
 def _build_person_out(person: Person, mask: bool) -> PersonOut:
     return PersonOut.from_orm_masked(person, mask=mask)
+
+
+# Sprint 2.3: Rol öncelik sıralaması — create_account için en yüksek yetkili rol seçilir
+_ROLE_PRIORITY: dict[str, int] = {
+    "kulup_yonetici": 5,
+    "yonetici":       5,
+    "antrenor":       4,
+    "veli":           3,
+    "uye":            2,
+    "sporcu":         1,
+    "personel":       1,
+    "misafir":        0,
+}
+# Hesap açılabilir roller (sporcu yalnızsa hesap açılmaz)
+_ACCOUNT_ELIGIBLE_ROLES = {"antrenor", "veli", "uye", "yonetici", "kulup_yonetici", "personel"}
 
 
 async def _get_person_for_club(
@@ -144,7 +160,7 @@ async def list_persons(
     return PersonListOut(items=items, total=total, skip=skip, limit=limit)
 
 
-@router.post("", response_model=PersonOut, status_code=status.HTTP_201_CREATED)
+@router.post("", response_model=PersonCreateOut, status_code=status.HTTP_201_CREATED)
 async def create_person(
     body: PersonCreate,
     request: Request,
@@ -152,7 +168,7 @@ async def create_person(
     current_user: TokenPayload = Depends(get_current_user),
     _: None = Depends(require_permission("kisi:write")),
     db: AsyncSession = Depends(get_db),
-) -> PersonOut:
+) -> PersonCreateOut:
     # Aynı kulüpte e-posta tekrarını kontrol et
     if body.email:
         dup = await db.execute(
@@ -213,18 +229,28 @@ async def create_person(
         request=request,
     )
 
-    # Sprint 20: e-posta + rol varsa otomatik hesap aç
-    if body.create_account and person.email and body.role_codes:
-        try:
-            await create_user_for_person(
-                person=person,
-                role_code=body.role_codes[0],
-                assigner_user_id=uuid.UUID(current_user.sub),
-                assigner_role=current_user.role,
-                db=db,
-            )
-        except HTTPException:
-            pass  # G10/G9: hesap zaten var veya çakışma — kişi yine de oluşturuldu
+    # Sprint 2.3: opsiyonel User hesabı
+    temp_password: Optional[str] = None
+    warnings: list[str] = []
+
+    if body.create_account:
+        eligible = [r for r in body.role_codes if r in _ACCOUNT_ELIGIBLE_ROLES]
+        if not person.email:
+            warnings.append("Hesap için e-posta zorunludur; hesap oluşturulmadı.")
+        elif not eligible:
+            warnings.append("Seçili roller için otomatik hesap oluşturma desteklenmiyor (yalnızca sporcu/misafir).")
+        else:
+            best_role = max(eligible, key=lambda r: _ROLE_PRIORITY.get(r, 0))
+            try:
+                _user, temp_password = await create_user_for_person(
+                    person=person,
+                    role_code=best_role,
+                    assigner_user_id=uuid.UUID(current_user.sub),
+                    assigner_role=current_user.role,
+                    db=db,
+                )
+            except HTTPException as exc:
+                warnings.append(f"Hesap oluşturulamadı: {exc.detail}")
 
     await db.commit()
     await db.refresh(person)
@@ -235,7 +261,10 @@ async def create_person(
     person = result2.scalar_one()
 
     mask = _should_mask(current_user.role)
-    return _build_person_out(person, mask=mask)
+    out = PersonCreateOut.from_orm_masked(person, mask=mask)
+    out.temp_password = temp_password
+    out.warnings = warnings
+    return out
 
 
 @router.get("/{person_id}", response_model=PersonOut)

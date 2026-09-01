@@ -57,6 +57,14 @@ export interface PersonCreate {
   notes?: string;
   avatar_url?: string;
   role_codes?: PersonRoleCode[];
+  /** Sprint 2.3: opsiyonel User hesabı — istemci bilinçli true gönderir */
+  create_account?: boolean;
+}
+
+/** create_person yanıtı — temp_password bir kez döner, sonra null */
+export interface PersonCreateOut extends Person {
+  temp_password?: string | null;
+  warnings?: string[];
 }
 
 export interface PersonUpdate extends Partial<PersonCreate> {

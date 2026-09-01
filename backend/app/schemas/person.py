@@ -106,8 +106,8 @@ class PersonBase(BaseModel):
 
 
 class PersonCreate(PersonBase):
-    # Sprint 20: e-posta ve rol varsa otomatik hesap aç
-    create_account: bool = True
+    # Sprint 2.3: istemci bilinçli olarak açmalı; kör True default YASAK
+    create_account: bool = False
 
 
 class PersonCreateAccountRequest(BaseModel):
@@ -241,6 +241,12 @@ class PersonOut(BaseModel):
             obj.national_id = "***" if obj.national_id else None
             obj.blood_type = "***" if obj.blood_type else None
         return obj
+
+
+class PersonCreateOut(PersonOut):
+    """create_person yanıtı — temp_password bir kez döner (G5), warnings bilgi amaçlı."""
+    temp_password: Optional[str] = None
+    warnings: List[str] = []
 
 
 class PersonListOut(BaseModel):

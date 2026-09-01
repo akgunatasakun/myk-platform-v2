@@ -603,10 +603,21 @@ html, body {
   color: var(--color-text);
 }
 
+/* form doğrudan .modal/.modal-box'un child'ıysa flex layout'a katılsın */
+.modal-box > form,
+.modal > form {
+  display: flex;
+  flex-direction: column;
+  flex: 1;
+  min-height: 0;
+  overflow: hidden;
+}
+
 .modal-body {
   padding: 24px;
   overflow-y: auto;
   flex: 1;
+  min-height: 0;
 }
 
 .modal-footer {

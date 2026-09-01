@@ -1,5 +1,5 @@
 import apiClient from './client';
-import type { Person, PersonCreate, PersonListResponse, PersonUpdate } from '@/types/person';
+import type { Person, PersonCreate, PersonCreateOut, PersonListResponse, PersonUpdate } from '@/types/person';
 import type {
   GuardianAthlete,
   PersonGuardian,
@@ -21,7 +21,7 @@ export const personsApi = {
   get: (id: string) =>
     apiClient.get<Person>(`/persons/${id}`),
   create: (data: PersonCreate) =>
-    apiClient.post<Person>('/persons', data),
+    apiClient.post<PersonCreateOut>('/persons', data),
   update: (id: string, data: PersonUpdate) =>
     apiClient.patch<Person>(`/persons/${id}`, data),
   delete: (id: string) =>
