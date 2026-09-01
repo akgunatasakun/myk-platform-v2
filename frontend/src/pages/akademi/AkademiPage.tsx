@@ -13,12 +13,18 @@ export default function AkademiPage() {
   const [error, setError] = useState<string | null>(null)
 
   useEffect(() => {
-    Promise.all([academyApi.listPrograms(), academyApi.myEnrollments()])
-      .then(([progs, enrs]) => {
-        setPrograms(progs)
-        setEnrollments(enrs)
+    Promise.allSettled([academyApi.listPrograms(), academyApi.myEnrollments()])
+      .then(([progsResult, enrsResult]) => {
+        if (progsResult.status === 'fulfilled') {
+          setPrograms(progsResult.value)
+        } else {
+          setError('Programlar yüklenemedi.')
+        }
+        if (enrsResult.status === 'fulfilled') {
+          setEnrollments(enrsResult.value)
+        }
+        // Kayıt listesi 403 dönse de (person kaydı olmayan yöneticiler) programlar gösterilir
       })
-      .catch(() => setError('Programlar yüklenemedi.'))
       .finally(() => setLoading(false))
   }, [])
 
