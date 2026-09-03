@@ -10,7 +10,7 @@ import uuid
 from datetime import date, datetime
 from typing import List, Optional
 
-from sqlalchemy import BigInteger, Boolean, Date, DateTime, ForeignKey, Integer, String, Text, func
+from sqlalchemy import BigInteger, Boolean, Date, DateTime, ForeignKey, Index, Integer, String, Text, func
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from app.database import Base
@@ -20,6 +20,9 @@ class DocumentCategory(Base):
     """Belge kategorileri."""
 
     __tablename__ = "doc_categories"
+    __table_args__ = (
+        Index("uq_doc_categories_club_code", "club_id", "code", unique=True),
+    )
 
     id: Mapped[uuid.UUID] = mapped_column(primary_key=True, default=uuid.uuid4)
     club_id: Mapped[uuid.UUID] = mapped_column(

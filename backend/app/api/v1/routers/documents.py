@@ -30,20 +30,24 @@ from fastapi import (
 )
 from fastapi.responses import Response
 from sqlalchemy import select, update
+from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import selectinload
 
 from app.config import get_settings
+from app.core.audit import log_action
 from app.core.rbac import has_permission, require_permission, is_own_scope_only
 from app.core.security import get_current_user
 from app.core.tenant import get_club_id
 from app.database import get_db
 from app.dependencies.documents_storage import get_dms_storage
-from app.models.documents import Document, DocumentRevision, DocumentRevisionFile
+from app.models.documents import Document, DocumentCategory, DocumentRevision, DocumentRevisionFile
 from app.models.person_guardian import PersonGuardian
 from app.models.user import User
 from app.schemas.auth import TokenPayload
 from app.schemas.documents import (
+    CategoryCreate,
+    CategoryOut,
     DocumentCreate,
     DocumentDetailOut,
     DocumentOut,
@@ -102,6 +106,27 @@ ALLOWED_MIME_TYPES = {
 
 def _safe_filename(name: str) -> str:
     return re.sub(r"[^a-zA-Z0-9._-]", "_", name)
+
+
+async def _get_category_for_club(
+    category_id: uuid.UUID,
+    club_id: uuid.UUID,
+    db: AsyncSession,
+) -> DocumentCategory:
+    """category_id'nin aynı club'a ait olduğunu doğrular; değilse 404 fırlatır."""
+    result = await db.execute(
+        select(DocumentCategory).where(
+            DocumentCategory.id == category_id,
+            DocumentCategory.club_id == club_id,
+        )
+    )
+    cat = result.scalar_one_or_none()
+    if cat is None:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Kategori bulunamadı veya bu kulübe ait değil.",
+        )
+    return cat
 
 
 async def _get_document_or_404(
@@ -234,6 +259,76 @@ async def get_kutuphane_document(
     return DocumentDetailOut.model_validate(doc)
 
 
+# ── Kategori listesi ──────────────────────────────────────────────────────────
+# Bu rotalar /{document_id} dinamik rotasından önce tanımlanmalıdır.
+
+@router.get("/categories", response_model=List[CategoryOut])
+async def list_categories(
+    club_id: uuid.UUID = Depends(get_club_id),
+    _: None = Depends(require_permission("belge:read")),
+    db: AsyncSession = Depends(get_db),
+) -> List[CategoryOut]:
+    """Kulübe ait tüm belge kategorilerini döner (sort_order, name sırasıyla)."""
+    result = await db.execute(
+        select(DocumentCategory)
+        .where(DocumentCategory.club_id == club_id)
+        .order_by(DocumentCategory.sort_order.asc(), DocumentCategory.name.asc())
+    )
+    return [CategoryOut.model_validate(c) for c in result.scalars().all()]
+
+
+@router.post("/categories", response_model=CategoryOut, status_code=status.HTTP_201_CREATED)
+async def create_category(
+    body: CategoryCreate,
+    request: Request,
+    club_id: uuid.UUID = Depends(get_club_id),
+    current_user: TokenPayload = Depends(get_current_user),
+    _: None = Depends(require_permission("belge:create")),
+    db: AsyncSession = Depends(get_db),
+) -> CategoryOut:
+    """Yeni belge kategorisi oluşturur. (club_id, code) çifti benzersiz olmalıdır."""
+    existing = await db.execute(
+        select(DocumentCategory).where(
+            DocumentCategory.club_id == club_id,
+            DocumentCategory.code == body.code,
+        )
+    )
+    if existing.scalar_one_or_none() is not None:
+        raise HTTPException(
+            status_code=status.HTTP_409_CONFLICT,
+            detail=f"Bu kulüpte '{body.code}' kodlu kategori zaten mevcut.",
+        )
+
+    cat = DocumentCategory(
+        id=uuid.uuid4(),
+        club_id=club_id,
+        **body.model_dump(),
+    )
+    db.add(cat)
+    try:
+        await db.flush()
+    except IntegrityError:
+        await db.rollback()
+        raise HTTPException(
+            status_code=status.HTTP_409_CONFLICT,
+            detail=f"Bu kulüpte '{body.code}' kodlu kategori zaten mevcut.",
+        )
+
+    await log_action(
+        db,
+        action="category_created",
+        resource_type="doc_category",
+        club_id=club_id,
+        user_id=uuid.UUID(current_user.sub),
+        resource_id=str(cat.id),
+        after={"code": cat.code, "name": cat.name, "sort_order": cat.sort_order},
+        request=request,
+    )
+
+    await db.refresh(cat)
+    return CategoryOut.model_validate(cat)
+
+
 # ── Belge detayı ──────────────────────────────────────────────────────────────
 
 @router.get("/{document_id}", response_model=DocumentDetailOut)
@@ -283,6 +378,10 @@ async def create_document(
             detail=f"Bu kulüpte '{body.code}' kodlu belge zaten mevcut.",
         )
 
+    # category_id tenant doğrulaması
+    if body.category_id is not None:
+        await _get_category_for_club(body.category_id, club_id, db)
+
     doc = Document(
         id=uuid.uuid4(),
         club_id=club_id,
@@ -297,6 +396,18 @@ async def create_document(
     )
     db.add(doc)
     await db.flush()
+
+    await log_action(
+        db,
+        action="document_created",
+        resource_type="document",
+        club_id=club_id,
+        user_id=uuid.UUID(current_user.sub),
+        resource_id=str(doc.id),
+        after={"code": doc.code, "title": doc.title, "document_type": doc.document_type},
+        request=request,
+    )
+
     await db.refresh(doc)
     return DocumentOut.model_validate(doc)
 
@@ -317,6 +428,10 @@ async def update_document(
 
     if not update_data:
         return DocumentOut.model_validate(doc)
+
+    # category_id tenant doğrulaması
+    if "category_id" in update_data and update_data["category_id"] is not None:
+        await _get_category_for_club(update_data["category_id"], club_id, db)
 
     # code uniqueness kontrolü
     if "code" in update_data and update_data["code"] != doc.code:
@@ -399,6 +514,7 @@ async def list_revisions(
 async def create_revision(
     document_id: uuid.UUID,
     body: RevisionCreate,
+    request: Request,
     club_id: uuid.UUID = Depends(get_club_id),
     current_user: TokenPayload = Depends(get_current_user),
     _: None = Depends(require_permission("belge:create")),
@@ -453,6 +569,21 @@ async def create_revision(
         doc.current_revision_id = rev.id
         await db.flush()
 
+    await log_action(
+        db,
+        action="revision_created",
+        resource_type="doc_revision",
+        club_id=club_id,
+        user_id=uuid.UUID(current_user.sub),
+        resource_id=str(rev.id),
+        after={
+            "document_id": str(document_id),
+            "revision_code": rev.revision_code,
+            "is_current": rev.is_current,
+        },
+        request=request,
+    )
+
     await db.refresh(rev)
     return RevisionOut.model_validate(rev)
 
@@ -468,6 +599,7 @@ async def upload_revision_file(
     document_id: uuid.UUID,
     revision_id: uuid.UUID,
     file: UploadFile,
+    request: Request,
     file_role: str = Form(default="source"),
     is_primary: bool = Form(default=False),
     club_id: uuid.UUID = Depends(get_club_id),
@@ -552,6 +684,25 @@ async def upload_revision_file(
                 storage_bucket, storage_key,
             )
         raise
+
+    await log_action(
+        db,
+        action="file_uploaded",
+        resource_type="doc_revision_file",
+        club_id=club_id,
+        user_id=uuid.UUID(current_user.sub),
+        resource_id=str(rev_file.id),
+        after={
+            "document_id": str(document_id),
+            "revision_id": str(revision_id),
+            "original_filename": original_filename,
+            "mime_type": mime,
+            "file_size": len(file_bytes),
+            "sha256": sha256,
+        },
+        request=request,
+    )
+
     return RevisionFileOut.model_validate(rev_file)
 
 

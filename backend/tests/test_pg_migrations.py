@@ -86,7 +86,7 @@ async def test_current_revision_is_head(engine):
     async with engine.connect() as conn:
         r = await conn.execute(text("SELECT version_num FROM alembic_version"))
         rev = r.scalar_one()
-    assert rev == "0024", f"Beklenen '0024', alınan '{rev!r}'"
+    assert rev == "0025", f"Beklenen '0025', alınan '{rev!r}'"
 
 
 # ── 2. Şema doğrulama ─────────────────────────────────────────────────────────
@@ -836,3 +836,121 @@ def test_downgrade_then_upgrade_idempotent():
     """Downgrade 0016 → upgrade head tekrar sorunsuz çalışmalı (idempotency)."""
     run_alembic("downgrade", "0016")
     run_alembic("upgrade", "head")
+
+
+# ── 9. Migration 0025: doc_categories tam unique kısıt ───────────────────────
+
+@pytest.mark.asyncio
+async def test_0025_full_unique_index_exists(engine):
+    """0025 sonrası uq_doc_categories_club_code tam UNIQUE index mevcut olmalı."""
+    async with engine.connect() as conn:
+        r = await conn.execute(text("""
+            SELECT COUNT(*) FROM pg_indexes
+            WHERE schemaname = 'public'
+              AND tablename  = 'doc_categories'
+              AND indexname  = 'uq_doc_categories_club_code'
+        """))
+        count = r.scalar()
+    assert count == 1, "uq_doc_categories_club_code UNIQUE index bulunamadı"
+
+
+@pytest.mark.asyncio
+async def test_0025_partial_index_removed(engine):
+    """0025 sonrası eski kısmi uq_doc_categories_code index kaldırılmış olmalı."""
+    async with engine.connect() as conn:
+        r = await conn.execute(text("""
+            SELECT COUNT(*) FROM pg_indexes
+            WHERE schemaname = 'public'
+              AND tablename  = 'doc_categories'
+              AND indexname  = 'uq_doc_categories_code'
+        """))
+        count = r.scalar()
+    assert count == 0, "Eski kısmi index uq_doc_categories_code hâlâ mevcut"
+
+
+@pytest.mark.asyncio
+async def test_0025_same_code_different_clubs_allowed(engine):
+    """Farklı kulüplerde aynı kod kabul edilmeli."""
+    import uuid as _uuid
+    club_a = _uuid.uuid4()
+    club_b = _uuid.uuid4()
+    try:
+        async with engine.begin() as conn:
+            for cid, slug in [(club_a, f"ca-{club_a.hex[:8]}"), (club_b, f"cb-{club_b.hex[:8]}")]:
+                await conn.execute(text("""
+                    INSERT INTO clubs (id, slug, name, plan, is_active)
+                    VALUES (:id, :slug, 'Unique Test Club', 'starter', true)
+                """), {"id": cid, "slug": slug})
+            # Aynı kod, farklı kulüp — kabul edilmeli
+            for cid in (club_a, club_b):
+                await conn.execute(text("""
+                    INSERT INTO doc_categories (id, club_id, code, name)
+                    VALUES (gen_random_uuid(), :cid, 'ORTAK-KOD', 'Paylaşılan Kod Testi')
+                """), {"cid": cid})
+    finally:
+        async with engine.begin() as conn:
+            for cid in (club_a, club_b):
+                await conn.execute(text("DELETE FROM clubs WHERE id = :id"), {"id": cid})
+
+
+@pytest.mark.asyncio
+async def test_0025_same_code_same_club_rejected(engine):
+    """Aynı kulüpte aynı kod reddedilmeli (UNIQUE constraint)."""
+    from sqlalchemy.exc import IntegrityError as SAIntegrityError
+    import uuid as _uuid
+    club_id = _uuid.uuid4()
+    async with engine.begin() as conn:
+        await conn.execute(text("""
+            INSERT INTO clubs (id, slug, name, plan, is_active)
+            VALUES (:id, :slug, 'Dup Test Club', 'starter', true)
+        """), {"id": club_id, "slug": f"dup-{club_id.hex[:8]}"})
+        # İlk ekleme — başarılı
+        await conn.execute(text("""
+            INSERT INTO doc_categories (id, club_id, code, name)
+            VALUES (gen_random_uuid(), :cid, 'DUP-KOD', 'İlk Kategori')
+        """), {"cid": club_id})
+
+    try:
+        with pytest.raises(SAIntegrityError):
+            async with engine.begin() as conn:
+                await conn.execute(text("""
+                    INSERT INTO doc_categories (id, club_id, code, name)
+                    VALUES (gen_random_uuid(), :cid, 'DUP-KOD', 'İkinci Kategori')
+                """), {"cid": club_id})
+    finally:
+        async with engine.begin() as conn:
+            await conn.execute(text("DELETE FROM clubs WHERE id = :id"), {"id": club_id})
+
+
+def test_0025_downgrade_restores_partial_index():
+    """0025 downgrade → kısmi index geri gelmeli, tam index kalkmalı."""
+    try:
+        run_alembic("downgrade", "0024")
+
+        async def _check() -> None:
+            e = create_async_engine(DATABASE_URL, echo=False)
+            try:
+                async with e.connect() as conn:
+                    # Tam index gitmiş olmalı
+                    r = await conn.execute(text("""
+                        SELECT COUNT(*) FROM pg_indexes
+                        WHERE schemaname = 'public'
+                          AND tablename  = 'doc_categories'
+                          AND indexname  = 'uq_doc_categories_club_code'
+                    """))
+                    assert r.scalar() == 0, "Downgrade sonrası tam index hâlâ var"
+
+                    # Kısmi index geri gelmiş olmalı
+                    r2 = await conn.execute(text("""
+                        SELECT COUNT(*) FROM pg_indexes
+                        WHERE schemaname = 'public'
+                          AND tablename  = 'doc_categories'
+                          AND indexname  = 'uq_doc_categories_code'
+                    """))
+                    assert r2.scalar() == 1, "Downgrade sonrası kısmi index geri gelmedi"
+            finally:
+                await e.dispose()
+
+        asyncio.get_event_loop().run_until_complete(_check())
+    finally:
+        run_alembic("upgrade", "head")

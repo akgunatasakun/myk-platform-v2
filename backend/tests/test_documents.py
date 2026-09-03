@@ -1,4 +1,4 @@
-"""DMS (Belge Yönetim Sistemi) API testleri — DMS-01 .. DMS-26.
+"""DMS (Belge Yönetim Sistemi) API testleri — DMS-01 .. DMS-26, CAT-01 .. CAT-08.
 
 Test kapsamı:
   - RBAC / kimlik doğrulama
@@ -25,6 +25,8 @@ import pytest
 import pytest_asyncio
 from httpx import AsyncClient
 from sqlalchemy.ext.asyncio import AsyncSession
+
+from sqlalchemy import select
 
 from app.core.security import create_access_token
 from app.dependencies.documents_storage import get_dms_storage
@@ -1034,3 +1036,403 @@ async def test_import_preserves_existing_contract() -> None:
     # Yeni alanlar da var
     assert "duplicate_codes" in plan
     assert "ambiguous_pairs" in plan
+
+
+# ═══════════════════════════════════════════════════════════════════════════════
+# ── Kategori API (CAT-01 .. CAT-08) ──────────────────────────────────────────
+# ═══════════════════════════════════════════════════════════════════════════════
+
+CATS_URL = "/api/v1/documents/categories"
+
+
+def _cat_payload(suffix: str = "") -> dict:
+    code = f"mevzuat-test-{uuid.uuid4().hex[:6]}{suffix}"
+    return {"code": code, "name": f"Mevzuat Test {suffix}", "sort_order": 0}
+
+
+# ── CAT-01: Boş liste, yetki gerekli ─────────────────────────────────────────
+
+async def test_list_categories_empty(
+    client: AsyncClient,
+    yonetici_token: str,
+) -> None:
+    """CAT-01: GET /documents/categories → boş liste; 401 token olmadan."""
+    resp = await client.get(CATS_URL, headers=_auth(yonetici_token))
+    assert resp.status_code == 200
+    assert isinstance(resp.json(), list)
+
+    resp401 = await client.get(CATS_URL)
+    assert resp401.status_code == 401
+
+
+# ── CAT-02: Kategori oluştur ──────────────────────────────────────────────────
+
+async def test_create_category_success(
+    client: AsyncClient,
+    yonetici_token: str,
+) -> None:
+    """CAT-02: POST /documents/categories → 201, alanlar doğru."""
+    payload = _cat_payload()
+    resp = await client.post(CATS_URL, json=payload, headers=_auth(yonetici_token))
+    assert resp.status_code == 201, resp.text
+    data = resp.json()
+    assert data["code"] == payload["code"]
+    assert data["name"] == payload["name"]
+    assert "id" in data
+    assert "club_id" in data
+
+    # Listede görünmeli
+    list_resp = await client.get(CATS_URL, headers=_auth(yonetici_token))
+    codes = [c["code"] for c in list_resp.json()]
+    assert payload["code"] in codes
+
+
+# ── CAT-03: Tekrar aynı kod → 409 ────────────────────────────────────────────
+
+async def test_create_category_duplicate_409(
+    client: AsyncClient,
+    yonetici_token: str,
+) -> None:
+    """CAT-03: Aynı (club_id, code) ikinci kez → 409."""
+    payload = _cat_payload()
+    r1 = await client.post(CATS_URL, json=payload, headers=_auth(yonetici_token))
+    assert r1.status_code == 201
+
+    r2 = await client.post(CATS_URL, json=payload, headers=_auth(yonetici_token))
+    assert r2.status_code == 409
+
+
+# ── CAT-04: Tenant izolasyonu ─────────────────────────────────────────────────
+
+async def test_category_tenant_isolation(
+    client: AsyncClient,
+    yonetici_token: str,
+    db_session: AsyncSession,
+) -> None:
+    """CAT-04: Başka kulübün kategorisi kendi kulübümüzden görülemez."""
+    from app.core.security import hash_password
+    from app.models.club import Club
+
+    # Birinci kulüp: kategori oluştur
+    payload = _cat_payload()
+    r1 = await client.post(CATS_URL, json=payload, headers=_auth(yonetici_token))
+    assert r1.status_code == 201
+
+    # İkinci kulüp + yönetici
+    other_club = Club(
+        id=uuid.uuid4(),
+        slug=f"other-cat-{uuid.uuid4().hex[:6]}",
+        name="Diğer Kulüp",
+        plan="starter",
+        is_active=True,
+        settings={},
+    )
+    db_session.add(other_club)
+    other_user = User(
+        id=uuid.uuid4(),
+        club_id=other_club.id,
+        email=f"other-cat-{uuid.uuid4().hex[:6]}@test.com",
+        password_hash=hash_password("Other1234!"),
+        full_name="Other Cat User",
+        role="kulup_yonetici",
+        is_active=True,
+        is_deleted=False,
+    )
+    db_session.add(other_user)
+    await db_session.flush()
+
+    other_token = create_access_token(
+        str(other_user.id), str(other_club.id), other_user.role
+    )
+
+    # Diğer kulüp kendi listesini çekiyor — birinci kulübün kategorisi görünmemeli
+    list_resp = await client.get(CATS_URL, headers=_auth(other_token))
+    assert list_resp.status_code == 200
+    codes = [c["code"] for c in list_resp.json()]
+    assert payload["code"] not in codes
+
+    # Diğer kulüpte aynı kod oluşturulabilir (tenant isolation)
+    r2 = await client.post(CATS_URL, json=payload, headers=_auth(other_token))
+    assert r2.status_code == 201
+
+
+# ── CAT-05: Yetkisiz erişim ───────────────────────────────────────────────────
+
+async def test_create_category_unauthorized(client: AsyncClient) -> None:
+    """CAT-05: Token olmadan POST → 401."""
+    resp = await client.post(CATS_URL, json=_cat_payload())
+    assert resp.status_code == 401
+
+
+# ── CAT-06: Antrenör yetkisiz ─────────────────────────────────────────────────
+
+async def test_create_category_antrenor_forbidden(
+    client: AsyncClient,
+    antrenor_token: str,
+) -> None:
+    """CAT-06: antrenor rolü belge:create yetkisi yok → 403."""
+    resp = await client.post(CATS_URL, json=_cat_payload(), headers=_auth(antrenor_token))
+    assert resp.status_code == 403
+
+
+# ── CAT-07: category_created audit kaydı ──────────────────────────────────────
+
+async def test_create_category_audit_log(
+    client_with_storage: AsyncClient,
+    yonetici_token: str,
+    db_session: AsyncSession,
+    test_club: Club,
+    test_user: User,
+) -> None:
+    """CAT-07: POST /documents/categories → AuditLog tam doğrulama (club_id, user_id, resource_id, after)."""
+    from app.models.audit import AuditLog
+
+    payload = _cat_payload()
+    resp = await client_with_storage.post(
+        CATS_URL, json=payload, headers=_auth(yonetici_token)
+    )
+    assert resp.status_code == 201
+    cat_id = resp.json()["id"]
+
+    result = await db_session.execute(
+        select(AuditLog).where(
+            AuditLog.action == "category_created",
+            AuditLog.resource_id == cat_id,
+        )
+    )
+    log = result.scalar_one_or_none()
+    assert log is not None, "category_created audit kaydı bulunamadı"
+    assert log.resource_type == "doc_category"
+    assert str(log.club_id) == str(test_club.id), f"club_id eşleşmiyor: {log.club_id!r}"
+    assert str(log.user_id) == str(test_user.id), f"user_id eşleşmiyor: {log.user_id!r}"
+    assert log.resource_id == cat_id, f"resource_id eşleşmiyor: {log.resource_id!r}"
+    assert log.changes is not None
+    after = log.changes["after"]
+    assert after["code"] == payload["code"], f"after.code yanlış: {after['code']!r}"
+    assert after["name"] == payload["name"], f"after.name yanlış: {after['name']!r}"
+    assert "sort_order" in after, "after.sort_order eksik"
+
+
+# ── CAT-08: file_uploaded audit kaydı ────────────────────────────────────────
+
+async def test_upload_file_audit_log(
+    client_with_storage: AsyncClient,
+    yonetici_token: str,
+    db_session: AsyncSession,
+    test_club: Club,
+    test_user: User,
+) -> None:
+    """CAT-08: Dosya yükleme → AuditLog tam doğrulama (club_id, user_id, resource_id, after)."""
+    from app.models.audit import AuditLog
+
+    doc = await _create_doc(
+        client_with_storage, yonetici_token, code=f"AUD-{uuid.uuid4().hex[:4]}"
+    )
+    rev = await _create_revision(client_with_storage, yonetici_token, doc["id"])
+
+    file_bytes = b"%PDF-1.4 test"
+    resp = await client_with_storage.post(
+        f"{DOCS_URL}/{doc['id']}/revisions/{rev['id']}/files",
+        files={"file": ("test.pdf", file_bytes, "application/pdf")},
+        data={"file_role": "source", "is_primary": "false"},
+        headers=_auth(yonetici_token),
+    )
+    assert resp.status_code == 201, resp.text
+    file_id = resp.json()["id"]
+
+    result = await db_session.execute(
+        select(AuditLog).where(
+            AuditLog.action == "file_uploaded",
+            AuditLog.resource_id == file_id,
+        )
+    )
+    log = result.scalar_one_or_none()
+    assert log is not None, "file_uploaded audit kaydı bulunamadı"
+    assert log.resource_type == "doc_revision_file"
+    assert str(log.club_id) == str(test_club.id), f"club_id eşleşmiyor: {log.club_id!r}"
+    assert str(log.user_id) == str(test_user.id), f"user_id eşleşmiyor: {log.user_id!r}"
+    assert log.resource_id == file_id, f"resource_id eşleşmiyor: {log.resource_id!r}"
+    after = log.changes["after"]
+    assert after["original_filename"] == "test.pdf"
+    assert after["mime_type"] == "application/pdf"
+    assert "file_size" in after, "after.file_size eksik"
+    assert "sha256" in after, "after.sha256 eksik"
+    assert "document_id" in after, "after.document_id eksik"
+    assert "revision_id" in after, "after.revision_id eksik"
+
+
+# ── CAT-09: Yarış koşulu — flush() IntegrityError → 409 ──────────────────────
+
+async def test_create_category_race_condition_409(
+    client: AsyncClient,
+    yonetici_token: str,
+    db_session: AsyncSession,
+) -> None:
+    """CAT-09: flush() IntegrityError yolunun doğrudan testi (yarış koşulu güvencesi).
+
+    Dependency override ile hibrit bir session enjekte edilir:
+      - execute()  → gerçek test session'a delege eder (auth + ön kontrol çalışır)
+      - add()      → no-op (gerçek DB'ye yazmayız)
+      - flush()    → IntegrityError fırlatır (eşzamanlı insert simülasyonu)
+      - rollback() → çağrıldığı kayıt altına alınır, test session'a dokunmaz
+
+    Beklentiler:
+      - POST /documents/categories → 409
+      - detail mesajı kod adını içerir
+      - flush() ve rollback() ikisi de çağrılmış olmalı
+      - Test session rollback'ten sonra kullanılabilir kalmalı
+    """
+    from sqlalchemy.exc import IntegrityError as SAIntegrityError
+    from sqlalchemy import text as sa_text
+    from app.database import get_db
+
+    payload = _cat_payload()
+    flush_called: list[bool] = []
+    rollback_called: list[bool] = []
+
+    class _RaceSession:
+        """Hibrit session: execute gerçek, flush IntegrityError fırlatır."""
+
+        async def execute(self, stmt, *args, **kwargs):
+            # Auth, get_club_id ve ön kontrol sorguları gerçek session üzerinden çalışır
+            return await db_session.execute(stmt, *args, **kwargs)
+
+        async def flush(self, objects=None):
+            flush_called.append(True)
+            raise SAIntegrityError(
+                "UNIQUE constraint failed: doc_categories.club_id, doc_categories.code",
+                params={},
+                orig=Exception("mock unique violation"),
+            )
+
+        async def rollback(self):
+            rollback_called.append(True)
+            # Test session'ına dokunmuyoruz; transaction test fixture'ı yönetiyor
+
+        def add(self, obj):  # noqa: ARG002
+            pass  # Gerçek DB'ye yazmayız — flush zaten hata fırlatacak
+
+        async def refresh(self, obj):  # noqa: ARG002
+            pass
+
+        async def close(self):
+            pass
+
+        def __getattr__(self, name: str):
+            # Kapsanmayan tüm özellikler gerçek session'a yönlendirilir
+            return getattr(db_session, name)
+
+    orig_override = app.dependency_overrides.get(get_db)
+
+    async def _race_db():
+        yield _RaceSession()
+
+    app.dependency_overrides[get_db] = _race_db
+    try:
+        resp = await client.post(CATS_URL, json=payload, headers=_auth(yonetici_token))
+    finally:
+        if orig_override is None:
+            app.dependency_overrides.pop(get_db, None)
+        else:
+            app.dependency_overrides[get_db] = orig_override
+
+    assert resp.status_code == 409, (
+        f"Beklenen 409, alınan {resp.status_code}: {resp.text}"
+    )
+    detail = resp.json()["detail"]
+    assert payload["code"] in detail, (
+        f"Duplicate mesajında kod adı yok: {detail!r}"
+    )
+    assert flush_called, "flush() hiç çağrılmadı — IntegrityError yolu test edilemedi"
+    assert rollback_called, "rollback() çağrılmadı — IntegrityError sonrası rollback eksik"
+
+    # Test session rollback'ten etkilenmemeli — basit SELECT çalışmalı
+    result = await db_session.execute(sa_text("SELECT 1"))
+    assert result.scalar() == 1, "Test session rollback sonrası kullanılamıyor"
+
+
+# ── CAT-10: category_id tenant doğrulaması (belge oluşturma) ─────────────────
+
+async def test_create_document_with_foreign_category_404(
+    client: AsyncClient,
+    yonetici_token: str,
+    db_session: AsyncSession,
+) -> None:
+    """CAT-10: Başka kulübe ait category_id ile belge oluşturma → 404."""
+    from app.core.security import hash_password
+
+    # Başka kulüp ve kategori oluştur
+    other_club = Club(
+        id=uuid.uuid4(),
+        slug=f"other-cat10-{uuid.uuid4().hex[:8]}",
+        name="Other Cat10 Club",
+        plan="starter",
+        is_active=True,
+    )
+    db_session.add(other_club)
+    await db_session.flush()
+
+    # Diğer kulübe ait category — oluşturmak için doğrudan DB insert
+    from app.models.documents import DocumentCategory
+    other_cat = DocumentCategory(
+        id=uuid.uuid4(),
+        club_id=other_club.id,
+        code="OTHER-CAT",
+        name="Diğer Kulüp Kategorisi",
+    )
+    db_session.add(other_cat)
+    await db_session.flush()
+
+    # Bu category_id ile belge oluşturmaya çalış — 404 beklenir
+    resp = await client.post(
+        DOCS_URL,
+        json={
+            "code": f"X-{uuid.uuid4().hex[:4]}",
+            "title": "Yabancı Kategori Testi",
+            "document_type": "form",
+            "category_id": str(other_cat.id),
+        },
+        headers=_auth(yonetici_token),
+    )
+    assert resp.status_code == 404, f"Beklenen 404, alınan {resp.status_code}: {resp.text}"
+
+
+# ── CAT-11: category_id tenant doğrulaması (belge güncelleme) ────────────────
+
+async def test_update_document_with_foreign_category_404(
+    client: AsyncClient,
+    yonetici_token: str,
+    db_session: AsyncSession,
+) -> None:
+    """CAT-11: PATCH sırasında başka kulübe ait category_id → 404."""
+    from app.models.documents import DocumentCategory
+
+    # Mevcut belge oluştur
+    doc = await _create_doc(client, yonetici_token, code=f"UPD-CAT-{uuid.uuid4().hex[:4]}")
+
+    # Başka kulüp ve kategori
+    other_club = Club(
+        id=uuid.uuid4(),
+        slug=f"other-cat11-{uuid.uuid4().hex[:8]}",
+        name="Other Cat11 Club",
+        plan="starter",
+        is_active=True,
+    )
+    db_session.add(other_club)
+    await db_session.flush()
+
+    other_cat = DocumentCategory(
+        id=uuid.uuid4(),
+        club_id=other_club.id,
+        code="OTHER-CAT11",
+        name="Diğer Kulüp Kategorisi 11",
+    )
+    db_session.add(other_cat)
+    await db_session.flush()
+
+    resp = await client.patch(
+        f"{DOCS_URL}/{doc['id']}",
+        json={"category_id": str(other_cat.id)},
+        headers=_auth(yonetici_token),
+    )
+    assert resp.status_code == 404, f"Beklenen 404, alınan {resp.status_code}: {resp.text}"
