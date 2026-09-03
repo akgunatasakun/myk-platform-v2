@@ -502,6 +502,19 @@ footer p{line-height:1.7;}
         <span class="acard-btn">Sınava Başla →</span>
       </a>
 
+      <a href="#yol-hakki" class="acard c-rules">
+        <span class="acard-icon">⚖️</span>
+        <span class="acard-tag">Mevzuat</span>
+        <h3>Yol Hakkı</h3>
+        <ul>
+          <li>RRS 10–18: yarışan yelkenliler arası</li>
+          <li>COLREG: feribot, balıkçı, gece seyri</li>
+          <li>Kim kime yol verir? Feribota "yarışıyorum" denmez</li>
+          <li>10 soruluk quiz ile kendinizi test edin</li>
+        </ul>
+        <span class="acard-btn">Öğren & Sına →</span>
+      </a>
+
     </div>
 
     <!-- Pupa Maskot -->
@@ -760,7 +773,226 @@ function goToKnot(id){const el=document.getElementById('kcard2-'+id);if(el)el.sc
 .isig-sign{font-size:1.8rem;flex-shrink:0;line-height:1;}
 .isig-label{font-size:.9rem;font-weight:800;color:#e8eef8;margin-bottom:.3rem;}
 .isig-desc{font-size:.8rem;color:rgba(255,255,255,.6);line-height:1.5;}
+/* Akademi: c-rules kart */
+.acard.c-rules:hover{border-color:rgba(0,180,180,.35);}
+.acard.c-rules .acard-tag{color:#008b8b;background:rgba(0,139,139,.09);}
+@media(max-width:640px){#yol-hakki .yh-compare{grid-template-columns:1fr!important;}}
 </style>
+
+<!-- ─── YOL HAKKI ─── -->
+<section id="yol-hakki" style="background:linear-gradient(180deg,#0c1f3d 0%,#0a1628 100%);padding:5rem 1rem;">
+<div class="inner">
+  <span class="sec-tag" style="color:#00b4d8;">⚖️ Deniz Hukuku</span>
+  <h2 class="sec-h2" style="text-align:center">Yol Hakkı: Kim Kime Yol Verir?</h2>
+  <p class="sec-sub" style="text-align:center">Denizde iki ayrı kurallar sistemi eş zamanlı geçerlidir: yarışan yelkenliler kendi aralarında RRS'e tabidir; feribottan balıkçıya, gece seyirinden sise kadar geri kalan her durumda COLREG uygulanır.</p>
+
+  <!-- RRS vs COLREG karşılaştırma kutusu -->
+  <div class="yh-compare" style="display:grid;grid-template-columns:1fr 1fr;gap:1.25rem;margin:2rem 0;">
+    <div style="background:rgba(0,119,182,.15);border:1.5px solid rgba(0,180,216,.25);border-radius:18px;padding:1.6rem;">
+      <h3 style="font-size:.98rem;font-weight:900;color:#e8eef8;margin-bottom:.5rem;">RRS 2025–2028 <span style="display:inline-block;font-size:.63rem;font-weight:700;padding:.2rem .5rem;border-radius:50px;background:rgba(0,180,216,.2);color:#00b4d8;margin-left:.4rem;vertical-align:middle;">YARIŞAN YELKEN</span></h3>
+      <ul style="list-style:none;display:flex;flex-direction:column;gap:.45rem;margin-top:.75rem;">
+        <li style="font-size:.79rem;color:rgba(255,255,255,.7);padding-left:1rem;position:relative;line-height:1.55;"><span style="position:absolute;left:0;color:#00b4d8;font-weight:900;">›</span>Yalnızca yarışan yelkenlilerin birbirine karşı uyguladığı kurallar (Bölüm 2).</li>
+        <li style="font-size:.79rem;color:rgba(255,255,255,.7);padding-left:1rem;position:relative;line-height:1.55;"><span style="position:absolute;left:0;color:#00b4d8;font-weight:900;">›</span>TYF tarafından yayımlanan 2025–2028 Türkçe yarış kuralları kitapçığı.</li>
+        <li style="font-size:.79rem;color:rgba(255,255,255,.7);padding-left:1rem;position:relative;line-height:1.55;"><span style="position:absolute;left:0;color:#00b4d8;font-weight:900;">›</span>Motor çalışırken yelken açık tekne motorlu tekne sayılır (COLREG Kural 3(c)); RRS 42 ise yarış sırasında motor kullanımını kısıtlar.</li>
+        <li style="font-size:.79rem;color:rgba(255,255,255,.7);padding-left:1rem;position:relative;line-height:1.55;"><span style="position:absolute;left:0;color:#00b4d8;font-weight:900;">›</span>Gece fenerleri ve sis işaretleri için COLREG'e atıf yapar (RRS 56).</li>
+        <li style="font-size:.79rem;color:rgba(255,255,255,.7);padding-left:1rem;position:relative;line-height:1.55;"><span style="position:absolute;left:0;color:#00b4d8;font-weight:900;">›</span>Yarışmayan taraflara ya da pist dışında uygulanmaz.</li>
+      </ul>
+    </div>
+    <div style="background:rgba(255,107,53,.1);border:1.5px solid rgba(255,107,53,.25);border-radius:18px;padding:1.6rem;">
+      <h3 style="font-size:.98rem;font-weight:900;color:#e8eef8;margin-bottom:.5rem;">COLREG 72 / TR Yönetmeliği <span style="display:inline-block;font-size:.63rem;font-weight:700;padding:.2rem .5rem;border-radius:50px;background:rgba(255,107,53,.2);color:#ff6b35;margin-left:.4rem;vertical-align:middle;">HER GEMİ</span></h3>
+      <ul style="list-style:none;display:flex;flex-direction:column;gap:.45rem;margin-top:.75rem;">
+        <li style="font-size:.79rem;color:rgba(255,255,255,.7);padding-left:1rem;position:relative;line-height:1.55;"><span style="position:absolute;left:0;color:#ff6b35;font-weight:900;">›</span>Denizde Çatışmayı Önleme Yönetmeliği — tüm tekneler, tüm durumlar.</li>
+        <li style="font-size:.79rem;color:rgba(255,255,255,.7);padding-left:1rem;position:relative;line-height:1.55;"><span style="position:absolute;left:0;color:#ff6b35;font-weight:900;">›</span>Türkiye: Resmî Gazete 12.03.2024, sayı 32487 (Karar 8258) ile yürürlükte.</li>
+        <li style="font-size:.79rem;color:rgba(255,255,255,.7);padding-left:1rem;position:relative;line-height:1.55;"><span style="position:absolute;left:0;color:#ff6b35;font-weight:900;">›</span>Feribot, tanker, balıkçı, gece seyri, sis: her zaman COLREG.</li>
+        <li style="font-size:.79rem;color:rgba(255,255,255,.7);padding-left:1rem;position:relative;line-height:1.55;"><span style="position:absolute;left:0;color:#ff6b35;font-weight:900;">›</span>Yarışmayan yelkenlilere ve üçüncü taraflara uygulanır.</li>
+        <li style="font-size:.79rem;color:rgba(255,255,255,.7);padding-left:1rem;position:relative;line-height:1.55;"><span style="position:absolute;left:0;color:#ff6b35;font-weight:900;">›</span>1972 uluslararası sözleşmesinin güncel Türkçe metni.</li>
+      </ul>
+    </div>
+  </div>
+
+  <!-- RRS Kuralları -->
+  <h3 class="subsec-h3">⛵ RRS Bölüm 2 — Yol Hakkı Özeti</h3>
+  <div style="display:flex;flex-direction:column;gap:.7rem;">
+    <div class="isig-card" style="border-left-color:#00b4d8;">
+      <div class="isig-sign" style="font-size:1rem;font-weight:900;color:#00b4d8;min-width:48px;line-height:1.3;text-align:center;">RRS<br>10</div>
+      <div class="isig-body"><div class="isig-label">Farklı Bordalar — İskele Uzak Durur</div><div class="isig-desc">İki tekne farklı bordada seyrediyorsa sancak bordanın yol hakkı vardır; iskele borda uzak durur.</div></div>
+    </div>
+    <div class="isig-card" style="border-left-color:#00b4d8;">
+      <div class="isig-sign" style="font-size:1rem;font-weight:900;color:#00b4d8;min-width:48px;line-height:1.3;text-align:center;">RRS<br>11</div>
+      <div class="isig-body"><div class="isig-label">Aynı Borda — Rüzgârüstü Uzak Durur</div><div class="isig-desc">Aynı bordada rüzgâr üstündeki tekne uzak durur; rüzgâr altındaki yol hakkına sahiptir.</div></div>
+    </div>
+    <div class="isig-card" style="border-left-color:#00b4d8;">
+      <div class="isig-sign" style="font-size:1rem;font-weight:900;color:#00b4d8;min-width:48px;line-height:1.3;text-align:center;">RRS<br>12</div>
+      <div class="isig-body"><div class="isig-label">Yetişen Tekne Her Koşulda Uzak Durur</div><div class="isig-desc">Arkadan yetişen tekne, borda veya rüzgâr konumundan bağımsız olarak, yetişme sona erene dek uzak durur.</div></div>
+    </div>
+    <div class="isig-card" style="border-left-color:#00b4d8;">
+      <div class="isig-sign" style="font-size:1rem;font-weight:900;color:#00b4d8;min-width:48px;line-height:1.3;text-align:center;">RRS<br>13</div>
+      <div class="isig-body"><div class="isig-label">Tramolada Herkesten Uzak Dur</div><div class="isig-desc">Tramola manevrasındaki tekne, belirli bir bordaya girene kadar tüm teknelerden uzak durma yükümlülüğü taşır.</div></div>
+    </div>
+    <div class="isig-card" style="border-left-color:#00b4d8;">
+      <div class="isig-sign" style="font-size:1rem;font-weight:900;color:#00b4d8;min-width:48px;line-height:1.3;text-align:center;">RRS<br>14</div>
+      <div class="isig-body"><div class="isig-label">Kaçınma — Yol Hakkı Çarpışma İzni Değildir</div><div class="isig-desc">Yol hakkı olan tekne bile mümkün olan son anda çarpışmayı önlemek için manevra yapmak zorundadır.</div></div>
+    </div>
+    <div class="isig-card" style="border-left-color:#4db8f0;">
+      <div class="isig-sign" style="font-size:1rem;font-weight:900;color:#4db8f0;min-width:48px;line-height:1.3;text-align:center;">RRS<br>15–18</div>
+      <div class="isig-body"><div class="isig-label">Yol Hakkı Devri, Rota Değiştirme, İşaret Yeri</div><div class="isig-desc">RRS 15: Yol hakkını yeni kazanan tekne karşı tarafa uzak durması için vakit tanımalıdır. RRS 16: Rota değişikliğinde alan bırakılır. RRS 18: Dönüş şamandırasında içteki tekneye alan verilir.</div></div>
+    </div>
+  </div>
+
+  <!-- COLREG Kuralları -->
+  <h3 class="subsec-h3">🚢 COLREG — Yarışmayan Tekneler İçin Temel Maddeler</h3>
+  <div style="display:flex;flex-direction:column;gap:.7rem;">
+    <div class="isig-card" style="border-left-color:#ff6b35;">
+      <div class="isig-sign" style="font-size:1rem;font-weight:900;color:#ff6b35;min-width:48px;line-height:1.3;text-align:center;">COL<br>5</div>
+      <div class="isig-body"><div class="isig-label">Gözetleme Zorunluluğu</div><div class="isig-desc">Her tekne görsel, işitsel ve radar yoluyla sürekli gözetleme yapar. "Görmedim" geçerli savunma değildir.</div></div>
+    </div>
+    <div class="isig-card" style="border-left-color:#ff6b35;">
+      <div class="isig-sign" style="font-size:1rem;font-weight:900;color:#ff6b35;min-width:48px;line-height:1.3;text-align:center;">COL<br>7</div>
+      <div class="isig-body"><div class="isig-label">Çarpışma Riski — Şüphede Risk Var Say</div><div class="isig-desc">Şüphe durumunda risk var kabul edilir. Pusula değeri değişmiyorsa iki tekne yaklaşıyordur.</div></div>
+    </div>
+    <div class="isig-card" style="border-left-color:#ff6b35;">
+      <div class="isig-sign" style="font-size:1rem;font-weight:900;color:#ff6b35;min-width:48px;line-height:1.3;text-align:center;">COL<br>12</div>
+      <div class="isig-body"><div class="isig-label">İki Yelkenli — RRS ile Aynı Kural</div><div class="isig-desc">Farklı borda: iskele uzak durur. Aynı borda: rüzgârüstü uzak durur. Karşı tarafın bordası belirlenemiyorsa iskele bordanın yükümlülüğü uzak durmaktır.</div></div>
+    </div>
+    <div class="isig-card" style="border-left-color:#ff6b35;">
+      <div class="isig-sign" style="font-size:1rem;font-weight:900;color:#ff6b35;min-width:48px;line-height:1.3;text-align:center;">COL<br>13</div>
+      <div class="isig-body"><div class="isig-label">Yetişen Tekne Uzak Durur</div><div class="isig-desc">22,5° gerisinden yaklaşan her tekne yetişen sayılır; konum değişene dek uzak durur.</div></div>
+    </div>
+    <div class="isig-card" style="border-left-color:#ff6b35;">
+      <div class="isig-sign" style="font-size:1rem;font-weight:900;color:#ff6b35;min-width:48px;line-height:1.3;text-align:center;">COL<br>14</div>
+      <div class="isig-body"><div class="isig-label">Karşılıklı Rotalar — İki Motorlu Sancağa</div><div class="isig-desc">İki motorlu tekne karşıdan geliyorsa her ikisi de sancağa (sağa) yönelir ve bordasından geçer.</div></div>
+    </div>
+    <div class="isig-card" style="border-left-color:#ff6b35;">
+      <div class="isig-sign" style="font-size:1rem;font-weight:900;color:#ff6b35;min-width:48px;line-height:1.3;text-align:center;">COL<br>15</div>
+      <div class="isig-body"><div class="isig-label">Kesişen Rotalar — Sancaktan Gelen Öncelikli</div><div class="isig-desc">İki motorlu tekne kesişiyorsa sağından gelen yol hakkına sahiptir; soldaki uzak durur.</div></div>
+    </div>
+    <div class="isig-card" style="border-left-color:#ff6b35;">
+      <div class="isig-sign" style="font-size:1rem;font-weight:900;color:#ff6b35;min-width:48px;line-height:1.3;text-align:center;">COL<br>18</div>
+      <div class="isig-body"><div class="isig-label">Hareket Kabiliyeti Sıralaması <span style="font-size:.68rem;font-weight:400;color:rgba(255,255,255,.4);">(basitleştirilmiş özet)</span></div><div class="isig-desc">Kısıtlı manevra &gt; balıkçı &gt; yelkenli &gt; motorlu tekne. Bu sıra dar kanal (Kural 9), trafik ayrım düzeni (Kural 10) ve derinlik kısıtlaması gibi özel koşullara göre değişir; her durumda mutlak öncelik sırası olarak uygulanamaz.</div></div>
+    </div>
+  </div>
+
+  <!-- Kırmızı uyarı -->
+  <div style="background:rgba(231,76,60,.12);border:2px solid rgba(231,76,60,.4);border-radius:18px;padding:1.6rem 1.75rem;margin:2.5rem 0;display:flex;gap:1.1rem;align-items:flex-start;">
+    <span style="font-size:2rem;flex-shrink:0;line-height:1;">⛴️</span>
+    <div>
+      <h3 style="font-size:.98rem;font-weight:900;color:#e74c3c;margin-bottom:.4rem;">Feribota "Ben Yarışıyorum" Denmez</h3>
+      <p style="font-size:.82rem;color:rgba(255,255,255,.72);line-height:1.7;">Feribot otomatik olarak her durumda yol hakkına sahip değildir. Dar kanal (COLREG 9), trafik ayrım düzeni (COLREG 10), manevra kabiliyeti ve su çekimi gibi koşullar ayrı değerlendirilir. Bununla birlikte küçük bir yelkenli, kanalda güvenle seyredebildiği büyük bir geminin geçişini engellememelidir (COLREG 9(b)). RRS yalnızca yarışan yelkenlilerin <strong>birbirine karşı</strong> ilişkisini düzenler; feribot veya kargo gemisi COLREG kapsamındadır ve yarış kurallarını tanımaz.</p>
+    </div>
+  </div>
+
+  <!-- YouTube -->
+  <div style="margin:2rem 0;border-radius:18px;overflow:hidden;aspect-ratio:16/9;background:#000;max-width:800px;margin-left:auto;margin-right:auto;">
+    <iframe width="100%" height="100%" src="https://www.youtube.com/embed/hgVejKOSVw4" title="Yelken Yol Hakkı Eğitim Videosu" allow="accelerometer;autoplay;clipboard-write;encrypted-media;gyroscope;picture-in-picture" allowfullscreen loading="lazy" style="border:none;display:block;"></iframe>
+  </div>
+
+  <!-- Quiz -->
+  <div style="background:rgba(255,255,255,.04);border:1.5px solid rgba(255,255,255,.1);border-radius:22px;padding:1.75rem;margin:2rem 0;max-width:780px;margin-left:auto;margin-right:auto;" id="yhQuizWrap">
+    <div id="yhActive">
+      <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:1.25rem;flex-wrap:wrap;gap:.5rem;">
+        <h3 style="font-size:.98rem;font-weight:900;color:#e8eef8;">🧭 Yol Hakkı Sınavı</h3>
+        <span id="yhProg" style="font-size:.77rem;color:rgba(255,255,255,.45);"></span>
+      </div>
+      <div id="yhQ" style="font-size:.9rem;font-weight:700;color:#e8eef8;margin-bottom:.9rem;line-height:1.65;"></div>
+      <div id="yhOpts" style="display:flex;flex-direction:column;gap:.55rem;"></div>
+      <div id="yhFb" style="display:none;font-size:.79rem;margin-top:.8rem;padding:.7rem .95rem;border-radius:10px;line-height:1.6;"></div>
+      <div style="display:flex;justify-content:space-between;align-items:center;margin-top:1.1rem;">
+        <span id="yhScore" style="font-size:.76rem;color:rgba(255,255,255,.4);"></span>
+        <button id="yhNext" onclick="yhNextQ()" disabled style="background:rgba(0,180,216,.15);border:1px solid rgba(0,180,216,.3);color:#00b4d8;border-radius:9px;padding:.55rem 1.3rem;font-size:.8rem;font-weight:700;cursor:pointer;">Sonraki →</button>
+      </div>
+    </div>
+    <div id="yhResult" style="display:none;text-align:center;padding:1.25rem 0;">
+      <div id="yhResScore" style="font-size:2.8rem;font-weight:900;margin-bottom:.4rem;color:#e8eef8;"></div>
+      <div id="yhResVerdict" style="font-size:.96rem;font-weight:700;margin-bottom:.6rem;color:#00b4d8;"></div>
+      <p id="yhResText" style="font-size:.81rem;color:rgba(255,255,255,.6);line-height:1.7;margin-bottom:1.1rem;"></p>
+      <button onclick="yhRestart()" style="background:linear-gradient(135deg,#1a3a8f,#2d6be4);color:#fff;border:none;border-radius:11px;padding:.75rem 1.65rem;font-size:.83rem;font-weight:700;cursor:pointer;">Tekrar Dene</button>
+    </div>
+  </div>
+
+  <!-- Dipnot -->
+  <div style="background:rgba(255,255,255,.03);border:1px solid rgba(255,255,255,.07);border-radius:12px;padding:1.1rem 1.4rem;margin-top:1.75rem;font-size:.72rem;color:rgba(255,255,255,.38);line-height:1.85;max-width:780px;margin-left:auto;margin-right:auto;">
+    <strong style="color:rgba(255,255,255,.55);">Kaynaklar ve Yasal Uyarı:</strong> Bu bölüm yalnızca eğitim amaçlıdır; hukuki tavsiye niteliği taşımaz.<br>
+    • <strong style="color:rgba(255,255,255,.5);">RRS 2025–2028:</strong> TYF tarafından yayımlanan 2025–2028 Türkçe yarış kuralları kitapçığı — <a href="https://www.tyf.org.tr/sayfalar/ws-rrs-yelken-yaris-kurallari-2025-2028-dijital-kitapcigi-yayinlanmistir/" target="_blank" rel="noopener" style="color:rgba(0,180,216,.6);text-decoration:none;">TYF ↗</a><br>
+    • <strong style="color:rgba(255,255,255,.5);">COLREG / TR Yönetmeliği:</strong> 1972 Uluslararası Denizde Çatışmayı Önleme Sözleşmesi; <a href="https://resmigazete.gov.tr/eskiler/2024/03/20240312-25.htm" target="_blank" rel="noopener" style="color:rgba(0,180,216,.6);text-decoration:none;">Resmî Gazete 12.03.2024 sayı 32487 ↗</a> (Karar 8258 — eski 1977 tüzüğünün yerine geçmiştir). Güncel tam metin: <a href="https://denizcilik.uab.gov.tr/duyurular/denizde-catismayi-onleme-yonetmeligi" target="_blank" rel="noopener" style="color:rgba(0,180,216,.6);text-decoration:none;">UAB Denizcilik Genel Müdürlüğü ↗</a><br>
+    • Buradaki metinler resmi belgelerin parafrazıdır. Tam ve bağlayıcı metin için yukarıdaki kaynaklara başvurun.
+  </div>
+</div>
+</section>
+
+<script>
+(function(){
+var YH_LS='myk_yh_best';
+var yhQs=[
+  {q:"RRS 10 — İki yelkenli farklı bordada seyrediyorsa hangisi uzak durur?",opts:["Sancak bordadaki","İskele bordadaki","Rüzgârüstündeki"],ans:1,fb:"RRS 10: Farklı bordada sancak bordanın yol hakkı vardır; iskele borda uzak durur."},
+  {q:"RRS 11 — İki yelkenli aynı bordada seyrediyorsa hangisi uzak durur?",opts:["Rüzgâraltındaki","Öndeki","Rüzgârüstündeki"],ans:2,fb:"RRS 11: Aynı bordada rüzgârüstü uzak durur; rüzgâraltındaki yol hakkına sahiptir."},
+  {q:"RRS 12 — Arkadan yetişen tekne için ne geçerlidir?",opts:["Yetişen tekne uzak durur","Öndeki tekne yavaşlar","Bordaya göre karar verilir"],ans:0,fb:"RRS 12: Yetişen tekne, yetişme sona erip önüne geçene kadar her durumda uzak durur."},
+  {q:"RRS 13 — Tramola manevrasındaki teknenin yükümlülüğü nedir?",opts:["Sadece sancaktakilerden uzak durur","Manevra bitene kadar herkesten uzak durur","Yol hakkı varsa sürdürür"],ans:1,fb:"RRS 13: Tramolada manevra tamamlanıp belirli bir bordaya girene kadar herkesten uzak durulur."},
+  {q:"RRS 14 — Yol hakkı olan teknenin çarpışmadan kaçınma yükümlülüğü var mıdır?",opts:["Hayır, yol hakkı tam koruma sağlar","Evet, son anda bile olsa kaçınmalıdır","Yalnızca motor varsa"],ans:1,fb:"RRS 14: Yol hakkı tekne bile mümkün olan son anda çarpışmayı önlemek için manevra yapmalıdır."},
+  {q:"Yarışmakta olan yelkenli hem yelken hem motor kullanıyorsa ne sayılır?",opts:["Yelkenli olarak değerlendirilir","Motorlu tekne sayılır","Duruma göre değişir"],ans:1,fb:"COLREG Kural 3(c): motor çalışırken yelken açık tekne motorlu sayılır. RRS 42 ise yarış sırasında motor kullanımını kısıtlar."},
+  {q:"COLREG 14 — İki motorlu tekne tam karşıdan geliyorsa ne yapmalıdır?",opts:["Her ikisi de sancağa (sağa) yönelir","Soldaki uzak durur","Hız azaltılır"],ans:0,fb:"COLREG 14: Karşıdan gelen iki motorlu tekne her ikisi de sancağa yönelerek birbirinin kıç tarafından geçer."},
+  {q:"COLREG 7 — Çarpışma riski şüphe götürüyorsa ne varsayılır?",opts:["Risk yok kabul edilir","Risk var kabul edilir","Kılavuza sorulur"],ans:1,fb:"COLREG 7: Şüphe durumunda çarpışma riski var kabul edilir."},
+  {q:"Dar kanalda büyük bir feribotla karşılaşan yarışçı yelkenli hangi kuralları esas almalıdır?",opts:["Yalnız RRS; yarışan yelkenli her durumda önceliklidir","COLREG; kanal, manevra kabiliyeti ve güvenli geçiş koşulları değerlendirilir","Tekne boyuna bakılmadan iki taraf eşit önceliklidir"],ans:1,fb:"Feribotla ilişkide COLREG uygulanır. Feribot otomatik olarak her durumda öncelikli değildir; ancak küçük yelkenli, dar kanalda yalnız o kanalda güvenle seyredebildiği büyük geminin geçişini engellememelidir (COLREG 9(b))."},
+  {q:"Gece seyirinde fenerlere hangi kurallar uygulanır?",opts:["RRS'nin kendi fener kuralları","COLREG — RRS 56 buna atıf yapar","Kulübün iç yönetmeliği"],ans:1,fb:"RRS 56: Yarış kuralları fener ve sis işaretleri konusunda COLREG'e atıf yapar."}
+];
+var yhQi=0,yhScore=0,yhAnswered=false;
+function yhRender(){
+  var q=yhQs[yhQi];
+  document.getElementById('yhProg').textContent='Soru '+(yhQi+1)+' / '+yhQs.length;
+  document.getElementById('yhQ').textContent=q.q;
+  document.getElementById('yhFb').style.display='none';
+  document.getElementById('yhNext').disabled=true;
+  yhAnswered=false;
+  var o=document.getElementById('yhOpts');o.innerHTML='';
+  q.opts.forEach(function(t,i){
+    var b=document.createElement('button');
+    b.textContent=t;
+    b.style.cssText='background:rgba(255,255,255,.06);border:1.5px solid rgba(255,255,255,.12);border-radius:11px;padding:.8rem 1rem;cursor:pointer;font-size:.81rem;color:#e8eef8;text-align:left;line-height:1.45;transition:all .18s;';
+    b.onmouseenter=function(){if(!yhAnswered)this.style.background='rgba(0,180,216,.1)';};
+    b.onmouseleave=function(){if(!yhAnswered&&!this.classList.contains('yh-correct')&&!this.classList.contains('yh-wrong'))this.style.background='rgba(255,255,255,.06)';};
+    b.onclick=function(){yhSelect(i);};
+    o.appendChild(b);
+  });
+  var s=document.getElementById('yhScore');
+  s.textContent=yhQi>0?'Puan: '+yhScore+' / '+yhQi:'';
+}
+function yhSelect(i){
+  if(yhAnswered)return;
+  yhAnswered=true;
+  var q=yhQs[yhQi];
+  var btns=document.querySelectorAll('#yhOpts button');
+  for(var k=0;k<btns.length;k++)btns[k].disabled=true;
+  var fb=document.getElementById('yhFb');
+  if(i===q.ans){
+    btns[i].style.background='rgba(39,174,96,.18)';btns[i].style.borderColor='#27ae60';btns[i].style.color='#2ecc71';
+    yhScore++;
+    fb.style.cssText='display:block;background:rgba(39,174,96,.1);border:1px solid rgba(39,174,96,.25);color:#2ecc71;font-size:.79rem;padding:.68rem .9rem;border-radius:9px;line-height:1.6;margin-top:.8rem;';
+    fb.textContent='✓ '+q.fb;
+  } else {
+    btns[i].style.background='rgba(231,76,60,.14)';btns[i].style.borderColor='#e74c3c';btns[i].style.color='#e74c3c';
+    btns[q.ans].style.background='rgba(39,174,96,.18)';btns[q.ans].style.borderColor='#27ae60';btns[q.ans].style.color='#2ecc71';
+    fb.style.cssText='display:block;background:rgba(231,76,60,.08);border:1px solid rgba(231,76,60,.25);color:#e74c3c;font-size:.79rem;padding:.68rem .9rem;border-radius:9px;line-height:1.6;margin-top:.8rem;';
+    fb.textContent='✗ Yanlış. '+q.fb;
+  }
+  document.getElementById('yhNext').disabled=false;
+}
+function yhNextQ(){yhQi++;if(yhQi>=yhQs.length){yhShowResult();}else{yhRender();}}
+function yhShowResult(){
+  document.getElementById('yhActive').style.display='none';
+  document.getElementById('yhResult').style.display='block';
+  document.getElementById('yhResScore').textContent=yhScore+' / '+yhQs.length;
+  var v,t;
+  if(yhScore>=7){v='🎉 Bravo! Yol hakkını iyi biliyorsunuz.';t='Denizde kendinize ve çevrenizdekilere güvenlisiniz.';}
+  else if(yhScore>=4){v='📚 İyi deneme — biraz daha tekrar gerekiyor.';t='Kural özetini tekrar okuyup deneyin.';}
+  else{v='⚓ Tekrar inceleyin — güvenli seyir için bilgi şart.';t='RRS ve COLREG özetini baştan okuyun.';}
+  document.getElementById('yhResVerdict').textContent=v;
+  document.getElementById('yhResText').textContent=t;
+  try{var b=parseInt(localStorage.getItem(YH_LS)||'0',10);if(yhScore>b)localStorage.setItem(YH_LS,yhScore);}catch(e){}
+}
+function yhRestart(){yhQi=0;yhScore=0;yhAnswered=false;document.getElementById('yhActive').style.display='block';document.getElementById('yhResult').style.display='none';yhRender();}
+window.yhNextQ=yhNextQ;window.yhRestart=yhRestart;
+yhRender();
+})();
+</script>
 
 <!-- ─── HAKKIMIZDA ─── -->
 <section class="about-sec" id="hakkimizda">
