@@ -638,11 +638,21 @@ async def add_guardian(
             detail="Veli olarak atanacak kişi bu kulüpte bulunamadı.",
         )
 
-    # 4. is_primary=True ise mevcut primary bağlantıları temizle
+    # 4. Veli ilişkisi kurulan kişi veli listesinde de görünmeli.
+    role_result = await db.execute(
+        select(PersonRole.id).where(
+            PersonRole.person_id == body.guardian_person_id,
+            PersonRole.role_code == "veli",
+        )
+    )
+    if role_result.scalar_one_or_none() is None:
+        db.add(PersonRole(person_id=body.guardian_person_id, role_code="veli"))
+
+    # 5. is_primary=True ise mevcut primary bağlantıları temizle
     if body.is_primary:
         await _clear_primary_for_athlete(person_id, club_id, exclude_id=None, db=db)
 
-    # 5. Bağlantı kaydı oluştur
+    # 6. Bağlantı kaydı oluştur
     link = PersonGuardian(
         club_id=club_id,
         athlete_person_id=person_id,

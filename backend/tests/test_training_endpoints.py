@@ -62,6 +62,7 @@ async def _make_person(
     last_name: str = "Kişi",
     role_codes: list[str] | None = None,
     is_active: bool = True,
+    birth_date: date | None = None,
 ) -> Person:
     person = Person(
         id=uuid.uuid4(),
@@ -71,6 +72,7 @@ async def _make_person(
         email=f"p-{uuid.uuid4().hex[:8]}@test.com",
         is_active=is_active,
         is_deleted=False,
+        birth_date=birth_date,
     )
     db.add(person)
     await db.flush()
@@ -150,6 +152,31 @@ async def test_p01_active_enrollment_shows_in_participants(
     data = resp.json()
     person_ids = [e["person_id"] for e in data]
     assert str(sporcu.id) in person_ids
+
+
+async def test_participants_include_birth_date_for_age_display(
+    client: AsyncClient,
+    db_session: AsyncSession,
+    test_club: Club,
+    yonetici_token: str,
+) -> None:
+    sporcu = await _make_person(
+        db_session,
+        test_club,
+        first_name="Yaş",
+        last_name="Testi",
+        birth_date=date(2015, 9, 4),
+    )
+    course = await _make_course(db_session, test_club)
+    await _enroll(db_session, test_club, course, sporcu)
+
+    resp = await client.get(
+        f"{TRAININGS_URL}/{course.id}/participants",
+        headers=_headers(yonetici_token),
+    )
+
+    assert resp.status_code == 200
+    assert resp.json()[0]["person_birth_date"] == "2015-09-04"
 
 
 async def test_p01_no_attendance_record_participant_visible(

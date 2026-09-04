@@ -4,6 +4,7 @@ import AppShell from '@/components/layout/AppShell'
 import { personsApi } from '@/api/persons'
 import type { Person } from '@/types/person'
 import type { GuardianAthlete } from '@/types/guardian'
+import { formatPersonAge } from '@/utils/personAge'
 
 const RELATION_LABELS: Record<string, string> = {
   anne: 'Anne',
@@ -220,6 +221,9 @@ export default function GuardianDetailPage() {
                                 {link.athlete.phone}
                               </div>
                             )}
+                            <div style={{ fontSize: 12, color: 'var(--color-text-muted)', marginTop: 2 }}>
+                              {formatPersonAge(link.athlete.birth_date)}
+                            </div>
                           </td>
 
                           <td>

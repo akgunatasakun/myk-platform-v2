@@ -10,6 +10,7 @@ import AppShell from '@/components/layout/AppShell'
 import AthleteProfileModal from './AthleteProfileModal'
 import { athletesApi } from '@/api/athletes'
 import type { AthleteDetailOut, DocumentStatus } from '@/types/athlete'
+import { formatPersonAge } from '@/utils/personAge'
 
 function fmtDate(d?: string | null) {
   if (!d) return '—'
@@ -153,6 +154,7 @@ export default function AthleteDetailPage() {
             <div className="card-body">
               <div className="detail-grid">
                 <DetailItem label="Doğum Tarihi" value={fmtDate(athlete.birth_date)} />
+                <DetailItem label="Güncel Yaş" value={formatPersonAge(athlete.birth_date)} />
                 <DetailItem
                   label="Cinsiyet"
                   value={athlete.gender ? GENDER_LABELS[athlete.gender] ?? athlete.gender : undefined}

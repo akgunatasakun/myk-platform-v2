@@ -145,6 +145,7 @@ export interface TrainingEnrollment {
   course_id: string
   person_id: string
   person_name: string | null
+  person_birth_date?: string | null
   status: EnrollmentStatus
   payment_status: PaymentStatus
   notes: string | null

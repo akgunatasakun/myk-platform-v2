@@ -13,6 +13,7 @@ import { useNavigate } from 'react-router-dom'
 import AppShell from '@/components/layout/AppShell'
 import { athletesApi } from '@/api/athletes'
 import type { AthleteAlertItem, AthleteListItem, DocumentStatus } from '@/types/athlete'
+import { formatPersonAge } from '@/utils/personAge'
 
 const PAGE_SIZE = 20
 
@@ -170,11 +171,9 @@ export default function AthletesPage() {
                           <div style={{ fontWeight: 600 }}>
                             {a.first_name} {a.last_name}
                           </div>
-                          {a.birth_date && (
-                            <div style={{ fontSize: 11, color: 'var(--color-text-muted)' }}>
-                              {fmtDate(a.birth_date)}
-                            </div>
-                          )}
+                          <div style={{ fontSize: 11, color: 'var(--color-text-muted)' }}>
+                            {formatPersonAge(a.birth_date)}
+                          </div>
                           {!a.has_profile && (
                             <div style={{ fontSize: 11, color: 'var(--color-warning)' }}>profil eksik</div>
                           )}

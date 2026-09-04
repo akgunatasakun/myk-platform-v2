@@ -1,5 +1,6 @@
 """PersonGuardian endpoint testleri — veli-sporcu ilişkisi."""
 import uuid
+from datetime import date
 
 import pytest
 import pytest_asyncio
@@ -8,7 +9,7 @@ from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.models.club import Club
-from app.models.person import Person
+from app.models.person import Person, PersonRole
 from app.models.person_guardian import PersonGuardian
 from app.models.user import User
 
@@ -22,6 +23,7 @@ async def _make_person(db: AsyncSession, club_id: uuid.UUID, **kwargs) -> Person
         club_id=club_id,
         first_name=kwargs.get("first_name", "Test"),
         last_name=kwargs.get("last_name", f"Kisi-{uuid.uuid4().hex[:6]}"),
+        birth_date=kwargs.get("birth_date"),
     )
     db.add(person)
     await db.flush()
@@ -78,8 +80,40 @@ async def test_list_guardians_empty(
 
 
 @pytest.mark.asyncio
+async def test_guardian_athletes_include_birth_date_for_age_display(
+    client: AsyncClient,
+    test_club: Club,
+    guardian_person: Person,
+    db_session: AsyncSession,
+    yonetici_token: str,
+) -> None:
+    athlete = await _make_person(
+        db_session,
+        test_club.id,
+        first_name="Yaşlı",
+        last_name="Sporcu",
+        birth_date=date(2015, 9, 4),
+    )
+    db_session.add(PersonGuardian(
+        club_id=test_club.id,
+        athlete_person_id=athlete.id,
+        guardian_person_id=guardian_person.id,
+    ))
+    await db_session.flush()
+
+    resp = await client.get(
+        f"/api/v1/persons/{guardian_person.id}/athletes",
+        headers={"Authorization": f"Bearer {yonetici_token}"},
+    )
+
+    assert resp.status_code == 200
+    assert resp.json()[0]["athlete"]["birth_date"] == "2015-09-04"
+
+
+@pytest.mark.asyncio
 async def test_add_guardian_success(
     client: AsyncClient,
+    db_session: AsyncSession,
     test_club: Club,
     athlete: Person,
     guardian_person: Person,
@@ -109,6 +143,13 @@ async def test_add_guardian_success(
     assert data["guardian"]["id"] == str(guardian_person.id)
     assert data["guardian"]["first_name"] == guardian_person.first_name
     assert data["guardian"]["last_name"] == guardian_person.last_name
+    role_result = await db_session.execute(
+        select(PersonRole).where(
+            PersonRole.person_id == guardian_person.id,
+            PersonRole.role_code == "veli",
+        )
+    )
+    assert role_result.scalar_one_or_none() is not None
 
 
 @pytest.mark.asyncio
@@ -392,6 +433,22 @@ async def test_add_guardian_requires_auth(
         json={"guardian_person_id": str(guardian_person.id)},
     )
     assert resp.status_code == 401
+
+
+@pytest.mark.asyncio
+async def test_add_guardian_requires_write_permission(
+    client: AsyncClient,
+    athlete: Person,
+    guardian_person: Person,
+    sporcu_token: str,
+) -> None:
+    """Menü görünürlüğünden bağımsız olarak API kişi yazma yetkisi ister."""
+    resp = await client.post(
+        f"/api/v1/persons/{athlete.id}/guardians",
+        headers={"Authorization": f"Bearer {sporcu_token}"},
+        json={"guardian_person_id": str(guardian_person.id)},
+    )
+    assert resp.status_code == 403
 
 
 @pytest.mark.asyncio

@@ -5,6 +5,7 @@ import PersonFormModal from './PersonFormModal'
 import PersonGuardiansSection from './PersonGuardiansSection'
 import { personsApi } from '@/api/persons'
 import type { Person, PersonRoleCode } from '@/types/person'
+import { formatPersonAge } from '@/utils/personAge'
 
 const ROLE_LABELS: Record<PersonRoleCode, string> = {
   sporcu: 'Sporcu',
@@ -209,6 +210,7 @@ export default function PersonDetailPage() {
                       : undefined
                   }
                 />
+                <DetailItem label="Güncel Yaş" value={formatPersonAge(person.birth_date)} />
                 <DetailItem
                   label="Cinsiyet"
                   value={person.gender ? GENDER_LABELS[person.gender] : undefined}

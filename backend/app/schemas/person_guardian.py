@@ -1,6 +1,6 @@
 """PersonGuardian şemaları — Pydantic v2."""
 import uuid
-from datetime import datetime
+from datetime import date, datetime
 from typing import Optional
 
 from pydantic import BaseModel, Field
@@ -14,6 +14,7 @@ class PersonMiniOut(BaseModel):
     last_name: str
     member_number: Optional[str] = None
     phone: Optional[str] = None
+    birth_date: Optional[date] = None
 
     model_config = {"from_attributes": True}
 

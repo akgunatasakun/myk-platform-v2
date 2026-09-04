@@ -8,6 +8,7 @@ export interface PersonMiniOut {
   last_name: string
   member_number: string | null
   phone: string | null
+  birth_date?: string | null
 }
 
 export interface PersonGuardian {
@@ -56,5 +57,6 @@ export interface GuardianAthlete {
     last_name: string
     member_number?: string | null
     phone?: string | null
+    birth_date?: string | null
   }
 }

@@ -794,6 +794,7 @@ async def list_participants(
     for e in enrollments:
         out = TrainingEnrollmentOut.model_validate(e)
         out.person_name = _person_name(e.person)
+        out.person_birth_date = e.person.birth_date if e.person else None
         items.append(out)
     return items
 

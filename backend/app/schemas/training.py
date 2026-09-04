@@ -248,6 +248,7 @@ class TrainingEnrollmentOut(BaseModel):
     course_id: uuid.UUID
     person_id: uuid.UUID
     person_name: Optional[str] = None           # computed
+    person_birth_date: Optional[date] = None    # computed — yaş istemci tarafında hesaplanır
     status: str
     payment_status: str
     notes: Optional[str] = None

@@ -1,13 +1,17 @@
 import { useCallback, useEffect, useRef, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
 import AppShell from '@/components/layout/AppShell'
+import PersonFormModal from '@/pages/persons/PersonFormModal'
 import { personsApi } from '@/api/persons'
 import type { Person, PersonListResponse } from '@/types/person'
+import { useAuth } from '@/hooks/useAuth'
+import { canManageGuardians } from '@/utils/guardianPermissions'
 
 const PAGE_SIZE = 20
 
 export default function GuardiansPage() {
   const navigate = useNavigate()
+  const { user } = useAuth()
 
   const [data, setData] = useState<PersonListResponse | null>(null)
   const [loading, setLoading] = useState(true)
@@ -16,6 +20,7 @@ export default function GuardiansPage() {
   const [search, setSearch] = useState('')
   const [activeFilter, setActiveFilter] = useState('')
   const [skip, setSkip] = useState(0)
+  const [createOpen, setCreateOpen] = useState(false)
 
   const debounceRef = useRef<ReturnType<typeof setTimeout> | null>(null)
 
@@ -73,6 +78,11 @@ export default function GuardiansPage() {
     <AppShell title="Veliler">
       <div className="page-header">
         <h1 className="page-title">Veliler</h1>
+        {canManageGuardians(user?.role) && (
+          <button className="btn btn-primary" onClick={() => setCreateOpen(true)}>
+            + Yeni Veli
+          </button>
+        )}
       </div>
 
       <div className="filter-bar">
@@ -198,6 +208,18 @@ export default function GuardiansPage() {
           </>
         )}
       </div>
+
+      <PersonFormModal
+        isOpen={createOpen}
+        onClose={() => setCreateOpen(false)}
+        forcedRole="veli"
+        title="Yeni Veli"
+        onSaved={() => {
+          setCreateOpen(false)
+          setSkip(0)
+          void fetchGuardians(search, activeFilter, 0)
+        }}
+      />
     </AppShell>
   )
 }

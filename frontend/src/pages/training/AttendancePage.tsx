@@ -15,6 +15,7 @@ import { useSearchParams } from 'react-router-dom'
 import AppShell from '@/components/layout/AppShell'
 import { trainingApi } from '@/api/training'
 import { useAuth } from '@/hooks/useAuth'
+import { formatPersonAge } from '@/utils/personAge'
 
 const CAN_TAKE_ATTENDANCE = new Set(['super_admin', 'kulup_yonetici', 'sportif_direktor', 'basantrenor', 'antrenor', 'personel'])
 import type {
@@ -35,6 +36,7 @@ const STATUS_BUTTONS: { value: AttendanceStatus; label: string; color: string }[
 interface AttendanceRow {
   person_id: string
   person_name: string
+  person_birth_date: string | null
   status: AttendanceStatus | null
   check_in_time: string
   check_out_time: string
@@ -116,6 +118,7 @@ export default function AttendancePage() {
           return {
             person_id: e.person_id,
             person_name: e.person_name ?? e.person_id,
+            person_birth_date: e.person_birth_date ?? null,
             status: (existing?.status as AttendanceStatus) ?? null,
             check_in_time: existing?.check_in_time?.slice(0, 5) ?? '',
             check_out_time: existing?.check_out_time?.slice(0, 5) ?? '',
@@ -329,7 +332,12 @@ export default function AttendancePage() {
                 {rows.map((row, idx) => (
                   <tr key={row.person_id}>
                     <td style={{ color: 'var(--color-text-muted)', width: 36 }}>{idx + 1}</td>
-                    <td><strong>{row.person_name}</strong></td>
+                    <td>
+                      <strong>{row.person_name}</strong>
+                      <div style={{ fontSize: 11, color: 'var(--color-text-muted)', marginTop: 2 }}>
+                        {formatPersonAge(row.person_birth_date)}
+                      </div>
+                    </td>
                     <td>
                       <div style={{ display: 'flex', gap: 4 }}>
                         {STATUS_BUTTONS.map((b) => (
