@@ -7,6 +7,7 @@ from app.models.membership_application import MembershipApplication
 from app.models.application_counter import ApplicationCounter
 from app.models.member_counter import MemberCounter
 from app.models.person_guardian import PersonGuardian
+from app.models.person_document import PersonDocument, PersonDocumentRepresentative
 from app.models.academy import (
     AcademyProgram,
     AcademyModule,
@@ -53,6 +54,8 @@ __all__ = [
     "ApplicationCounter",
     "MemberCounter",
     "PersonGuardian",
+    "PersonDocument",
+    "PersonDocumentRepresentative",
     "AcademyProgram",
     "AcademyModule",
     "AcademyLesson",

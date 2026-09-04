@@ -17,6 +17,7 @@ from app.api.v1.routers.settings import router as settings_router
 from app.api.v1.routers.notifications import router as notifications_router
 from app.api.v1.routers.calendar import router as calendar_router
 from app.api.v1.routers.documents import router as documents_router
+from app.api.v1.routers.person_documents import router as person_documents_router
 from app.api.v1.routers.users import router as users_router
 from app.api.v1.routers.audit import router as audit_router
 from app.config import get_settings
@@ -95,6 +96,7 @@ app.include_router(settings_router, prefix=API_PREFIX)
 app.include_router(notifications_router, prefix=API_PREFIX)
 app.include_router(calendar_router, prefix=API_PREFIX)
 app.include_router(documents_router, prefix=API_PREFIX)
+app.include_router(person_documents_router, prefix=API_PREFIX)
 app.include_router(users_router, prefix=API_PREFIX)  # Sprint 18: kullanıcı yönetimi
 app.include_router(audit_router, prefix=API_PREFIX)  # Sprint 19: denetim kayıtları
 

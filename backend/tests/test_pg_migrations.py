@@ -82,11 +82,11 @@ def test_fresh_upgrade_head():
 
 @pytest.mark.asyncio
 async def test_current_revision_is_head(engine):
-    """Migration sonrası alembic_version = '0020' (head) olmalı."""
+    """Migration sonrası alembic_version güncel head olmalı."""
     async with engine.connect() as conn:
         r = await conn.execute(text("SELECT version_num FROM alembic_version"))
         rev = r.scalar_one()
-    assert rev == "0025", f"Beklenen '0025', alınan '{rev!r}'"
+    assert rev == "0026", f"Beklenen '0026', alınan '{rev!r}'"
 
 
 # ── 2. Şema doğrulama ─────────────────────────────────────────────────────────
@@ -948,6 +948,193 @@ def test_0025_downgrade_restores_partial_index():
                           AND indexname  = 'uq_doc_categories_code'
                     """))
                     assert r2.scalar() == 1, "Downgrade sonrası kısmi index geri gelmedi"
+            finally:
+                await e.dispose()
+
+        asyncio.get_event_loop().run_until_complete(_check())
+    finally:
+        run_alembic("upgrade", "head")
+
+
+# ── 10. Migration 0026: veli yetkisi + kişisel evrak çekirdeği ──────────────
+
+@pytest.mark.asyncio
+async def test_0026_guardian_columns_and_document_tables_exist(engine):
+    """0026 gerekli guardian kolonlarını ve iki evrak tablosunu oluşturmalı."""
+    async with engine.connect() as conn:
+        columns = await conn.execute(text("""
+            SELECT column_name, is_nullable, column_default
+              FROM information_schema.columns
+             WHERE table_schema = 'public'
+               AND table_name = 'person_guardians'
+               AND column_name IN (
+                    'can_consent', 'is_active', 'revoked_at',
+                    'revoked_by_user_id'
+               )
+        """))
+        guardian_columns = {row.column_name: row for row in columns}
+        assert set(guardian_columns) == {
+            "can_consent", "is_active", "revoked_at", "revoked_by_user_id"
+        }
+        assert guardian_columns["can_consent"].is_nullable == "NO"
+        assert guardian_columns["is_active"].is_nullable == "NO"
+
+        tables = await conn.execute(text("""
+            SELECT table_name
+              FROM information_schema.tables
+             WHERE table_schema = 'public'
+               AND table_name IN (
+                    'person_documents', 'person_document_representatives'
+               )
+        """))
+        assert set(tables.scalars().all()) == {
+            "person_documents", "person_document_representatives"
+        }
+
+
+@pytest.mark.asyncio
+async def test_0026_constraints_and_indexes_exist(engine):
+    """Allowlist CHECK'leri, health hassasiyet kuralı ve indeksler kurulmalı."""
+    async with engine.connect() as conn:
+        constraints = await conn.execute(text("""
+            SELECT conname
+              FROM pg_constraint
+             WHERE conrelid IN (
+                    'person_documents'::regclass,
+                    'person_document_representatives'::regclass
+               )
+        """))
+        names = set(constraints.scalars().all())
+        assert {
+            "ck_person_documents_document_type",
+            "ck_person_documents_review_status",
+            "ck_person_documents_scan_status",
+            "ck_person_documents_health_sensitive",
+            "uq_person_document_representative_role",
+        }.issubset(names)
+
+        indexes = await conn.execute(text("""
+            SELECT indexname
+              FROM pg_indexes
+             WHERE schemaname = 'public'
+               AND tablename = 'person_documents'
+        """))
+        index_names = set(indexes.scalars().all())
+        assert "ix_person_documents_club_subject_deleted" in index_names
+        assert "ix_person_documents_club_type_scan" in index_names
+
+
+def test_0026_primary_guardian_backfill():
+    """0025 kaydında yalnız primary veli can_consent=true almalı."""
+    club_id = uuid.uuid4()
+    athlete_id = uuid.uuid4()
+    primary_id = uuid.uuid4()
+    secondary_id = uuid.uuid4()
+
+    async def _insert_legacy() -> None:
+        e = create_async_engine(DATABASE_URL, echo=False)
+        try:
+            async with e.begin() as conn:
+                await conn.execute(text("""
+                    INSERT INTO clubs (id, slug, name, plan, is_active)
+                    VALUES (:id, :slug, '0026 Backfill Kulübü', 'starter', true)
+                """), {"id": club_id, "slug": f"doc26-{club_id.hex[:8]}"})
+                for person_id, first_name in (
+                    (athlete_id, "Sporcu"),
+                    (primary_id, "Birincil"),
+                    (secondary_id, "İkincil"),
+                ):
+                    await conn.execute(text("""
+                        INSERT INTO persons (id, club_id, first_name, last_name)
+                        VALUES (:id, :club_id, :first_name, 'Test')
+                    """), {
+                        "id": person_id,
+                        "club_id": club_id,
+                        "first_name": first_name,
+                    })
+                for guardian_id, is_primary in (
+                    (primary_id, True),
+                    (secondary_id, False),
+                ):
+                    await conn.execute(text("""
+                        INSERT INTO person_guardians (
+                            id, club_id, athlete_person_id,
+                            guardian_person_id, is_primary
+                        ) VALUES (
+                            gen_random_uuid(), :club_id, :athlete_id,
+                            :guardian_id, :is_primary
+                        )
+                    """), {
+                        "club_id": club_id,
+                        "athlete_id": athlete_id,
+                        "guardian_id": guardian_id,
+                        "is_primary": is_primary,
+                    })
+        finally:
+            await e.dispose()
+
+    async def _verify_and_cleanup() -> None:
+        e = create_async_engine(DATABASE_URL, echo=False)
+        try:
+            async with e.connect() as conn:
+                result = await conn.execute(text("""
+                    SELECT guardian_person_id, can_consent, is_active
+                      FROM person_guardians
+                     WHERE club_id = :club_id
+                """), {"club_id": club_id})
+                rows = {
+                    row.guardian_person_id: (row.can_consent, row.is_active)
+                    for row in result
+                }
+                assert rows[primary_id] == (True, True)
+                assert rows[secondary_id] == (False, True)
+            async with e.begin() as conn:
+                await conn.execute(
+                    text("DELETE FROM clubs WHERE id = :id"), {"id": club_id}
+                )
+        finally:
+            await e.dispose()
+
+    try:
+        run_alembic("downgrade", "0025")
+        asyncio.get_event_loop().run_until_complete(_insert_legacy())
+        run_alembic("upgrade", "0026")
+        asyncio.get_event_loop().run_until_complete(_verify_and_cleanup())
+    finally:
+        run_alembic("upgrade", "head")
+
+
+def test_0026_downgrade_removes_document_schema():
+    """0026 downgrade tabloları ve guardian kolonlarını temizlemeli."""
+    try:
+        run_alembic("downgrade", "0025")
+
+        async def _check() -> None:
+            e = create_async_engine(DATABASE_URL, echo=False)
+            try:
+                async with e.connect() as conn:
+                    tables = await conn.execute(text("""
+                        SELECT COUNT(*)
+                          FROM information_schema.tables
+                         WHERE table_schema = 'public'
+                           AND table_name IN (
+                                'person_documents',
+                                'person_document_representatives'
+                           )
+                    """))
+                    assert tables.scalar() == 0
+
+                    columns = await conn.execute(text("""
+                        SELECT COUNT(*)
+                          FROM information_schema.columns
+                         WHERE table_schema = 'public'
+                           AND table_name = 'person_guardians'
+                           AND column_name IN (
+                                'can_consent', 'is_active', 'revoked_at',
+                                'revoked_by_user_id'
+                           )
+                    """))
+                    assert columns.scalar() == 0
             finally:
                 await e.dispose()
 

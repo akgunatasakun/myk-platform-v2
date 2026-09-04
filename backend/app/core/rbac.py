@@ -20,6 +20,7 @@ PERMISSIONS: dict[str, set[str]] = {
         "ekipman:*", "belge:*", "deniz_log:*", "yoklama:*", "ajan:*",
         "rapor:*", "audit:read", "uygunsuzluk:*", "rezervasyon:*",
         "etkinlik:*", "bakim:*", "kisi:*", "kutuphane:read",
+        "person_document:*", "health_file:*",
     },
 
     "baskan": {
@@ -62,7 +63,7 @@ PERMISSIONS: dict[str, set[str]] = {
     },
 
     "saglik_sorumlusu": {
-        "sporcu:read", "sporcu:saglik:*",
+        "sporcu:read", "sporcu:saglik:*", "person_document:read", "health_file:read",
         # Ödeme ve teknik verileri GÖREMEZ
     },
 
@@ -73,6 +74,7 @@ PERMISSIONS: dict[str, set[str]] = {
     "veli": {
         "sporcu:read:own", "egitim:read:own", "odeme:read:own",
         "yoklama:read:own", "belge:read:own", "rezervasyon:*:own",
+        "person_document:read:own", "person_document:create:own",
     },
 
     "sporcu": {
