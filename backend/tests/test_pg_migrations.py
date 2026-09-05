@@ -1167,8 +1167,7 @@ def test_0027_downgrade_removes_column():
         run_alembic("downgrade", "0026")
 
         async def _check():
-            url = get_db_url()
-            e = create_async_engine(url)
+            e = create_async_engine(DATABASE_URL, echo=False)
             try:
                 async with e.connect() as conn:
                     r = await conn.execute(text("""

@@ -290,7 +290,7 @@ export default function PersonDocumentsTab({ subjectPersonId, role }: Props) {
         ),
       )
       setDeleteReqState(null)
-    } catch (err: unknown) {
+    } catch {
       setDeleteReqMsg('İstek gönderilemedi. Lütfen tekrar deneyin.')
     } finally {
       setDeleteReqLoading(false)
