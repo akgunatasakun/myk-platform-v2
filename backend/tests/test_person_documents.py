@@ -270,7 +270,7 @@ async def test_file_size_and_subject_quota(
         URL, headers=_auth(yonetici_token), data=_upload_data(child.id),
         files={"file": ("x.pdf", PDF, "application/pdf")},
     )
-    assert quota.status_code == 413
+    assert quota.status_code == 507
 
 
 async def test_daily_upload_quota(

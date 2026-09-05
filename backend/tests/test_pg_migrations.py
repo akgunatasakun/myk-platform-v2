@@ -86,7 +86,7 @@ async def test_current_revision_is_head(engine):
     async with engine.connect() as conn:
         r = await conn.execute(text("SELECT version_num FROM alembic_version"))
         rev = r.scalar_one()
-    assert rev == "0026", f"Beklenen '0026', alınan '{rev!r}'"
+    assert rev == "0027", f"Beklenen '0027', alınan '{rev!r}'"
 
 
 # ── 2. Şema doğrulama ─────────────────────────────────────────────────────────
@@ -1135,6 +1135,50 @@ def test_0026_downgrade_removes_document_schema():
                            )
                     """))
                     assert columns.scalar() == 0
+            finally:
+                await e.dispose()
+
+        asyncio.get_event_loop().run_until_complete(_check())
+    finally:
+        run_alembic("upgrade", "head")
+
+
+# ── Migration 0027 ────────────────────────────────────────────────────────────
+
+@pytest.mark.asyncio
+async def test_0027_delete_request_column_exists(engine):
+    """person_documents.delete_request TEXT kolonu mevcut olmalı."""
+    async with engine.connect() as conn:
+        r = await conn.execute(text("""
+            SELECT data_type
+              FROM information_schema.columns
+             WHERE table_schema = 'public'
+               AND table_name   = 'person_documents'
+               AND column_name  = 'delete_request'
+        """))
+        row = r.fetchone()
+    assert row is not None, "delete_request kolonu bulunamadı"
+    assert row[0] == "text", f"Beklenen 'text', alınan '{row[0]}'"
+
+
+def test_0027_downgrade_removes_column():
+    """0027 downgrade: delete_request kolonu kaldırılmalı."""
+    try:
+        run_alembic("downgrade", "0026")
+
+        async def _check():
+            url = get_db_url()
+            e = create_async_engine(url)
+            try:
+                async with e.connect() as conn:
+                    r = await conn.execute(text("""
+                        SELECT COUNT(*)
+                          FROM information_schema.columns
+                         WHERE table_schema = 'public'
+                           AND table_name   = 'person_documents'
+                           AND column_name  = 'delete_request'
+                    """))
+                    assert r.scalar() == 0
             finally:
                 await e.dispose()
 
