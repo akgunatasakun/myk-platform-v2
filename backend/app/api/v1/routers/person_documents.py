@@ -249,7 +249,7 @@ def _assert_file_access(document: PersonDocument, current_user: TokenPayload) ->
         raise HTTPException(status_code=423, detail="Dosya tarama bekleniyor veya güvenli değil")
     elif document.scan_status not in DOWNLOADABLE_SCAN_STATUSES:
         raise HTTPException(status_code=423, detail="Dosya güvenlik taramasını geçmedi.")
-    if document.scan_status == "skipped_dev" and settings.myk_env == "production":
+    if document.scan_status == "skipped_dev" and settings.myk_env == "production" and settings.person_document_scan_required:
         raise HTTPException(status_code=423, detail="Production dosyası taranmamış.")
 
 
