@@ -674,6 +674,83 @@ export default function PersonDocumentsTab({ subjectPersonId, role }: Props) {
         </div>
       )}
 
+      {/* Yükleme formu — admin her zaman gösterilir */}
+      <div className="card" style={{ marginBottom: 16 }}>
+        <div className="card-header">Evrak Yükle</div>
+        <div className="card-body">
+          <form onSubmit={(e) => { void handleUpload(e) }} style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
+            <div style={{ display: 'flex', gap: 12, flexWrap: 'wrap' }}>
+              <div style={{ display: 'flex', flexDirection: 'column', gap: 4, minWidth: 180 }}>
+                <label style={{ fontSize: 13, fontWeight: 500 }}>Evrak Türü</label>
+                <select
+                  className="form-select"
+                  value={uploadDocType}
+                  onChange={(e) => setUploadDocType(e.target.value as PersonDocumentType)}
+                  disabled={uploadState === 'uploading'}
+                >
+                  {UPLOADABLE_TYPES.map((t) => (
+                    <option key={t} value={t}>{DOC_TYPE_LABELS[t]}</option>
+                  ))}
+                </select>
+              </div>
+
+              <div style={{ display: 'flex', flexDirection: 'column', gap: 4, minWidth: 220 }}>
+                <label style={{ fontSize: 13, fontWeight: 500 }}>
+                  Dosya <span style={{ color: 'var(--color-text-muted)', fontWeight: 400 }}>(PDF, JPG, PNG — maks. 20MB)</span>
+                </label>
+                <input
+                  type="file"
+                  accept=".pdf,.jpg,.jpeg,.png"
+                  className="form-input"
+                  disabled={uploadState === 'uploading'}
+                  onChange={(e) => {
+                    const f = e.target.files?.[0] ?? null
+                    setUploadFile(f)
+                    setUploadErrMsg('')
+                    setUploadState('idle')
+                  }}
+                />
+              </div>
+
+              <div style={{ display: 'flex', flexDirection: 'column', gap: 4, minWidth: 180 }}>
+                <label style={{ fontSize: 13, fontWeight: 500 }}>
+                  Geçerlilik Tarihi <span style={{ color: 'var(--color-text-muted)', fontWeight: 400 }}>(opsiyonel)</span>
+                </label>
+                <input
+                  type="date"
+                  className="form-input"
+                  value={uploadValidUntil}
+                  onChange={(e) => setUploadValidUntil(e.target.value)}
+                  disabled={uploadState === 'uploading'}
+                />
+              </div>
+            </div>
+
+            {uploadErrMsg && (
+              <div className="alert alert-error" style={{ padding: '6px 12px', fontSize: 13 }}>
+                {uploadErrMsg}
+              </div>
+            )}
+
+            {uploadState === 'success' && (
+              <div className="alert alert-success" style={{ padding: '6px 12px', fontSize: 13 }}>
+                Evrak başarıyla yüklendi.
+              </div>
+            )}
+
+            <div>
+              <button
+                type="submit"
+                className="btn btn-primary btn-sm"
+                disabled={uploadState === 'uploading' || !uploadFile}
+              >
+                {uploadState === 'uploading' ? 'Yükleniyor…' : 'Yükle'}
+              </button>
+            </div>
+          </form>
+        </div>
+      </div>
+
       <div className="card">
         <div className="card-header">
           Evraklar
