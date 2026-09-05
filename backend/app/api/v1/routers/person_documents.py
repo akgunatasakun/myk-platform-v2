@@ -131,7 +131,7 @@ async def upload_person_document(
 
     if scanner is None:
         # PERSON_DOCUMENT_SCAN_REQUIRED=false ve hassas olmayan belge — kabul edilir
-        scan_status = "skipped_uat"
+        scan_status = "skipped_dev"
     else:
         scan_status = await scanner.scan(data, mime)
         if scan_status == "skipped_dev" and _scan_required:
