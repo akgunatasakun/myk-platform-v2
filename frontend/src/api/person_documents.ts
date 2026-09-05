@@ -3,7 +3,11 @@
  * api/documents.ts veya types/document.ts'den hiçbir şey import edilmez.
  */
 import apiClient from './client'
-import type { HealthDocumentSummaryOut, PersonDocumentOut } from '@/types/person_document'
+import type {
+  DeleteRequestOut,
+  HealthDocumentSummaryOut,
+  PersonDocumentOut,
+} from '@/types/person_document'
 
 export interface UploadPersonDocumentPayload {
   subjectPersonId: string
@@ -51,6 +55,27 @@ export const personDocumentsApi = {
       headers: { 'Content-Type': 'multipart/form-data' },
     })
   },
+
+  requestDelete: (documentId: string, reason?: string) =>
+    apiClient.post<DeleteRequestOut>(
+      `/person-documents/${documentId}/delete-request`,
+      { reason: reason ?? '' },
+    ),
+
+  approveDeleteRequest: (documentId: string) =>
+    apiClient.post<PersonDocumentOut>(
+      `/person-documents/${documentId}/delete-request/approve`,
+      {},
+    ),
+
+  rejectDeleteRequest: (documentId: string, reason: string) =>
+    apiClient.post<DeleteRequestOut>(
+      `/person-documents/${documentId}/delete-request/reject`,
+      { rejection_reason: reason },
+    ),
+
+  deleteDocument: (documentId: string) =>
+    apiClient.delete<{ deleted: boolean }>(`/person-documents/${documentId}`),
 }
 
 /**

@@ -27,6 +27,7 @@ import MembersPage from '@/pages/members/MembersPage'
 import MemberDetailPage from '@/pages/members/MemberDetailPage'
 import CoachesPage from '@/pages/coaches/CoachesPage'
 import CoachDetailPage from '@/pages/coaches/CoachDetailPage'
+import PersonDocumentQueuePage from '@/pages/coaches/PersonDocumentQueuePage'
 import SettingsPage from '@/pages/settings/SettingsPage'
 import NotificationsPage from '@/pages/notifications/NotificationsPage'
 import CalendarPage from '@/pages/calendar/CalendarPage'
@@ -75,6 +76,7 @@ const ROUTE_ROLES: Record<string, string[]> = {
   '/takvim':              [...STAFF, 'sporcu', 'veli', 'uye'],
   '/kutuphane':           [...MANAGEMENT, 'sportif_direktor', 'basantrenor', 'antrenor', 'genel_sekreter'],
   '/ayarlar':             ADMIN,
+  '/antrenor-evrak-kuyrugu': [...ADMIN, 'basantrenor', 'antrenor'],
 }
 
 function isRouteAllowed(pathname: string, role: string): boolean {
@@ -256,6 +258,14 @@ export default function App() {
           element={
             <ProtectedRoute>
               <CoachDetailPage />
+            </ProtectedRoute>
+          }
+        />
+        <Route
+          path="/antrenor-evrak-kuyrugu"
+          element={
+            <ProtectedRoute>
+              <PersonDocumentQueuePage />
             </ProtectedRoute>
           }
         />

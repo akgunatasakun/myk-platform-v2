@@ -129,6 +129,9 @@ class PersonDocument(Base):
     processing_basis: Mapped[Optional[str]] = mapped_column(
         String(128), nullable=True
     )
+    delete_request: Mapped[Optional[str]] = mapped_column(
+        Text, nullable=True
+    )
 
     representatives: Mapped[list["PersonDocumentRepresentative"]] = relationship(
         back_populates="document", cascade="all, delete-orphan"

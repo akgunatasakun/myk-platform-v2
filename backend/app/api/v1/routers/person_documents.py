@@ -1,6 +1,7 @@
 """Kişisel evrak API — tenant, guardian, scan ve hassas veri korumalı."""
 from __future__ import annotations
 
+import json
 import uuid
 from datetime import date, datetime, timezone
 
@@ -20,7 +21,13 @@ from app.dependencies.person_document_scan import get_person_document_scanner
 from app.dependencies.person_document_policy import get_health_document_legal_gate
 from app.models.person_document import DOCUMENT_TYPES, PersonDocument
 from app.schemas.auth import TokenPayload
-from app.schemas.person_document import HealthDocumentSummaryOut, PersonDocumentOut, RejectionBody
+from app.schemas.person_document import (
+    DeleteRequestBody,
+    DeleteRequestOut,
+    HealthDocumentSummaryOut,
+    PersonDocumentOut,
+    RejectionBody,
+)
 from app.services.malware_scan import MalwareScanner
 from app.services.person_document_service import (
     enforce_upload_quota,
@@ -231,7 +238,9 @@ async def view_person_document(
 def _assert_file_access(document: PersonDocument, current_user: TokenPayload) -> None:
     if document.document_type == "health_report" and current_user.role != "veli" and not has_permission(current_user.role, "health_file:read"):
         raise HTTPException(status_code=403, detail="Sağlık raporu dosyasına erişim yetkiniz yok.")
-    if document.scan_status not in DOWNLOADABLE_SCAN_STATUSES:
+    if document.scan_status in {"pending", "infected", "failed"}:
+        raise HTTPException(status_code=423, detail="Dosya tarama bekleniyor veya güvenli değil")
+    elif document.scan_status not in DOWNLOADABLE_SCAN_STATUSES:
         raise HTTPException(status_code=423, detail="Dosya güvenlik taramasını geçmedi.")
     if document.scan_status == "skipped_dev" and settings.myk_env == "production":
         raise HTTPException(status_code=423, detail="Production dosyası taranmamış.")
@@ -354,3 +363,168 @@ async def reject_person_document(
         request=request,
     )
     return PersonDocumentOut.model_validate(document)
+
+
+# ─────────────────────────────────────────────────────────────────────────────
+# Silme isteği akışı
+# ─────────────────────────────────────────────────────────────────────────────
+
+_DELETE_REQUEST_ROLES = {"veli", "kulup_yonetici", "super_admin"}
+
+
+@router.post("/{document_id}/delete-request", response_model=DeleteRequestOut, status_code=201)
+async def request_document_delete(
+    document_id: uuid.UUID,
+    body: DeleteRequestBody,
+    request: Request,
+    club_id: uuid.UUID = Depends(get_club_id),
+    current_user: TokenPayload = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db),
+) -> DeleteRequestOut:
+    if current_user.role not in _DELETE_REQUEST_ROLES:
+        raise HTTPException(status_code=403, detail="Bu işlem için yetkiniz yok.")
+    document = await _get_document_or_404(document_id, club_id, db)
+    user = await get_active_user(current_user, club_id, db)
+
+    if current_user.role == "veli":
+        # Velinin kendi çocuğunun evrakı olduğunu doğrula
+        await get_active_guardian_link(
+            user.person_id, document.subject_person_id, club_id, db  # type: ignore[arg-type]
+        )
+
+    # Zaten bekleyen bir istek varsa yeni istek açılmaz
+    if document.delete_request:
+        existing = json.loads(document.delete_request) if isinstance(document.delete_request, str) else document.delete_request
+        if existing.get("status") == "pending":
+            raise HTTPException(status_code=409, detail="Bu evrak için zaten bekleyen bir silme isteği var.")
+
+    now = datetime.now(timezone.utc)
+    payload = {
+        "reason": body.reason,
+        "requested_by_user_id": str(user.id),
+        "status": "pending",
+        "created_at": now.isoformat(),
+    }
+    document.delete_request = json.dumps(payload)
+    await db.flush()
+    await log_action(
+        db,
+        action="person_document_delete_requested",
+        resource_type="person_document",
+        resource_id=str(document.id),
+        club_id=club_id,
+        user_id=user.id,
+        after={"reason": body.reason},
+        request=request,
+    )
+    return DeleteRequestOut(
+        id=document.id,
+        document_id=document.id,
+        requested_by_user_id=user.id,
+        reason=body.reason,
+        created_at=now,
+        status="pending",
+    )
+
+
+@router.post("/{document_id}/delete-request/approve", response_model=PersonDocumentOut)
+async def approve_document_delete_request(
+    document_id: uuid.UUID,
+    request: Request,
+    club_id: uuid.UUID = Depends(get_club_id),
+    current_user: TokenPayload = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db),
+) -> PersonDocumentOut:
+    if current_user.role not in ADMIN_ROLES:
+        raise HTTPException(status_code=403, detail="Bu işlem için yetkiniz yok.")
+    document = await _get_document_or_404(document_id, club_id, db)
+    if not document.delete_request:
+        raise HTTPException(status_code=404, detail="Bu evrak için silme isteği bulunamadı.")
+    dr = json.loads(document.delete_request) if isinstance(document.delete_request, str) else document.delete_request
+    if dr.get("status") != "pending":
+        raise HTTPException(status_code=409, detail="Bekleyen bir silme isteği yok.")
+    user = await get_active_user(current_user, club_id, db)
+    dr["status"] = "approved"
+    document.delete_request = json.dumps(dr)
+    document.is_deleted = True
+    await db.flush()
+    await db.refresh(document)
+    await log_action(
+        db,
+        action="document_deleted",
+        resource_type="person_document",
+        resource_id=str(document.id),
+        club_id=club_id,
+        user_id=user.id,
+        after={"via": "delete_request_approved"},
+        request=request,
+    )
+    return PersonDocumentOut.model_validate(document)
+
+
+@router.post("/{document_id}/delete-request/reject", response_model=DeleteRequestOut)
+async def reject_document_delete_request(
+    document_id: uuid.UUID,
+    body: RejectionBody,
+    request: Request,
+    club_id: uuid.UUID = Depends(get_club_id),
+    current_user: TokenPayload = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db),
+) -> DeleteRequestOut:
+    if current_user.role not in ADMIN_ROLES:
+        raise HTTPException(status_code=403, detail="Bu işlem için yetkiniz yok.")
+    document = await _get_document_or_404(document_id, club_id, db)
+    if not document.delete_request:
+        raise HTTPException(status_code=404, detail="Bu evrak için silme isteği bulunamadı.")
+    dr = json.loads(document.delete_request) if isinstance(document.delete_request, str) else document.delete_request
+    if dr.get("status") != "pending":
+        raise HTTPException(status_code=409, detail="Bekleyen bir silme isteği yok.")
+    user = await get_active_user(current_user, club_id, db)
+    dr["status"] = "rejected"
+    document.delete_request = json.dumps(dr)
+    await db.flush()
+    await log_action(
+        db,
+        action="person_document_delete_request_rejected",
+        resource_type="person_document",
+        resource_id=str(document.id),
+        club_id=club_id,
+        user_id=user.id,
+        after={"rejection_reason": body.rejection_reason},
+        request=request,
+    )
+    return DeleteRequestOut(
+        id=document.id,
+        document_id=document.id,
+        requested_by_user_id=uuid.UUID(dr["requested_by_user_id"]),
+        reason=dr.get("reason", ""),
+        created_at=datetime.fromisoformat(dr["created_at"]),
+        status="rejected",
+    )
+
+
+@router.delete("/{document_id}")
+async def delete_person_document(
+    document_id: uuid.UUID,
+    request: Request,
+    club_id: uuid.UUID = Depends(get_club_id),
+    current_user: TokenPayload = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db),
+) -> dict:
+    if current_user.role not in ADMIN_ROLES:
+        raise HTTPException(status_code=403, detail="Bu işlem için yetkiniz yok.")
+    document = await _get_document_or_404(document_id, club_id, db)
+    user = await get_active_user(current_user, club_id, db)
+    document.is_deleted = True
+    await db.flush()
+    await log_action(
+        db,
+        action="document_deleted",
+        resource_type="person_document",
+        resource_id=str(document.id),
+        club_id=club_id,
+        user_id=user.id,
+        after={"via": "admin_direct_delete"},
+        request=request,
+    )
+    return {"deleted": True}

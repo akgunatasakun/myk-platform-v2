@@ -41,6 +41,7 @@ const NAV_ITEMS: NavItem[] = [
   { path: '/akademi',            label: 'Deniz Akademisi',    icon: '🪢', roles: [...STAFF, 'sporcu', 'veli'] },
   { path: '/egitimler',          label: 'Eğitimler',          icon: '📚', roles: [...STAFF, 'sporcu', 'veli'] },
   { path: '/kutuphane',          label: 'Eğitim Kütüphanesi', icon: '📖', roles: COACHES },
+  { path: '/antrenor-evrak-kuyrugu', label: 'Evrak Kuyruğu', icon: '📋', roles: [...ADMIN, 'basantrenor', 'antrenor'] },
   { path: '/yoklama',            label: 'Yoklama',            icon: '✅', roles: COACHES },
   { path: '/katilim',            label: 'Katılım (Öz)',       icon: '🙋', roles: ['sporcu'] },
 

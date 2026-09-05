@@ -123,7 +123,7 @@ async def enforce_upload_quota(
         )
     )
     if int(subject_total or 0) + incoming_size > SUBJECT_MAX_BYTES:
-        raise HTTPException(status_code=413, detail="Kişi evrak kotası doldu.")
+        raise HTTPException(status_code=507, detail="Kişi belge kapasitesi dolu (100MB).")
 
     today_utc = datetime.now(timezone.utc).date()
     daily_count = await db.scalar(
