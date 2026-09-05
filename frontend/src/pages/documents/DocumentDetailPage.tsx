@@ -10,6 +10,14 @@ import type {
   RevisionCreate,
 } from '@/types/document'
 
+const DOC_TYPE_LABEL: Record<string, string> = {
+  el_kitabi: 'El Kitabı',
+  egitim_materyali: 'Eğitim Mat.',
+  form_sablon: 'Form / Şablon',
+  politika_prosedur: 'Politika / Prosedür',
+  diger: 'Diğer',
+}
+
 const REV_STATUS_LABEL: Record<string, string> = {
   taslak: 'Taslak',
   incelemede: 'İncelemede',
@@ -408,7 +416,7 @@ export default function DocumentDetailPage() {
         <div className="card-body">
           <h1 style={{ margin: '0 0 4px', fontSize: 22 }}>{doc.title}</h1>
           <div style={{ color: 'var(--color-text-muted)', fontSize: 14 }}>
-            <strong>{doc.code}</strong> &nbsp;·&nbsp; {doc.document_type} &nbsp;·&nbsp; {doc.content_status}
+            <strong>{doc.code}</strong> &nbsp;·&nbsp; {DOC_TYPE_LABEL[doc.document_type] ?? doc.document_type} &nbsp;·&nbsp; {doc.content_status}
           </div>
         </div>
       </div>
