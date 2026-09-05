@@ -113,7 +113,10 @@ async def upload_person_document(
             status_code=403,
             detail="Sağlık evrakı için onaylı hukuki metin etkin değil.",
         )
-    if settings.myk_env == "production" and scanner is None:
+    # Hassas belgeler (sağlık raporu ve is_sensitive türler) scanner olmadan hiçbir zaman kabul edilmez.
+    _is_sensitive_type = document_type == "health_report"
+    _scan_required = settings.person_document_scan_required or _is_sensitive_type
+    if scanner is None and _scan_required:
         raise HTTPException(status_code=503, detail="Dosya tarama servisi kullanılamıyor.")
 
     data = await file.read()
@@ -126,9 +129,13 @@ async def upload_person_document(
         db=db,
     )
 
-    scan_status = "skipped_dev" if scanner is None else await scanner.scan(data, mime)
-    if scan_status == "skipped_dev" and settings.myk_env == "production":
-        raise HTTPException(status_code=503, detail="Production taraması atlanamaz.")
+    if scanner is None:
+        # PERSON_DOCUMENT_SCAN_REQUIRED=false ve hassas olmayan belge — kabul edilir
+        scan_status = "skipped_uat"
+    else:
+        scan_status = await scanner.scan(data, mime)
+        if scan_status == "skipped_dev" and _scan_required:
+            raise HTTPException(status_code=503, detail="Production taraması atlanamaz.")
 
     document_id = uuid.uuid4()
     safe_name = "".join(c if c.isalnum() or c in "._-" else "_" for c in (file.filename or "upload"))

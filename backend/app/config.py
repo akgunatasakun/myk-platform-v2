@@ -20,6 +20,9 @@ class Settings(BaseSettings):
     # Ortam
     myk_env: Literal["development", "test", "production"] = "development"
 
+    # Kişisel evrak tarama — false iken sağlık/hassas hariç scan atlanır (skipped_uat)
+    person_document_scan_required: bool = True
+
     # PostgreSQL
     database_url: str = "postgresql+asyncpg://myk_user:password@localhost:5432/myk_platform"
 
@@ -44,7 +47,7 @@ class Settings(BaseSettings):
     allow_public_setup: bool = True
 
     # Dosya yükleme
-    max_upload_mb: int = 15
+    max_upload_mb: int = 20
     storage_backend: Literal["local", "s3"] = "local"
     storage_path: str = "/app/storage"
 
