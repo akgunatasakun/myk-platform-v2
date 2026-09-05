@@ -128,8 +128,7 @@ services:
         condition: service_healthy
       pdf-service:
         condition: service_healthy
-      clamav:
-        condition: service_healthy
+      # clamav depends_on yok — scanner bağlantı hatası kodda graceful "failed" döner
     networks:
       - myk_network
     healthcheck:

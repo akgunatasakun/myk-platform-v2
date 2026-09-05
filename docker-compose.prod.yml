@@ -90,16 +90,17 @@ services:
     restart: always
     # Port publish yok — yalnızca api → pdf-service:8001 iç ağ erişimi
 
-  # ── ClamAV ───────────────────────────────────────────────────────────────
+  # ── ClamAV — isteğe bağlı tarama profili ────────────────────────────────
+  # Varsayılan olarak BAŞLAMAZ. Yeterli RAM olan sunucuda:
+  #   $PDC --profile scanning up -d clamav
+  # Ardından production.env: PERSON_DOCUMENT_SCAN_REQUIRED=true
   clamav:
+    profiles: [scanning]
     restart: always
     deploy:
       resources:
         limits:
-          memory: 1g   # 4 GB sunucuda ClamAV için üst sınır
-
-  # ── Backend — ClamAV env'leri production'da da gerekli ───────────────────
-  # (CLAMD_HOST zaten docker-compose.yml içinde tanımlı; override gerekmez)
+          memory: 1g   # İmza indir + daemon: ~700-900 MB; 4 GB sunucuda yetersiz olabilir
 
 volumes:
   postgres_data:
