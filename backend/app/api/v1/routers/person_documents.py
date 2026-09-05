@@ -2,7 +2,7 @@
 from __future__ import annotations
 
 import uuid
-from datetime import date
+from datetime import date, datetime, timezone
 
 from fastapi import APIRouter, Depends, File, Form, HTTPException, Query, Request, UploadFile
 from fastapi.responses import Response
@@ -20,7 +20,7 @@ from app.dependencies.person_document_scan import get_person_document_scanner
 from app.dependencies.person_document_policy import get_health_document_legal_gate
 from app.models.person_document import DOCUMENT_TYPES, PersonDocument
 from app.schemas.auth import TokenPayload
-from app.schemas.person_document import HealthDocumentSummaryOut, PersonDocumentOut
+from app.schemas.person_document import HealthDocumentSummaryOut, PersonDocumentOut, RejectionBody
 from app.services.malware_scan import MalwareScanner
 from app.services.person_document_service import (
     enforce_upload_quota,
@@ -286,3 +286,71 @@ async def download_person_document(
     document = await _get_document_or_404(document_id, club_id, db)
     user, _ = await _access_context(document.subject_person_id, club_id, current_user, db)
     return await _stream_document(document, inline=False, action="person_document_downloaded", request=request, club_id=club_id, current_user=current_user, user_id=user.id, db=db, storage=storage)
+
+
+_REVIEWER_ROLES = ADMIN_ROLES | {"antrenor", "basantrenor"}
+
+
+@router.patch("/{document_id}/approve", response_model=PersonDocumentOut)
+async def approve_person_document(
+    document_id: uuid.UUID,
+    request: Request,
+    club_id: uuid.UUID = Depends(get_club_id),
+    current_user: TokenPayload = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db),
+) -> PersonDocumentOut:
+    if current_user.role not in _REVIEWER_ROLES:
+        raise HTTPException(status_code=403, detail="Bu işlem için yetkiniz yok.")
+    document = await _get_document_or_404(document_id, club_id, db)
+    if document.is_sensitive and current_user.role in {"antrenor", "basantrenor"}:
+        raise HTTPException(status_code=403, detail="Hassas belgeyi onaylama yetkiniz yok.")
+    user = await get_active_user(current_user, club_id, db)
+    document.review_status = "approved"
+    document.reviewed_by_user_id = user.id
+    document.reviewed_at = datetime.now(timezone.utc)
+    document.rejection_reason = None
+    await db.flush()
+    await db.refresh(document)
+    await log_action(
+        db,
+        action="person_document_approved",
+        resource_type="person_document",
+        resource_id=str(document.id),
+        club_id=club_id,
+        user_id=user.id,
+        request=request,
+    )
+    return PersonDocumentOut.model_validate(document)
+
+
+@router.patch("/{document_id}/reject", response_model=PersonDocumentOut)
+async def reject_person_document(
+    document_id: uuid.UUID,
+    body: RejectionBody,
+    request: Request,
+    club_id: uuid.UUID = Depends(get_club_id),
+    current_user: TokenPayload = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db),
+) -> PersonDocumentOut:
+    if current_user.role not in _REVIEWER_ROLES:
+        raise HTTPException(status_code=403, detail="Bu işlem için yetkiniz yok.")
+    document = await _get_document_or_404(document_id, club_id, db)
+    if document.is_sensitive and current_user.role in {"antrenor", "basantrenor"}:
+        raise HTTPException(status_code=403, detail="Hassas belgeyi reddetme yetkiniz yok.")
+    user = await get_active_user(current_user, club_id, db)
+    document.review_status = "rejected"
+    document.rejection_reason = body.rejection_reason
+    document.reviewed_by_user_id = user.id
+    document.reviewed_at = datetime.now(timezone.utc)
+    await db.flush()
+    await db.refresh(document)
+    await log_action(
+        db,
+        action="person_document_rejected",
+        resource_type="person_document",
+        resource_id=str(document.id),
+        club_id=club_id,
+        user_id=user.id,
+        request=request,
+    )
+    return PersonDocumentOut.model_validate(document)

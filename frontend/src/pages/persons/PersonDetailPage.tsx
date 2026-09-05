@@ -3,9 +3,12 @@ import { useNavigate, useParams } from 'react-router-dom'
 import AppShell from '@/components/layout/AppShell'
 import PersonFormModal from './PersonFormModal'
 import PersonGuardiansSection from './PersonGuardiansSection'
+import PersonDocumentsTab from '@/components/persons/PersonDocumentsTab'
+import type { PersonDocumentsRole } from '@/components/persons/PersonDocumentsTab'
 import { personsApi } from '@/api/persons'
 import type { Person, PersonRoleCode } from '@/types/person'
 import { formatPersonAge } from '@/utils/personAge'
+import { useAuth } from '@/hooks/useAuth'
 
 const ROLE_LABELS: Record<PersonRoleCode, string> = {
   sporcu: 'Sporcu',
@@ -31,9 +34,17 @@ function DetailItem({ label, value }: { label: string; value?: string | null }) 
   )
 }
 
+function resolveDocsRole(userRole: string | undefined): PersonDocumentsRole {
+  if (userRole === 'antrenor') return 'antrenor'
+  if (userRole === 'basantrenor') return 'basantrenor'
+  if (userRole === 'veli') return 'veli'
+  return 'admin'
+}
+
 export default function PersonDetailPage() {
   const { id } = useParams<{ id: string }>()
   const navigate = useNavigate()
+  const { user: authUser } = useAuth()
   const [person, setPerson] = useState<Person | null>(null)
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
@@ -380,6 +391,17 @@ export default function PersonDetailPage() {
 
           {/* Veliler / Vasiler bölümü */}
           <PersonGuardiansSection personId={person.id} />
+
+          {/* Evraklar bölümü */}
+          <div className="card" style={{ marginTop: 20 }}>
+            <div className="card-header">Evraklar</div>
+            <div className="card-body">
+              <PersonDocumentsTab
+                subjectPersonId={person.id}
+                role={resolveDocsRole(authUser?.role)}
+              />
+            </div>
+          </div>
         </>
       )}
 

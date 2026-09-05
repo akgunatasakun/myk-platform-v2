@@ -8,9 +8,12 @@ import { useEffect, useState } from 'react'
 import { useNavigate, useParams } from 'react-router-dom'
 import AppShell from '@/components/layout/AppShell'
 import AthleteProfileModal from './AthleteProfileModal'
+import PersonDocumentsTab from '@/components/persons/PersonDocumentsTab'
+import type { PersonDocumentsRole } from '@/components/persons/PersonDocumentsTab'
 import { athletesApi } from '@/api/athletes'
 import type { AthleteDetailOut, DocumentStatus } from '@/types/athlete'
 import { formatPersonAge } from '@/utils/personAge'
+import { useAuth } from '@/hooks/useAuth'
 
 function fmtDate(d?: string | null) {
   if (!d) return '—'
@@ -60,9 +63,17 @@ const GENDER_LABELS: Record<string, string> = {
   belirtilmedi: 'Belirtilmedi',
 }
 
+function resolveDocsRole(userRole: string | undefined): PersonDocumentsRole {
+  if (userRole === 'antrenor') return 'antrenor'
+  if (userRole === 'basantrenor') return 'basantrenor'
+  if (userRole === 'veli') return 'veli'
+  return 'admin'
+}
+
 export default function AthleteDetailPage() {
   const { id } = useParams<{ id: string }>()
   const navigate = useNavigate()
+  const { user: authUser } = useAuth()
   const [athlete, setAthlete] = useState<AthleteDetailOut | null>(null)
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
@@ -270,6 +281,17 @@ export default function AthleteDetailPage() {
               </div>
             </>
           )}
+
+          {/* Evraklar bölümü */}
+          <div className="card" style={{ marginBottom: 20 }}>
+            <div className="card-header">Evraklar</div>
+            <div className="card-body">
+              <PersonDocumentsTab
+                subjectPersonId={athlete.person_id}
+                role={resolveDocsRole(authUser?.role)}
+              />
+            </div>
+          </div>
         </>
       )}
 

@@ -29,6 +29,10 @@ class PersonDocumentOut(BaseModel):
     processing_basis: Optional[str] = None
 
 
+class RejectionBody(BaseModel):
+    rejection_reason: str
+
+
 class HealthDocumentSummaryOut(BaseModel):
     subject_person_id: uuid.UUID
     exists: bool

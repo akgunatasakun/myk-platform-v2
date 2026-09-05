@@ -1,10 +1,13 @@
 import { useEffect, useState } from 'react'
 import { useNavigate, useParams } from 'react-router-dom'
 import AppShell from '@/components/layout/AppShell'
+import PersonDocumentsTab from '@/components/persons/PersonDocumentsTab'
+import type { PersonDocumentsRole } from '@/components/persons/PersonDocumentsTab'
 import { personsApi } from '@/api/persons'
 import type { Person } from '@/types/person'
 import type { GuardianAthlete } from '@/types/guardian'
 import { formatPersonAge } from '@/utils/personAge'
+import { useAuth } from '@/hooks/useAuth'
 
 const RELATION_LABELS: Record<string, string> = {
   anne: 'Anne',
@@ -30,9 +33,17 @@ function DetailItem({
   )
 }
 
+function resolveDocsRole(userRole: string | undefined): PersonDocumentsRole {
+  if (userRole === 'antrenor') return 'antrenor'
+  if (userRole === 'basantrenor') return 'basantrenor'
+  if (userRole === 'veli') return 'veli'
+  return 'admin'
+}
+
 export default function GuardianDetailPage() {
   const { id } = useParams<{ id: string }>()
   const navigate = useNavigate()
+  const { user: authUser } = useAuth()
 
   const [guardian, setGuardian] = useState<Person | null>(null)
   const [athletes, setAthletes] = useState<GuardianAthlete[]>([])
@@ -277,6 +288,17 @@ export default function GuardianDetailPage() {
                   value={guardian.emergency_contact_phone}
                 />
               </div>
+            </div>
+          </div>
+
+          {/* Evraklar bölümü */}
+          <div className="card" style={{ marginTop: 20 }}>
+            <div className="card-header">Evraklar</div>
+            <div className="card-body">
+              <PersonDocumentsTab
+                subjectPersonId={guardian.id}
+                role={resolveDocsRole(authUser?.role)}
+              />
             </div>
           </div>
         </>
