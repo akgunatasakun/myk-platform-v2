@@ -385,6 +385,31 @@ async def test_production_health_requires_legal_gate(
     assert "hukuki metin" in response.json()["detail"]
 
 
+async def test_health_gate_open_allows_health_report_upload(
+    document_client, db_session, test_club, yonetici_token, monkeypatch
+):
+    """HEALTH_DOCUMENT_GATE_OPEN=true olduğunda health_report yüklenebilir."""
+    client, _, _ = document_client
+    child = await _person(db_session, test_club)
+    app.dependency_overrides[get_health_document_legal_gate] = lambda: True
+    monkeypatch.setattr(router_module.settings, "myk_env", "production")
+    response = await client.post(
+        URL,
+        headers=_auth(yonetici_token),
+        data={
+            "subject_person_id": str(child.id),
+            "document_type": "health_report",
+            "processing_basis": "KVKK Madde 6 — sağlık verisi işleme onayı",
+        },
+        files={"file": ("health.pdf", PDF, "application/pdf")},
+    )
+    # FakeScanner(clean) + gate açık → 201
+    assert response.status_code == 201
+    body = response.json()
+    assert body["is_sensitive"] is True
+    assert body["document_type"] == "health_report"
+
+
 async def test_guardian_access_closes_when_subject_turns_18(
     document_client, db_session, test_club
 ):

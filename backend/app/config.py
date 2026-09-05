@@ -20,8 +20,16 @@ class Settings(BaseSettings):
     # Ortam
     myk_env: Literal["development", "test", "production"] = "development"
 
-    # Kişisel evrak tarama — false iken sağlık/hassas hariç scan atlanır (skipped_uat)
+    # Kişisel evrak tarama — false iken sağlık/hassas hariç scan atlanır (skipped_dev)
     person_document_scan_required: bool = True
+
+    # ClamAV / clamd TCP bağlantısı
+    clamd_host: str = "clamav"   # Docker service adı; "" → scanner None döner
+    clamd_port: int = 3310
+
+    # Sağlık evrakı hukuki kapı — true olduğunda health_report yüklemesine izin verilir.
+    # Production'da yazılı hukuki onay alındıktan sonra HEALTH_DOCUMENT_GATE_OPEN=true yapılır.
+    health_document_gate_open: bool = False
 
     # PostgreSQL
     database_url: str = "postgresql+asyncpg://myk_user:password@localhost:5432/myk_platform"

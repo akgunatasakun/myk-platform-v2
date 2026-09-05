@@ -54,6 +54,24 @@ services:
     # Port publish sadece dev ortamında: 9000 API, 9001 console
     # Staging override bu portları kaldırır
 
+  # ── ClamAV (Zararlı Yazılım Tarama) ──────────────────────────────────────
+  clamav:
+    image: clamav/clamav:stable
+    restart: unless-stopped
+    environment:
+      # freshclam imzaları başlangıçta indirir; ilk başlatma uzun sürebilir (~2-3 dk)
+      CLAMAV_NO_MILTERD: "true"
+    volumes:
+      - clamav_data:/var/lib/clamav
+    healthcheck:
+      test: ["CMD", "clamdscan", "--ping", "3"]
+      interval: 30s
+      timeout: 15s
+      retries: 5
+      start_period: 120s   # İlk imza indirmesi için uzun start_period
+    networks:
+      - myk_network
+
   # ── PDF Service (WeasyPrint) ───────────────────────────────────────────────
   pdf-service:
     build:
@@ -96,6 +114,8 @@ services:
       DATABASE_URL: postgresql+asyncpg://${POSTGRES_USER:-myk_user}:${POSTGRES_PASSWORD}@db:5432/${POSTGRES_DB:-myk_platform}
       STORAGE_ENDPOINT: http://minio:9000
       PDF_SERVICE_URL: http://pdf-service:8001
+      CLAMD_HOST: clamav
+      CLAMD_PORT: "3310"
     volumes:
       - ./backend:/app
       - storage_data:/app/storage
@@ -107,6 +127,8 @@ services:
       minio:
         condition: service_healthy
       pdf-service:
+        condition: service_healthy
+      clamav:
         condition: service_healthy
     networks:
       - myk_network
@@ -152,6 +174,7 @@ volumes:
   redis_data:
   storage_data:
   minio_data:
+  clamav_data:
 
 networks:
   myk_network:
