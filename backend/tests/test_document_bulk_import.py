@@ -22,7 +22,7 @@ from sqlalchemy import select
 from app.models.club import Club
 from app.models.documents import Document, DocumentRevision, DocumentRevisionFile
 from app.services.document_bulk_import import (
-    _PLAN_CONTRACT,
+    _PLAN_CONTRACT_ZEROS,
     ImportResult,
     import_document_plan,
 )
@@ -42,7 +42,7 @@ def _build_plan(
     duplicate_codes: list[dict[str, Any]] | None = None,
 ) -> dict[str, Any]:
     """Test plan JSON'u oluştur. summary her zaman geçerli contract değerlerini taşır."""
-    base_summary: dict[str, Any] = dict(_PLAN_CONTRACT)
+    base_summary: dict[str, Any] = dict(_PLAN_CONTRACT_ZEROS)
     if summary_overrides:
         base_summary.update(summary_overrides)
     return {
