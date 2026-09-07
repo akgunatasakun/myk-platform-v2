@@ -25,7 +25,7 @@ export default function PersonDocumentQueuePage() {
   useEffect(() => {
     setLoading(true)
     athletesApi
-      .list({ limit: 500, is_active: true })
+      .list({ limit: 100, is_active: true })
       .then((r) => {
         setAthletes((r.data as AthleteListOut).items)
       })
