@@ -593,229 +593,274 @@ footer p{line-height:1.7;}
 
 <section class="knots-sec" id="baglar">
 <div class="inner" style="text-align:center;">
-  <span class="sec-tag">⚓ Denizcilik Kültürü</span>
-  <h2 class="sec-h2">Gemici Bağlarını Öğren</h2>
-  <p class="sec-sub">Her adımı sırayla takip et. İleri/Geri butonlarıyla istediğin kadar tekrar et.</p>
 
-  <div class="knots-sound-bar">
-    <button class="sound-toggle" id="soundToggle" onclick="toggleSound()">🔊 Ses Açık</button>
-  </div>
+  <span class="sec-tag" style="background:rgba(0,119,182,.15);color:#4fc3f7;border-color:rgba(0,119,182,.3);">D1 · TYF Yelken TV</span>
+  <h2 class="sec-h2">Denizci bağlarını öğren</h2>
+  <p class="sec-sub">TYF Yelken TV'nin D1 eğitim videosunu izle; ardından aşağıdaki atölyede adım adım dene.</p>
 
-  <div class="todays-knot">
-    <div class="tk-icon">🪢</div>
-    <div class="tk-body">
-      <div class="tk-label">Bugünün Gemici Bağı</div>
-      <div class="tk-name" id="tkName">—</div>
-      <div class="tk-desc" id="tkDesc">—</div>
-    </div>
-    <a class="btn-b tk-btn" id="tkBtn" href="#baglar">▶ Öğren</a>
-  </div>
-
-  <div class="knots-legend">
-    <div class="legend-item"><span class="legend-dot" style="background:#d4a843"></span>Ana halat</div>
-    <div class="legend-item"><span class="legend-dot" style="background:#ff6b35"></span>Çalışan uç</div>
-    <div class="legend-item"><span class="legend-dot" style="background:#64c4f5"></span>Direk / nesne</div>
-    <div class="legend-item"><span class="legend-dot" style="background:#6b7a99"></span>Sabit kısım</div>
-  </div>
-
-  <div class="knots-grid2" id="knotsGrid2"></div>
-</div>
-</section>
-
-<style>
-.knots-legend{display:flex;gap:1rem;justify-content:center;flex-wrap:wrap;margin-bottom:2rem;font-size:.8rem;}
-.legend-item{display:flex;align-items:center;gap:.4rem;color:rgba(255,255,255,.6);}
-.legend-dot{width:12px;height:12px;border-radius:50%;flex-shrink:0;}
-.knots-grid2{display:grid;grid-template-columns:repeat(auto-fill,minmax(300px,1fr));gap:1.6rem;text-align:left;}
-.kcard2{background:rgba(255,255,255,.04);border:1px solid rgba(255,255,255,.1);border-radius:16px;overflow:hidden;transition:border-color .25s;}
-.kcard2:hover{border-color:rgba(212,168,67,.35);}
-.kcard2-header{padding:1.1rem 1.4rem .7rem;}
-.kcard2-header h3{font-size:1.05rem;font-weight:800;color:#fff;margin-bottom:.2rem;}
-.kcard2-header h3 span{font-weight:400;color:rgba(255,255,255,.38);font-size:.82rem;}
-.kcard2-header p{font-size:.84rem;color:rgba(255,255,255,.55);margin:.15rem 0 .35rem;line-height:1.5;}
-.kcard2 .kuses2{font-size:.74rem;color:#d4a843;opacity:.85;}
-.kstep-visual2{background:#0c1420;display:flex;align-items:center;justify-content:center;padding:.8rem;min-height:185px;}
-.kstep-body2{padding:.9rem 1.3rem 1.1rem;}
-.kstep-info2{min-height:4.5rem;margin-bottom:.75rem;}
-.kstep-num2{font-size:.7rem;font-weight:800;letter-spacing:.12em;text-transform:uppercase;color:#d4a843;margin-bottom:.3rem;}
-.kstep-desc2{font-size:.92rem;color:#e8eef8;line-height:1.6;}
-.kstep-nav2{display:flex;align-items:center;gap:.5rem;margin-bottom:.5rem;}
-.kstep-btn2{background:rgba(212,168,67,.14);border:1px solid rgba(212,168,67,.3);color:#d4a843;border-radius:50px;padding:.42rem 1rem;font-size:.82rem;font-weight:700;cursor:pointer;transition:background .18s;min-height:44px;}
-.kstep-btn2:hover:not(:disabled){background:rgba(212,168,67,.26);}
-.kstep-btn2:disabled{opacity:.28;cursor:default;}
-.kstep-dots2{display:flex;gap:.38rem;flex:1;justify-content:center;}
-.kstep-dot2{width:9px;height:9px;border-radius:50%;background:rgba(212,168,67,.2);border:1px solid rgba(212,168,67,.35);cursor:pointer;padding:0;transition:background .15s;}
-.kstep-dot2.active{background:#d4a843;border-color:#d4a843;}
-.kstep-speak2{background:none;border:1px solid rgba(255,255,255,.12);color:rgba(255,255,255,.45);border-radius:50px;padding:.3rem .85rem;font-size:.75rem;cursor:pointer;transition:all .18s;width:100%;}
-.kstep-speak2:hover{border-color:rgba(255,255,255,.32);color:rgba(255,255,255,.8);}
-</style>
-
-<script>
-let soundEnabled=true;
-function toggleSound(){
-  soundEnabled=!soundEnabled;
-  const b=document.getElementById('soundToggle');
-  if(b)b.textContent=soundEnabled?'🔊 Ses Açık':'🔇 Ses Kapalı';
-  if(!soundEnabled&&'speechSynthesis' in window)speechSynthesis.cancel();
-}
-function sayText(t){
-  if(!soundEnabled||!('speechSynthesis' in window))return;
-  speechSynthesis.cancel();
-  const u=new SpeechSynthesisUtterance(t);u.lang='tr-TR';u.rate=0.85;speechSynthesis.speak(u);
-}
-function closePupa(){
-  const t=document.getElementById('pupaToast');
-  if(!t)return;t.classList.remove('visible');setTimeout(()=>{t.style.display='none';},400);
-}
-window.addEventListener('load',()=>{
-  try {
-    if(!sessionStorage.getItem('pupa_shown')){
-      setTimeout(()=>{const t=document.getElementById('pupaToast');if(t)t.classList.add('visible');},1200);
-      setTimeout(closePupa,8000);
-      sessionStorage.setItem('pupa_shown','1');
-    }
-  } catch(e) {
-    // sessionStorage erişim hatası — sessizce geç
-  }
-});
-const prefersReduced=window.matchMedia('(prefers-reduced-motion:reduce)').matches;
-const KNOTS=[{"id": "sekiz", "name": "Sekiz Bağı", "en": "Figure-8 Knot", "desc": "Halatların uçlarının kaymaması için en temel bağ.", "uses": "⚓ Halat ucu / yelken şotası", "steps": [{"text": "İpi öne doğru tut. Çalışan ucu (turuncu) aşağı düşür, küçük bir halka yap.", "svg": "<svg viewBox=\"0 0 220 175\" xmlns=\"http://www.w3.org/2000/svg\" style=\"max-width:220px;width:100%;height:175px;display:block;margin:auto\"><defs><marker id=\"arw\" markerWidth=\"8\" markerHeight=\"8\" refX=\"6\" refY=\"3\" orient=\"auto\"><path d=\"M0,0 L6,3 L0,6 Z\" fill=\"#ff6b35\"/></marker><marker id=\"arw_g\" markerWidth=\"8\" markerHeight=\"8\" refX=\"6\" refY=\"3\" orient=\"auto\"><path d=\"M0,0 L6,3 L0,6 Z\" fill=\"#d4a843\"/></marker></defs><path d=\"M20,70 L120,70\" stroke=\"#6b7a99\" stroke-width=\"11\" fill=\"none\" stroke-linecap=\"round\" stroke-linejoin=\"round\"/><path d=\"M120,70 C150,70 165,80 165,100 C165,120 150,130 130,130 C110,130 100,120 100,100\" stroke=\"#ff6b35\" stroke-width=\"11\" fill=\"none\" stroke-linecap=\"round\" stroke-linejoin=\"round\"/><text x=\"40\" y=\"58\" fill=\"#6b7a99\" font-size=\"11\" font-family=\"Arial,sans-serif\" text-anchor=\"middle\" font-weight=\"bold\">Ana ip</text><text x=\"165\" y=\"95\" fill=\"#ff6b35\" font-size=\"11\" font-family=\"Arial,sans-serif\" text-anchor=\"start\" font-weight=\"bold\">Halka</text></svg>"}, {"text": "Çalışan ucu ana ipin ÜSTÜNDEN sola doğru geçir.", "svg": "<svg viewBox=\"0 0 220 175\" xmlns=\"http://www.w3.org/2000/svg\" style=\"max-width:220px;width:100%;height:175px;display:block;margin:auto\"><defs><marker id=\"arw\" markerWidth=\"8\" markerHeight=\"8\" refX=\"6\" refY=\"3\" orient=\"auto\"><path d=\"M0,0 L6,3 L0,6 Z\" fill=\"#ff6b35\"/></marker><marker id=\"arw_g\" markerWidth=\"8\" markerHeight=\"8\" refX=\"6\" refY=\"3\" orient=\"auto\"><path d=\"M0,0 L6,3 L0,6 Z\" fill=\"#d4a843\"/></marker></defs><path d=\"M20,70 L70,70\" stroke=\"#6b7a99\" stroke-width=\"11\" fill=\"none\" stroke-linecap=\"round\" stroke-linejoin=\"round\"/><path d=\"M100,100 C100,80 85,65 70,65\" stroke=\"#ff6b35\" stroke-width=\"11\" fill=\"none\" stroke-linecap=\"round\" stroke-linejoin=\"round\"/><path d=\"M68,69\" stroke=\"#0c1420\" stroke-width=\"18\" fill=\"none\" stroke-linecap=\"round\"/><path d=\"M70,70 L120,70\" stroke=\"#6b7a99\" stroke-width=\"11\" fill=\"none\" stroke-linecap=\"round\" stroke-linejoin=\"round\"/><path d=\"M65,65 L35,65 L35,50\" stroke=\"#ff6b35\" stroke-width=\"11\" fill=\"none\" stroke-linecap=\"round\" stroke-linejoin=\"round\"/><path d=\"M120,70 C150,70 165,80 165,100 C165,120 150,130 130,130 C110,130 100,120 100,100\" stroke=\"#d4a843\" stroke-width=\"9\" fill=\"none\" stroke-linecap=\"round\" stroke-linejoin=\"round\"/><text x=\"35\" y=\"42\" fill=\"#ff6b35\" font-size=\"11\" font-family=\"Arial,sans-serif\" text-anchor=\"middle\" font-weight=\"bold\">↑ buraya</text></svg>"}, {"text": "Çalışan ucu aşağıdaki halkanın İÇİNDEN yukarı sok. Çek ve sık!", "svg": "<svg viewBox=\"0 0 220 175\" xmlns=\"http://www.w3.org/2000/svg\" style=\"max-width:220px;width:100%;height:175px;display:block;margin:auto\"><defs><marker id=\"arw\" markerWidth=\"8\" markerHeight=\"8\" refX=\"6\" refY=\"3\" orient=\"auto\"><path d=\"M0,0 L6,3 L0,6 Z\" fill=\"#ff6b35\"/></marker><marker id=\"arw_g\" markerWidth=\"8\" markerHeight=\"8\" refX=\"6\" refY=\"3\" orient=\"auto\"><path d=\"M0,0 L6,3 L0,6 Z\" fill=\"#d4a843\"/></marker></defs><path d=\"M20,80 L70,80\" stroke=\"#6b7a99\" stroke-width=\"11\" fill=\"none\" stroke-linecap=\"round\" stroke-linejoin=\"round\"/><path d=\"M65,75 L50,50 L50,35\" stroke=\"#ff6b35\" stroke-width=\"11\" fill=\"none\" stroke-linecap=\"round\" stroke-linejoin=\"round\"/><path d=\"M68,78\" stroke=\"#0c1420\" stroke-width=\"18\" fill=\"none\" stroke-linecap=\"round\"/><path d=\"M70,80 L115,80\" stroke=\"#6b7a99\" stroke-width=\"11\" fill=\"none\" stroke-linecap=\"round\" stroke-linejoin=\"round\"/><path d=\"M115,80 C145,80 160,92 160,110 C160,128 145,138 125,138\" stroke=\"#d4a843\" stroke-width=\"9\" fill=\"none\" stroke-linecap=\"round\" stroke-linejoin=\"round\"/><path d=\"M118,138\" stroke=\"#0c1420\" stroke-width=\"18\" fill=\"none\" stroke-linecap=\"round\"/><path d=\"M50,40 C50,20 80,18 100,25 C120,32 125,50 125,70 C125,90 118,105 118,120 C118,132 122,137 125,138\" stroke=\"#ff6b35\" stroke-width=\"11\" fill=\"none\" stroke-linecap=\"round\" stroke-linejoin=\"round\"/><text x=\"50\" y=\"28\" fill=\"#ff6b35\" font-size=\"11\" font-family=\"Arial,sans-serif\" text-anchor=\"middle\" font-weight=\"bold\">↑ çek!</text></svg>"}]}, {"id": "izbarco", "name": "İzbarço", "en": "Bowline Knot", "desc": "Değişmez bir halka oluşturan, açılmayan güvenli bağ.", "uses": "🔒 Cankurtarma / ön halat", "steps": [{"text": "Ana ipte küçük bir halka oluştur (büküm halka). Halkayı parmaklarınla tut.", "svg": "<svg viewBox=\"0 0 220 175\" xmlns=\"http://www.w3.org/2000/svg\" style=\"max-width:220px;width:100%;height:175px;display:block;margin:auto\"><defs><marker id=\"arw\" markerWidth=\"8\" markerHeight=\"8\" refX=\"6\" refY=\"3\" orient=\"auto\"><path d=\"M0,0 L6,3 L0,6 Z\" fill=\"#ff6b35\"/></marker><marker id=\"arw_g\" markerWidth=\"8\" markerHeight=\"8\" refX=\"6\" refY=\"3\" orient=\"auto\"><path d=\"M0,0 L6,3 L0,6 Z\" fill=\"#d4a843\"/></marker></defs><path d=\"M20,90 L80,90\" stroke=\"#6b7a99\" stroke-width=\"11\" fill=\"none\" stroke-linecap=\"round\" stroke-linejoin=\"round\"/><path d=\"M80,90 C95,90 105,80 105,70 C105,60 95,55 85,60 C75,65 75,75 80,90\" stroke=\"#d4a843\" stroke-width=\"11\" fill=\"none\" stroke-linecap=\"round\" stroke-linejoin=\"round\"/><path d=\"M80,90 L200,90\" stroke=\"#6b7a99\" stroke-width=\"9\" fill=\"none\" stroke-linecap=\"round\" stroke-linejoin=\"round\"/><circle cx=\"90\" cy=\"73\" r=\"5\" fill=\"none\" stroke=\"#d4a843\" stroke-width=\"2\"/><text x=\"92\" y=\"55\" fill=\"#d4a843\" font-size=\"11\" font-family=\"Arial,sans-serif\" text-anchor=\"start\" font-weight=\"bold\">Halka</text></svg>"}, {"text": "Çalışan ucu halkadan AŞAĞI YUKARIYA doğru çıkar.", "svg": "<svg viewBox=\"0 0 220 175\" xmlns=\"http://www.w3.org/2000/svg\" style=\"max-width:220px;width:100%;height:175px;display:block;margin:auto\"><defs><marker id=\"arw\" markerWidth=\"8\" markerHeight=\"8\" refX=\"6\" refY=\"3\" orient=\"auto\"><path d=\"M0,0 L6,3 L0,6 Z\" fill=\"#ff6b35\"/></marker><marker id=\"arw_g\" markerWidth=\"8\" markerHeight=\"8\" refX=\"6\" refY=\"3\" orient=\"auto\"><path d=\"M0,0 L6,3 L0,6 Z\" fill=\"#d4a843\"/></marker></defs><path d=\"M20,90 L80,90\" stroke=\"#6b7a99\" stroke-width=\"11\" fill=\"none\" stroke-linecap=\"round\" stroke-linejoin=\"round\"/><path d=\"M80,90 C95,90 105,80 105,70 C105,60 95,55 85,60 C75,65 75,75 80,90\" stroke=\"#d4a843\" stroke-width=\"11\" fill=\"none\" stroke-linecap=\"round\" stroke-linejoin=\"round\"/><path d=\"M80,90 L170,90\" stroke=\"#6b7a99\" stroke-width=\"9\" fill=\"none\" stroke-linecap=\"round\" stroke-linejoin=\"round\"/><path d=\"M120,130 L120,90 L120,65\" stroke=\"#ff6b35\" stroke-width=\"11\" fill=\"none\" stroke-linecap=\"round\" stroke-linejoin=\"round\"/><path d=\"M119,88 L121,88\" stroke=\"#0c1420\" stroke-width=\"18\" fill=\"none\" stroke-linecap=\"round\"/><text x=\"130\" y=\"140\" fill=\"#ff6b35\" font-size=\"10\" font-family=\"Arial,sans-serif\" text-anchor=\"start\" font-weight=\"bold\">Çalışan uç</text><text x=\"130\" y=\"62\" fill=\"#ff6b35\" font-size=\"11\" font-family=\"Arial,sans-serif\" text-anchor=\"start\" font-weight=\"bold\">↑ yukarı</text></svg>"}, {"text": "Ana ipin arkasından dolaş (sağdan sola).", "svg": "<svg viewBox=\"0 0 220 175\" xmlns=\"http://www.w3.org/2000/svg\" style=\"max-width:220px;width:100%;height:175px;display:block;margin:auto\"><defs><marker id=\"arw\" markerWidth=\"8\" markerHeight=\"8\" refX=\"6\" refY=\"3\" orient=\"auto\"><path d=\"M0,0 L6,3 L0,6 Z\" fill=\"#ff6b35\"/></marker><marker id=\"arw_g\" markerWidth=\"8\" markerHeight=\"8\" refX=\"6\" refY=\"3\" orient=\"auto\"><path d=\"M0,0 L6,3 L0,6 Z\" fill=\"#d4a843\"/></marker></defs><path d=\"M20,90 L80,90\" stroke=\"#6b7a99\" stroke-width=\"11\" fill=\"none\" stroke-linecap=\"round\" stroke-linejoin=\"round\"/><path d=\"M80,90 C95,90 105,80 105,70 C105,60 95,55 85,60 C75,65 75,75 80,90\" stroke=\"#d4a843\" stroke-width=\"11\" fill=\"none\" stroke-linecap=\"round\" stroke-linejoin=\"round\"/><path d=\"M80,90 L170,90\" stroke=\"#6b7a99\" stroke-width=\"9\" fill=\"none\" stroke-linecap=\"round\" stroke-linejoin=\"round\"/><path d=\"M120,60 C140,55 160,60 165,75 C170,90 160,100 145,105 C130,110 120,105 120,95\" stroke=\"#ff6b35\" stroke-width=\"11\" fill=\"none\" stroke-linecap=\"round\" stroke-linejoin=\"round\"/><text x=\"100\" y=\"40\" fill=\"#ff6b35\" font-size=\"10\" font-family=\"Arial,sans-serif\" text-anchor=\"middle\" font-weight=\"bold\">Ana ipin arkasından →</text></svg>"}, {"text": "Çalışan ucu halkadan GERİ İÇERİ sok ve sık! İzbarço hazır.", "svg": "<svg viewBox=\"0 0 220 175\" xmlns=\"http://www.w3.org/2000/svg\" style=\"max-width:220px;width:100%;height:175px;display:block;margin:auto\"><defs><marker id=\"arw\" markerWidth=\"8\" markerHeight=\"8\" refX=\"6\" refY=\"3\" orient=\"auto\"><path d=\"M0,0 L6,3 L0,6 Z\" fill=\"#ff6b35\"/></marker><marker id=\"arw_g\" markerWidth=\"8\" markerHeight=\"8\" refX=\"6\" refY=\"3\" orient=\"auto\"><path d=\"M0,0 L6,3 L0,6 Z\" fill=\"#d4a843\"/></marker></defs><path d=\"M20,90 L78,90\" stroke=\"#6b7a99\" stroke-width=\"11\" fill=\"none\" stroke-linecap=\"round\" stroke-linejoin=\"round\"/><path d=\"M78,90 C93,90 103,80 103,70 C103,60 93,55 83,60 C73,65 73,75 78,90\" stroke=\"#d4a843\" stroke-width=\"11\" fill=\"none\" stroke-linecap=\"round\" stroke-linejoin=\"round\"/><path d=\"M78,90 L170,90\" stroke=\"#6b7a99\" stroke-width=\"9\" fill=\"none\" stroke-linecap=\"round\" stroke-linejoin=\"round\"/><path d=\"M118,55 C138,50 158,58 163,75 C168,92 155,108 138,112\" stroke=\"#ff6b35\" stroke-width=\"11\" fill=\"none\" stroke-linecap=\"round\" stroke-linejoin=\"round\"/><path d=\"M138,112 L118,112 L118,88\" stroke=\"#ff6b35\" stroke-width=\"11\" fill=\"none\" stroke-linecap=\"round\" stroke-linejoin=\"round\"/><path d=\"M117,91\" stroke=\"#0c1420\" stroke-width=\"18\" fill=\"none\" stroke-linecap=\"round\"/><text x=\"90\" y=\"142\" fill=\"#ff6b35\" font-size=\"10\" font-family=\"Arial,sans-serif\" text-anchor=\"middle\" font-weight=\"bold\">← içeri sok, çek!</text></svg>"}]}, {"id": "kazik", "name": "Kazık Bağı", "en": "Cleat Hitch", "desc": "Baba veya direklere halat bağlamak için.", "uses": "🚢 Iskarmoz / baba bağlama", "steps": [{"text": "İpi direk veya halkanın etrafından bir tam tur at.", "svg": "<svg viewBox=\"0 0 220 175\" xmlns=\"http://www.w3.org/2000/svg\" style=\"max-width:220px;width:100%;height:175px;display:block;margin:auto\"><defs><marker id=\"arw\" markerWidth=\"8\" markerHeight=\"8\" refX=\"6\" refY=\"3\" orient=\"auto\"><path d=\"M0,0 L6,3 L0,6 Z\" fill=\"#ff6b35\"/></marker><marker id=\"arw_g\" markerWidth=\"8\" markerHeight=\"8\" refX=\"6\" refY=\"3\" orient=\"auto\"><path d=\"M0,0 L6,3 L0,6 Z\" fill=\"#d4a843\"/></marker></defs><path d=\"M105,20 L105,155\" stroke=\"#64c4f5\" stroke-width=\"14\" fill=\"none\" stroke-linecap=\"round\" stroke-linejoin=\"round\"/><path d=\"M20,70 C20,70 50,55 105,55\" stroke=\"#6b7a99\" stroke-width=\"11\" fill=\"none\" stroke-linecap=\"round\" stroke-linejoin=\"round\"/><path d=\"M105,55 C160,55 185,70 185,90 C185,110 165,120 140,120 C115,120 105,110 105,100\" stroke=\"#ff6b35\" stroke-width=\"11\" fill=\"none\" stroke-linecap=\"round\" stroke-linejoin=\"round\"/><text x=\"105\" y=\"15\" fill=\"#64c4f5\" font-size=\"11\" font-family=\"Arial,sans-serif\" text-anchor=\"middle\" font-weight=\"bold\">Direk</text><text x=\"145\" y=\"85\" fill=\"#ff6b35\" font-size=\"10\" font-family=\"Arial,sans-serif\" text-anchor=\"start\" font-weight=\"bold\">Bir tur →</text></svg>"}, {"text": "İpi çaprazlayarak tekrar geçir (X şekli oluştur).", "svg": "<svg viewBox=\"0 0 220 175\" xmlns=\"http://www.w3.org/2000/svg\" style=\"max-width:220px;width:100%;height:175px;display:block;margin:auto\"><defs><marker id=\"arw\" markerWidth=\"8\" markerHeight=\"8\" refX=\"6\" refY=\"3\" orient=\"auto\"><path d=\"M0,0 L6,3 L0,6 Z\" fill=\"#ff6b35\"/></marker><marker id=\"arw_g\" markerWidth=\"8\" markerHeight=\"8\" refX=\"6\" refY=\"3\" orient=\"auto\"><path d=\"M0,0 L6,3 L0,6 Z\" fill=\"#d4a843\"/></marker></defs><path d=\"M105,20 L105,155\" stroke=\"#64c4f5\" stroke-width=\"14\" fill=\"none\" stroke-linecap=\"round\" stroke-linejoin=\"round\"/><path d=\"M20,60 L105,60\" stroke=\"#6b7a99\" stroke-width=\"11\" fill=\"none\" stroke-linecap=\"round\" stroke-linejoin=\"round\"/><path d=\"M105,100 C85,100 65,90 55,78\" stroke=\"#ff6b35\" stroke-width=\"11\" fill=\"none\" stroke-linecap=\"round\" stroke-linejoin=\"round\"/><path d=\"M103,83\" stroke=\"#0c1420\" stroke-width=\"18\" fill=\"none\" stroke-linecap=\"round\"/><path d=\"M105,70 C85,70 70,80 55,78\" stroke=\"#d4a843\" stroke-width=\"9\" fill=\"none\" stroke-linecap=\"round\" stroke-linejoin=\"round\"/><path d=\"M55,78 L30,78 L30,50\" stroke=\"#ff6b35\" stroke-width=\"11\" fill=\"none\" stroke-linecap=\"round\" stroke-linejoin=\"round\"/><text x=\"35\" y=\"44\" fill=\"#ff6b35\" font-size=\"14\" font-family=\"Arial,sans-serif\" text-anchor=\"middle\" font-weight=\"bold\">↑</text></svg>"}, {"text": "Çalışan ucu alttan geçir ve sık! Çift yarım bağ kazık bağı oluşturur.", "svg": "<svg viewBox=\"0 0 220 175\" xmlns=\"http://www.w3.org/2000/svg\" style=\"max-width:220px;width:100%;height:175px;display:block;margin:auto\"><defs><marker id=\"arw\" markerWidth=\"8\" markerHeight=\"8\" refX=\"6\" refY=\"3\" orient=\"auto\"><path d=\"M0,0 L6,3 L0,6 Z\" fill=\"#ff6b35\"/></marker><marker id=\"arw_g\" markerWidth=\"8\" markerHeight=\"8\" refX=\"6\" refY=\"3\" orient=\"auto\"><path d=\"M0,0 L6,3 L0,6 Z\" fill=\"#d4a843\"/></marker></defs><path d=\"M105,20 L105,155\" stroke=\"#64c4f5\" stroke-width=\"14\" fill=\"none\" stroke-linecap=\"round\" stroke-linejoin=\"round\"/><path d=\"M20,60 L105,60\" stroke=\"#6b7a99\" stroke-width=\"11\" fill=\"none\" stroke-linecap=\"round\" stroke-linejoin=\"round\"/><path d=\"M105,75 C80,75 60,82 50,90\" stroke=\"#ff6b35\" stroke-width=\"11\" fill=\"none\" stroke-linecap=\"round\" stroke-linejoin=\"round\"/><path d=\"M103,65\" stroke=\"#0c1420\" stroke-width=\"18\" fill=\"none\" stroke-linecap=\"round\"/><path d=\"M105,65 C80,65 65,70 55,75\" stroke=\"#d4a843\" stroke-width=\"9\" fill=\"none\" stroke-linecap=\"round\" stroke-linejoin=\"round\"/><path d=\"M50,90 C45,100 50,112 60,115 C75,118 90,110 105,110\" stroke=\"#ff6b35\" stroke-width=\"11\" fill=\"none\" stroke-linecap=\"round\" stroke-linejoin=\"round\"/><path d=\"M103,107\" stroke=\"#0c1420\" stroke-width=\"18\" fill=\"none\" stroke-linecap=\"round\"/><path d=\"M105,110 C125,110 140,100 145,85\" stroke=\"#ff6b35\" stroke-width=\"11\" fill=\"none\" stroke-linecap=\"round\" stroke-linejoin=\"round\"/><text x=\"148\" y=\"82\" fill=\"#ff6b35\" font-size=\"11\" font-family=\"Arial,sans-serif\" text-anchor=\"start\" font-weight=\"bold\">Çek!</text></svg>"}]}, {"id": "camadan", "name": "Camadan Bağı", "en": "Reef Knot", "desc": "İki halatı düzgünce bağlamak için simetrik bağ.", "uses": "⛵ Yelken serme / yük sabitleme", "steps": [{"text": "İpin ortasını bul. Orta kısımla büyük bir halka yap.", "svg": "<svg viewBox=\"0 0 220 175\" xmlns=\"http://www.w3.org/2000/svg\" style=\"max-width:220px;width:100%;height:175px;display:block;margin:auto\"><defs><marker id=\"arw\" markerWidth=\"8\" markerHeight=\"8\" refX=\"6\" refY=\"3\" orient=\"auto\"><path d=\"M0,0 L6,3 L0,6 Z\" fill=\"#ff6b35\"/></marker><marker id=\"arw_g\" markerWidth=\"8\" markerHeight=\"8\" refX=\"6\" refY=\"3\" orient=\"auto\"><path d=\"M0,0 L6,3 L0,6 Z\" fill=\"#d4a843\"/></marker></defs><path d=\"M20,90 L90,90\" stroke=\"#6b7a99\" stroke-width=\"11\" fill=\"none\" stroke-linecap=\"round\" stroke-linejoin=\"round\"/><path d=\"M90,90 C110,90 125,75 125,60 C125,45 110,35 95,40 C80,45 80,60 90,90\" stroke=\"#d4a843\" stroke-width=\"11\" fill=\"none\" stroke-linecap=\"round\" stroke-linejoin=\"round\"/><path d=\"M90,90 L200,90\" stroke=\"#6b7a99\" stroke-width=\"9\" fill=\"none\" stroke-linecap=\"round\" stroke-linejoin=\"round\"/><text x=\"125\" y=\"28\" fill=\"#d4a843\" font-size=\"10\" font-family=\"Arial,sans-serif\" text-anchor=\"middle\" font-weight=\"bold\">Büyük halka</text></svg>"}, {"text": "Serbest ucu halkaya sok (bükümlü geçir).", "svg": "<svg viewBox=\"0 0 220 175\" xmlns=\"http://www.w3.org/2000/svg\" style=\"max-width:220px;width:100%;height:175px;display:block;margin:auto\"><defs><marker id=\"arw\" markerWidth=\"8\" markerHeight=\"8\" refX=\"6\" refY=\"3\" orient=\"auto\"><path d=\"M0,0 L6,3 L0,6 Z\" fill=\"#ff6b35\"/></marker><marker id=\"arw_g\" markerWidth=\"8\" markerHeight=\"8\" refX=\"6\" refY=\"3\" orient=\"auto\"><path d=\"M0,0 L6,3 L0,6 Z\" fill=\"#d4a843\"/></marker></defs><path d=\"M20,85 L88,85\" stroke=\"#6b7a99\" stroke-width=\"11\" fill=\"none\" stroke-linecap=\"round\" stroke-linejoin=\"round\"/><path d=\"M88,85 C108,85 123,70 123,55 C123,40 108,30 93,35 C78,40 78,55 88,85\" stroke=\"#d4a843\" stroke-width=\"11\" fill=\"none\" stroke-linecap=\"round\" stroke-linejoin=\"round\"/><path d=\"M88,85 L195,85\" stroke=\"#6b7a99\" stroke-width=\"9\" fill=\"none\" stroke-linecap=\"round\" stroke-linejoin=\"round\"/><path d=\"M140,130 L140,95 L140,75\" stroke=\"#ff6b35\" stroke-width=\"11\" fill=\"none\" stroke-linecap=\"round\" stroke-linejoin=\"round\"/><path d=\"M105,77\" stroke=\"#0c1420\" stroke-width=\"18\" fill=\"none\" stroke-linecap=\"round\"/><text x=\"155\" y=\"130\" fill=\"#ff6b35\" font-size=\"10\" font-family=\"Arial,sans-serif\" text-anchor=\"start\" font-weight=\"bold\">Serbest uç</text><text x=\"155\" y=\"60\" fill=\"#ff6b35\" font-size=\"10\" font-family=\"Arial,sans-serif\" text-anchor=\"start\" font-weight=\"bold\">↑ halkaya sok</text></svg>"}, {"text": "Geçirilen ucu üstten büküp sabitle. Sertçe çek!", "svg": "<svg viewBox=\"0 0 220 175\" xmlns=\"http://www.w3.org/2000/svg\" style=\"max-width:220px;width:100%;height:175px;display:block;margin:auto\"><defs><marker id=\"arw\" markerWidth=\"8\" markerHeight=\"8\" refX=\"6\" refY=\"3\" orient=\"auto\"><path d=\"M0,0 L6,3 L0,6 Z\" fill=\"#ff6b35\"/></marker><marker id=\"arw_g\" markerWidth=\"8\" markerHeight=\"8\" refX=\"6\" refY=\"3\" orient=\"auto\"><path d=\"M0,0 L6,3 L0,6 Z\" fill=\"#d4a843\"/></marker></defs><path d=\"M20,85 L88,85\" stroke=\"#6b7a99\" stroke-width=\"11\" fill=\"none\" stroke-linecap=\"round\" stroke-linejoin=\"round\"/><path d=\"M88,85 C108,85 123,70 123,55 C123,40 108,30 93,35 C78,40 78,55 88,85\" stroke=\"#d4a843\" stroke-width=\"11\" fill=\"none\" stroke-linecap=\"round\" stroke-linejoin=\"round\"/><path d=\"M88,85 L195,85\" stroke=\"#6b7a99\" stroke-width=\"9\" fill=\"none\" stroke-linecap=\"round\" stroke-linejoin=\"round\"/><path d=\"M105,50 C115,40 128,38 135,45 C142,52 140,65 130,72 C120,79 108,78 105,70\" stroke=\"#ff6b35\" stroke-width=\"11\" fill=\"none\" stroke-linecap=\"round\" stroke-linejoin=\"round\"/><text x=\"100\" y=\"155\" fill=\"#ff6b35\" font-size=\"10\" font-family=\"Arial,sans-serif\" text-anchor=\"middle\" font-weight=\"bold\">← Çek! Bağ kilitlendi.</text></svg>"}]}, {"id": "piyan", "name": "Piyan", "en": "Two Half Hitches", "desc": "İki yarım bağla oluşturulan, kolay açılan güvenli bağ.", "uses": "🪝 Direk / halka bağlama", "steps": [{"text": "İpi nesnenin (direk, halka) etrafından bir tur geçir.", "svg": "<svg viewBox=\"0 0 220 175\" xmlns=\"http://www.w3.org/2000/svg\" style=\"max-width:220px;width:100%;height:175px;display:block;margin:auto\"><defs><marker id=\"arw\" markerWidth=\"8\" markerHeight=\"8\" refX=\"6\" refY=\"3\" orient=\"auto\"><path d=\"M0,0 L6,3 L0,6 Z\" fill=\"#ff6b35\"/></marker><marker id=\"arw_g\" markerWidth=\"8\" markerHeight=\"8\" refX=\"6\" refY=\"3\" orient=\"auto\"><path d=\"M0,0 L6,3 L0,6 Z\" fill=\"#d4a843\"/></marker></defs><path d=\"M105,15 L105,160\" stroke=\"#64c4f5\" stroke-width=\"14\" fill=\"none\" stroke-linecap=\"round\" stroke-linejoin=\"round\"/><path d=\"M20,75 L105,75\" stroke=\"#6b7a99\" stroke-width=\"11\" fill=\"none\" stroke-linecap=\"round\" stroke-linejoin=\"round\"/><path d=\"M105,75 C155,75 175,90 175,105 C175,120 155,130 130,130 C115,130 105,125 105,115\" stroke=\"#ff6b35\" stroke-width=\"11\" fill=\"none\" stroke-linecap=\"round\" stroke-linejoin=\"round\"/><text x=\"105\" y=\"10\" fill=\"#64c4f5\" font-size=\"10\" font-family=\"Arial,sans-serif\" text-anchor=\"middle\" font-weight=\"bold\">Nesne</text><text x=\"155\" y=\"105\" fill=\"#ff6b35\" font-size=\"10\" font-family=\"Arial,sans-serif\" text-anchor=\"start\" font-weight=\"bold\">→ bir tur</text></svg>"}, {"text": "Çalışan ucu ana ipin ÜZERİNDEN çapraz geçir.", "svg": "<svg viewBox=\"0 0 220 175\" xmlns=\"http://www.w3.org/2000/svg\" style=\"max-width:220px;width:100%;height:175px;display:block;margin:auto\"><defs><marker id=\"arw\" markerWidth=\"8\" markerHeight=\"8\" refX=\"6\" refY=\"3\" orient=\"auto\"><path d=\"M0,0 L6,3 L0,6 Z\" fill=\"#ff6b35\"/></marker><marker id=\"arw_g\" markerWidth=\"8\" markerHeight=\"8\" refX=\"6\" refY=\"3\" orient=\"auto\"><path d=\"M0,0 L6,3 L0,6 Z\" fill=\"#d4a843\"/></marker></defs><path d=\"M105,15 L105,160\" stroke=\"#64c4f5\" stroke-width=\"14\" fill=\"none\" stroke-linecap=\"round\" stroke-linejoin=\"round\"/><path d=\"M20,70 L105,70\" stroke=\"#6b7a99\" stroke-width=\"11\" fill=\"none\" stroke-linecap=\"round\" stroke-linejoin=\"round\"/><path d=\"M105,115 C90,115 75,105 65,90\" stroke=\"#ff6b35\" stroke-width=\"11\" fill=\"none\" stroke-linecap=\"round\" stroke-linejoin=\"round\"/><path d=\"M103,85\" stroke=\"#0c1420\" stroke-width=\"18\" fill=\"none\" stroke-linecap=\"round\"/><path d=\"M105,80 C90,80 75,85 65,90\" stroke=\"#d4a843\" stroke-width=\"9\" fill=\"none\" stroke-linecap=\"round\" stroke-linejoin=\"round\"/><path d=\"M65,90 L45,90 L45,58\" stroke=\"#ff6b35\" stroke-width=\"11\" fill=\"none\" stroke-linecap=\"round\" stroke-linejoin=\"round\"/><text x=\"50\" y=\"50\" fill=\"#ff6b35\" font-size=\"11\" font-family=\"Arial,sans-serif\" text-anchor=\"middle\" font-weight=\"bold\">↑ üstten</text></svg>"}, {"text": "Ana ipin ALTINDAN tekrar geçir — 1. yarım bağ hazır.", "svg": "<svg viewBox=\"0 0 220 175\" xmlns=\"http://www.w3.org/2000/svg\" style=\"max-width:220px;width:100%;height:175px;display:block;margin:auto\"><defs><marker id=\"arw\" markerWidth=\"8\" markerHeight=\"8\" refX=\"6\" refY=\"3\" orient=\"auto\"><path d=\"M0,0 L6,3 L0,6 Z\" fill=\"#ff6b35\"/></marker><marker id=\"arw_g\" markerWidth=\"8\" markerHeight=\"8\" refX=\"6\" refY=\"3\" orient=\"auto\"><path d=\"M0,0 L6,3 L0,6 Z\" fill=\"#d4a843\"/></marker></defs><path d=\"M105,15 L105,160\" stroke=\"#64c4f5\" stroke-width=\"14\" fill=\"none\" stroke-linecap=\"round\" stroke-linejoin=\"round\"/><path d=\"M20,70 L105,70\" stroke=\"#6b7a99\" stroke-width=\"11\" fill=\"none\" stroke-linecap=\"round\" stroke-linejoin=\"round\"/><path d=\"M105,115 C85,115 65,105 58,90\" stroke=\"#ff6b35\" stroke-width=\"11\" fill=\"none\" stroke-linecap=\"round\" stroke-linejoin=\"round\"/><path d=\"M103,79\" stroke=\"#0c1420\" stroke-width=\"18\" fill=\"none\" stroke-linecap=\"round\"/><path d=\"M105,76 C85,76 68,80 58,90\" stroke=\"#d4a843\" stroke-width=\"9\" fill=\"none\" stroke-linecap=\"round\" stroke-linejoin=\"round\"/><path d=\"M58,90 L42,90 C42,90 38,75 50,65 C62,55 80,58 105,60\" stroke=\"#ff6b35\" stroke-width=\"11\" fill=\"none\" stroke-linecap=\"round\" stroke-linejoin=\"round\"/><text x=\"100\" y=\"42\" fill=\"#ff6b35\" font-size=\"10\" font-family=\"Arial,sans-serif\" text-anchor=\"middle\" font-weight=\"bold\">1. yarım bağ ✓</text></svg>"}, {"text": "Aynı işlemi bir kez daha tekrarla — 2. yarım bağ. İki tur tamamlandı, çek!", "svg": "<svg viewBox=\"0 0 220 175\" xmlns=\"http://www.w3.org/2000/svg\" style=\"max-width:220px;width:100%;height:175px;display:block;margin:auto\"><defs><marker id=\"arw\" markerWidth=\"8\" markerHeight=\"8\" refX=\"6\" refY=\"3\" orient=\"auto\"><path d=\"M0,0 L6,3 L0,6 Z\" fill=\"#ff6b35\"/></marker><marker id=\"arw_g\" markerWidth=\"8\" markerHeight=\"8\" refX=\"6\" refY=\"3\" orient=\"auto\"><path d=\"M0,0 L6,3 L0,6 Z\" fill=\"#d4a843\"/></marker></defs><path d=\"M105,15 L105,160\" stroke=\"#64c4f5\" stroke-width=\"14\" fill=\"none\" stroke-linecap=\"round\" stroke-linejoin=\"round\"/><path d=\"M20,70 L105,70\" stroke=\"#6b7a99\" stroke-width=\"11\" fill=\"none\" stroke-linecap=\"round\" stroke-linejoin=\"round\"/><path d=\"M52,95 C42,85 40,70 48,60 C56,50 72,48 95,50\" stroke=\"#6b7a99\" stroke-width=\"8\" fill=\"none\" stroke-linecap=\"round\" stroke-linejoin=\"round\"/><path d=\"M95,50 C120,50 135,58 140,70\" stroke=\"#d4a843\" stroke-width=\"8\" fill=\"none\" stroke-linecap=\"round\" stroke-linejoin=\"round\"/><path d=\"M140,70 C150,82 148,95 138,103 C128,111 112,112 95,108\" stroke=\"#ff6b35\" stroke-width=\"11\" fill=\"none\" stroke-linecap=\"round\" stroke-linejoin=\"round\"/><path d=\"M95,108 L65,108 L55,100\" stroke=\"#ff6b35\" stroke-width=\"11\" fill=\"none\" stroke-linecap=\"round\" stroke-linejoin=\"round\"/><text x=\"30\" y=\"130\" fill=\"#ff6b35\" font-size=\"10\" font-family=\"Arial,sans-serif\" text-anchor=\"start\" font-weight=\"bold\">← Çek! Piyan hazır.</text></svg>"}]}];
-const kState={};KNOTS.forEach(k=>{kState[k.id]=0;});
-function renderKnot(id){
-  const k=KNOTS.find(x=>x.id===id);if(!k)return;
-  const s=kState[id],total=k.steps.length;
-  document.getElementById('kv2-'+id).innerHTML=k.steps[s].svg;
-  document.getElementById('kd2-'+id).textContent=k.steps[s].text;
-  document.getElementById('kn2-'+id).textContent='Adım '+(s+1)+' / '+total;
-  const dots=document.getElementById('kdots2-'+id);
-  [...dots.querySelectorAll('.kstep-dot2')].forEach((d,i)=>d.classList.toggle('active',i===s));
-  document.getElementById('kprev2-'+id).disabled=s===0;
-  document.getElementById('knext2-'+id).textContent=s<total-1?'Sonraki →':'↩ Başa Dön';
-}
-function prevStep(id){if(kState[id]>0){kState[id]--;renderKnot(id);}}
-function nextStep(id){const k=KNOTS.find(x=>x.id===id);kState[id]=kState[id]<k.steps.length-1?kState[id]+1:0;renderKnot(id);}
-function speakStep(id){const k=KNOTS.find(x=>x.id===id);if(k)sayText(k.name+'. '+k.steps[kState[id]].text);}
-function goToKnot(id){const el=document.getElementById('kcard2-'+id);if(el)el.scrollIntoView({behavior:'smooth',block:'center'});}
-(function(){
-  const grid=document.getElementById('knotsGrid2');
-  KNOTS.forEach(k=>{
-    const dots=k.steps.map((_,i)=>'<button class="kstep-dot2'+(i===0?' active':'')+'" onclick="kState[\''+k.id+'\']='+"'"+'+i+'+"'"+';renderKnot(\''+k.id+'\')"></button>').join('');
-    grid.insertAdjacentHTML('beforeend',
-      '<div class="kcard2" id="kcard2-'+k.id+'">'
-      +'<div class="kcard2-header"><h3>'+k.name+' <span>('+k.en+')</span></h3>'
-      +'<p>'+k.desc+'</p><div class="kuses2">'+k.uses+'</div></div>'
-      +'<div class="kstep-visual2" id="kv2-'+k.id+'">'+k.steps[0].svg+'</div>'
-      +'<div class="kstep-body2">'
-      +'<div class="kstep-info2"><div class="kstep-num2" id="kn2-'+k.id+'">Adım 1 / '+k.steps.length+'</div>'
-      +'<div class="kstep-desc2" id="kd2-'+k.id+'">'+k.steps[0].text+'</div></div>'
-      +'<div class="kstep-nav2">'
-      +'<button class="kstep-btn2" id="kprev2-'+k.id+'" onclick="prevStep(\''+k.id+'\')" disabled>← Önceki</button>'
-      +'<div class="kstep-dots2" id="kdots2-'+k.id+'">'+dots+'</div>'
-      +'<button class="kstep-btn2" id="knext2-'+k.id+'" onclick="nextStep(\''+k.id+'\')" >Sonraki →</button>'
-      +'</div>'
-      +'<button class="kstep-speak2" onclick="speakStep(\''+k.id+'\')" >🔊 Bu adımı sesli oku</button>'
-      +'</div></div>'
-    );
-  });
-})();
-(function(){
-  const today=new Date();
-  const idx=(today.getFullYear()*366+today.getMonth()*31+today.getDate())%KNOTS.length;
-  const k=KNOTS[idx];
-  document.getElementById('tkName').textContent=k.name;
-  document.getElementById('tkDesc').textContent=k.desc;
-  const btn=document.getElementById('tkBtn');
-  if(btn)btn.onclick=function(e){e.preventDefault();goToKnot(k.id);};
-})();
-</script>
-
-<!-- ─── TYF YELKEN TV / D1 EĞİTİM ─── -->
-<section style="background:linear-gradient(180deg,#08111e 0%,#0a1a2e 100%);padding:5rem 1.5rem;" id="d1-egitim">
-<div class="inner">
-  <div style="text-align:center;margin-bottom:2.8rem;">
-    <span class="sec-tag" style="background:rgba(0,119,182,.15);color:#4fc3f7;border-color:rgba(0,119,182,.3);">⛵ D1 Yelkenli Tekne Eğitimi</span>
-    <h2 class="sec-h2">TYF Onaylı Eğitim İçerikleri</h2>
-    <p class="sec-sub">Türkiye Yelken Federasyonu'nun resmi eğitim kanalından D1 yelkenli tekne eğitimi: denizcilik bilgisi ve denizci bağları.</p>
-  </div>
-
-  <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(300px,1fr));gap:1.75rem;align-items:start;">
-
-    <!-- TYF Yelken TV ana kart -->
-    <a href="https://www.youtube.com/@TYFYelkenTV" target="_blank" rel="noopener"
-       style="display:block;background:linear-gradient(135deg,rgba(0,119,182,.2),rgba(0,77,130,.12));border:1.5px solid rgba(0,180,216,.3);border-radius:20px;padding:2rem;text-decoration:none;transition:border-color .2s,transform .2s;"
-       onmouseover="this.style.borderColor='rgba(0,180,216,.7)';this.style.transform='translateY(-3px)'"
-       onmouseout="this.style.borderColor='rgba(0,180,216,.3)';this.style.transform='translateY(0)'">
-      <div style="display:flex;align-items:center;gap:1rem;margin-bottom:1.25rem;">
-        <div style="width:56px;height:56px;border-radius:50%;background:rgba(255,0,0,.15);border:2px solid rgba(255,80,80,.3);display:flex;align-items:center;justify-content:center;font-size:1.6rem;flex-shrink:0;">▶</div>
-        <div>
-          <div style="font-size:1.05rem;font-weight:900;color:#fff;">TYF Yelken TV</div>
-          <div style="font-size:.78rem;color:rgba(255,255,255,.45);margin-top:.15rem;">Türkiye Yelken Federasyonu Resmî Kanalı</div>
-        </div>
-      </div>
-      <h3 style="font-size:1rem;font-weight:800;color:#e8eef8;margin-bottom:.6rem;line-height:1.4;">D1 Yelkenli Tekne Eğitimi<br><span style="font-weight:500;color:rgba(255,255,255,.55);font-size:.88rem;">Denizcilik Bilgisi ve Denizci Bağları</span></h3>
-      <p style="font-size:.83rem;color:rgba(255,255,255,.6);line-height:1.6;margin-bottom:1.25rem;">D1 belgesi için gerekli temel denizcilik bilgisi, tekne tanımı ve denizci bağları konularını TYF Yelken TV'nin eğitim serisi ile öğren.</p>
-      <div style="display:flex;align-items:center;gap:.75rem;flex-wrap:wrap;">
-        <span style="background:rgba(0,180,216,.15);color:#4fc3f7;border:1px solid rgba(0,180,216,.25);border-radius:50px;padding:.3rem .85rem;font-size:.76rem;font-weight:700;">🎓 D1 Eğitimi</span>
-        <span style="background:rgba(212,168,67,.1);color:#d4a843;border:1px solid rgba(212,168,67,.2);border-radius:50px;padding:.3rem .85rem;font-size:.76rem;font-weight:700;">🪢 Denizci Bağları</span>
-        <span style="background:rgba(0,200,100,.1);color:#00c896;border:1px solid rgba(0,200,100,.2);border-radius:50px;padding:.3rem .85rem;font-size:.76rem;font-weight:700;">⚓ Denizcilik Bilgisi</span>
-      </div>
-      <div style="margin-top:1.4rem;background:rgba(0,180,216,.12);border:1px solid rgba(0,180,216,.2);border-radius:12px;padding:.85rem 1.1rem;display:flex;justify-content:space-between;align-items:center;gap:.5rem;">
-        <span style="font-size:.82rem;color:#4fc3f7;font-weight:700;">YouTube'da İzle →</span>
-        <span style="font-size:.72rem;color:rgba(255,255,255,.35);">@TYFYelkenTV</span>
-      </div>
-    </a>
-
-    <!-- Konular listesi -->
-    <div style="display:flex;flex-direction:column;gap:1rem;">
-      <div style="background:rgba(255,255,255,.04);border:1px solid rgba(255,255,255,.09);border-left:4px solid #4fc3f7;border-radius:0 14px 14px 0;padding:1rem 1.2rem;">
-        <div style="font-size:.88rem;font-weight:800;color:#e8eef8;margin-bottom:.3rem;">🗺️ Denizcilik Bilgisi</div>
-        <div style="font-size:.8rem;color:rgba(255,255,255,.55);line-height:1.5;">Pusula okuma, harita kullanımı, rota hesaplama, kara ile deniz koordinatları.</div>
-      </div>
-      <div style="background:rgba(255,255,255,.04);border:1px solid rgba(255,255,255,.09);border-left:4px solid #d4a843;border-radius:0 14px 14px 0;padding:1rem 1.2rem;">
-        <div style="font-size:.88rem;font-weight:800;color:#e8eef8;margin-bottom:.3rem;">🪢 Denizci Bağları</div>
-        <div style="font-size:.8rem;color:rgba(255,255,255,.55);line-height:1.5;">Sekiz bağı, izbarço, kazık bağı, camadan — her bağı adım adım öğren ve uygula.</div>
-      </div>
-      <div style="background:rgba(255,255,255,.04);border:1px solid rgba(255,255,255,.09);border-left:4px solid #00c896;border-radius:0 14px 14px 0;padding:1rem 1.2rem;">
-        <div style="font-size:.88rem;font-weight:800;color:#e8eef8;margin-bottom:.3rem;">⛵ Tekne Tanımı</div>
-        <div style="font-size:.8rem;color:rgba(255,255,255,.55);line-height:1.5;">D1 yelkenli teknesinin parçaları, donanımı ve temel kullanım kuralları.</div>
-      </div>
-      <div style="background:rgba(255,255,255,.04);border:1px solid rgba(255,255,255,.09);border-left:4px solid #ff6b35;border-radius:0 14px 14px 0;padding:1rem 1.2rem;">
-        <div style="font-size:.88rem;font-weight:800;color:#e8eef8;margin-bottom:.3rem;">🏅 D1 Belgesi</div>
-        <div style="font-size:.8rem;color:rgba(255,255,255,.55);line-height:1.5;">TYF onaylı D1 yelkenli belgesi için gerekli bilgi ve beceriler hakkında rehber.</div>
-      </div>
-      <a href="#baglar" style="display:flex;align-items:center;justify-content:center;gap:.55rem;background:linear-gradient(135deg,rgba(212,168,67,.18),rgba(212,168,67,.08));border:1.5px solid rgba(212,168,67,.35);border-radius:14px;padding:.85rem 1rem;text-decoration:none;margin-top:.5rem;transition:border-color .2s;"
-         onmouseover="this.style.borderColor='rgba(212,168,67,.7)'" onmouseout="this.style.borderColor='rgba(212,168,67,.35)'">
-        <span style="font-size:1.2rem;">🪢</span>
-        <div>
-          <div style="font-size:.85rem;font-weight:800;color:#d4a843;">Bağları burada dene →</div>
-          <div style="font-size:.72rem;color:rgba(255,255,255,.4);margin-top:.1rem;">İnteraktif bağ animasyonuna git</div>
-        </div>
-      </a>
-      <div style="text-align:center;padding:.6rem;font-size:.73rem;color:rgba(255,255,255,.3);border-top:1px solid rgba(255,255,255,.06);margin-top:.25rem;">
-        İçerik kaynağı: <a href="https://www.youtube.com/@TYFYelkenTV" target="_blank" rel="noopener" style="color:rgba(0,180,216,.6);text-decoration:none;font-weight:700;">TYF Yelken TV</a>
-      </div>
-    </div>
-
-  </div>
-
-  <!-- TYF Yelken TV — D1 Video -->
-  <div style="margin:3rem 0 0;border-radius:20px;overflow:hidden;aspect-ratio:16/9;background:#000;max-width:800px;margin-left:auto;margin-right:auto;">
-    <iframe
-      width="100%" height="100%"
+  <!-- 16:9 video -->
+  <div style="border-radius:16px;overflow:hidden;aspect-ratio:16/9;background:#000;max-width:800px;margin:2rem auto 1rem;">
+    <iframe width="100%" height="100%"
       src="https://www.youtube.com/embed/GjKPPzbi1uk"
-      title="D1 Yelkenli Tekne Eğitimi — Denizcilik Bilgisi ve Denizci Bağları | TYF Yelken TV"
+      title="D1 Yelkenli Tekne Eğitimi — Denizci Bağları | TYF Yelken TV"
       allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture"
-      allowfullscreen
-      loading="lazy"
-      style="border:none;display:block;"></iframe>
+      allowfullscreen loading="lazy" style="border:none;display:block;"></iframe>
   </div>
-  <p style="text-align:center;margin:1rem 0 0;font-size:.78rem;color:rgba(255,255,255,.4);">
+  <p style="font-size:.75rem;color:rgba(255,255,255,.35);margin:0 0 2.5rem;">
     Kaynak: <a href="https://www.youtube.com/@TYFYelkenTV" target="_blank" rel="noopener" style="color:rgba(0,180,216,.6);text-decoration:none;font-weight:700;">TYF Yelken TV</a>
     &nbsp;·&nbsp; Türkiye Yelken Federasyonu Resmî Eğitim Kanalı
   </p>
 
+  <!-- 4 konu chip -->
+  <div style="display:flex;gap:.65rem;justify-content:center;flex-wrap:wrap;margin-bottom:3rem;">
+    <span style="background:rgba(0,180,216,.12);color:#4fc3f7;border:1px solid rgba(0,180,216,.25);border-radius:50px;padding:.35rem 1rem;font-size:.8rem;font-weight:700;">⚓ Denizcilik</span>
+    <span style="background:rgba(212,168,67,.12);color:#d4a843;border:1px solid rgba(212,168,67,.25);border-radius:50px;padding:.35rem 1rem;font-size:.8rem;font-weight:700;">🪢 Bağlar</span>
+    <span style="background:rgba(100,196,245,.12);color:#64c4f5;border:1px solid rgba(100,196,245,.25);border-radius:50px;padding:.35rem 1rem;font-size:.8rem;font-weight:700;">⛵ Tekne</span>
+    <span style="background:rgba(0,200,150,.12);color:#00c896;border:1px solid rgba(0,200,150,.25);border-radius:50px;padding:.35rem 1rem;font-size:.8rem;font-weight:700;">🎓 D1</span>
+  </div>
+
+  <!-- Ayırıcı -->
+  <div style="display:flex;align-items:center;gap:1.2rem;margin:0 auto 2.5rem;max-width:500px;">
+    <div style="flex:1;height:1px;background:rgba(212,168,67,.25);"></div>
+    <span style="font-size:.92rem;font-weight:700;color:#d4a843;white-space:nowrap;">Şimdi sen dene</span>
+    <div style="flex:1;height:1px;background:rgba(212,168,67,.25);"></div>
+  </div>
+
+  <h3 style="font-size:1.25rem;font-weight:900;color:#fff;margin:0 0 1.5rem;">3 adımda dene</h3>
+
+  <!-- Bağ seçici -->
+  <div id="knotTabs" style="display:flex;gap:.5rem;justify-content:center;flex-wrap:wrap;margin-bottom:2rem;"></div>
+
+  <!-- Flipbook -->
+  <div id="knotDisplay" style="max-width:340px;margin:0 auto;">
+    <div id="knotSvgWrap" style="background:#0c1420;border-radius:16px;overflow:hidden;display:flex;align-items:center;justify-content:center;padding:1rem;min-height:220px;"></div>
+    <div id="knotCaption" style="margin:.9rem 0 .5rem;font-size:.93rem;color:#e8eef8;min-height:2.8rem;line-height:1.5;padding:0 .25rem;"></div>
+    <div id="knotDots" style="display:flex;gap:.45rem;justify-content:center;margin-bottom:.85rem;"></div>
+    <div style="display:flex;gap:.75rem;justify-content:center;">
+      <button onclick="kPrev()" aria-label="Önceki adım" style="min-width:60px;padding:.6rem 1.5rem;background:rgba(212,168,67,.14);border:1px solid rgba(212,168,67,.3);color:#d4a843;border-radius:50px;font-size:1.1rem;font-weight:700;cursor:pointer;transition:background .18s;min-height:44px;">&#9664;</button>
+      <button onclick="kNext()" aria-label="Sonraki adım" style="min-width:60px;padding:.6rem 1.5rem;background:rgba(212,168,67,.14);border:1px solid rgba(212,168,67,.3);color:#d4a843;border-radius:50px;font-size:1.1rem;font-weight:700;cursor:pointer;transition:background .18s;min-height:44px;">&#9654;</button>
+    </div>
+    <div id="knotStepLabel" style="margin-top:.55rem;font-size:.73rem;color:rgba(255,255,255,.35);"></div>
+  </div>
+
 </div>
 </section>
+
+<style>
+#knotTabs button{background:rgba(255,255,255,.05);border:1px solid rgba(255,255,255,.12);color:rgba(255,255,255,.6);border-radius:50px;padding:.45rem 1.1rem;font-size:.82rem;font-weight:700;cursor:pointer;transition:all .18s;min-height:44px;}
+#knotTabs button.kt-active{background:rgba(212,168,67,.2);border-color:rgba(212,168,67,.5);color:#d4a843;}
+.k-dot{width:10px;height:10px;border-radius:50%;background:rgba(212,168,67,.2);border:1px solid rgba(212,168,67,.4);cursor:pointer;padding:0;transition:background .15s;}
+.k-dot.k-active{background:#d4a843;border-color:#d4a843;}
+</style>
+
+<script>
+/* ─── Pupa toast ─── */
+function closePupa(){
+  var t=document.getElementById('pupaToast');
+  if(!t)return;t.classList.remove('visible');setTimeout(function(){t.style.display='none';},400);
+}
+window.addEventListener('load',function(){
+  try{
+    if(!sessionStorage.getItem('pupa_shown')){
+      setTimeout(function(){var t=document.getElementById('pupaToast');if(t)t.classList.add('visible');},1200);
+      setTimeout(closePupa,8000);
+      sessionStorage.setItem('pupa_shown','1');
+    }
+  }catch(e){}
+});
+
+/* ─── Knot flipbook ─── */
+(function(){
+var prefR=window.matchMedia('(prefers-reduced-motion:reduce)').matches;
+var C='#1a3560',O='#ff6b35',LB='#64c4f5',W='#e8eef8';
+function svg(paths,labels){
+  return '<svg viewBox="0 0 280 220" xmlns="http://www.w3.org/2000/svg" style="width:280px;height:220px;display:block;margin:auto">'+paths+(labels||'')+'</svg>';
+}
+function p(d,color,w){return '<path d="'+d+'" stroke="'+color+'" stroke-width="'+(w||8)+'" fill="none" stroke-linecap="round" stroke-linejoin="round"/>';}
+function line(x1,y1,x2,y2,color,w){return '<line x1="'+x1+'" y1="'+y1+'" x2="'+x2+'" y2="'+y2+'" stroke="'+color+'" stroke-width="'+(w||8)+'" stroke-linecap="round"/>';}
+function dot(cx,cy,color){return '<circle cx="'+cx+'" cy="'+cy+'" r="6" fill="'+color+'"/>';}
+function cover(cx,cy){return '<circle cx="'+cx+'" cy="'+cy+'" r="9" fill="#0c1420"/>';}
+function txt(x,y,text,color,anchor){return '<text x="'+x+'" y="'+y+'" fill="'+(color||W)+'" font-size="12" font-family="system-ui,sans-serif" text-anchor="'+(anchor||'middle')+'" font-weight="600">'+text+'</text>';}
+function ok(x,y){return txt(x,y,'&#10003; Hazır','#4fc3f7','middle');}
+
+var KNOTS=[
+  {id:'sekiz',name:'Sekiz',frames:[
+    {cap:'Halatı tut. Çalışan ucu (turuncu) aşağı düşür — halka yap.',
+     svg:svg(
+       p('M20,110 L155,110',C)+
+       p('M155,110 C180,110 198,128 198,150 C198,172 178,182 158,175 C138,168 130,150 148,134',O)+
+       dot(148,134,O)+
+       txt(80,95,'Ana halat',C)+ txt(208,155,'Halka',O,'start')
+     )},
+    {cap:'Ucu ana halatın ÜSTÜNDEn soldan geçir.',
+     svg:svg(
+       p('M20,110 L155,110',C)+
+       p('M155,110 C180,110 196,126 196,148 C196,168 176,178 158,172',C,5)+
+       cover(148,132)+
+       p('M148,134 L108,100',O)+
+       p('M108,100 L60,100 L60,75',O)+
+       dot(60,75,O)+
+       txt(60,65,'&#8593; üstten',O)
+     )},
+    {cap:'Ucu halkadan içeri sok. İki elden çek — sekiz tamam.',
+     svg:svg(
+       p('M20,110 L85,110',C)+
+       p('M85,110 C100,110 112,98 112,84 C112,70 100,62 88,67 C76,72 74,86 82,100 C86,107 95,113 100,120 C110,132 108,150 95,157 C82,164 66,157 64,143 C62,130 72,120 82,110',C)+
+       p('M82,110 L200,110',C)+
+       p('M74,98 L58,70 L58,52',O)+
+       dot(58,52,O)+
+       ok(190,80)
+     )}
+  ]},
+  {id:'izbarco',name:'İzbarço',frames:[
+    {cap:'Ana halatın ortasında büküm halka oluştur.',
+     svg:svg(
+       p('M20,140 L105,140',C)+
+       p('M105,140 C125,140 138,127 138,113 C138,99 125,91 113,97 C101,103 99,117 105,140',C)+
+       p('M105,140 L245,140',C,6)+
+       txt(148,92,'Büküm halka',C)
+     )},
+    {cap:'Çalışan ucu halkadan yukarı çıkar, ana halatın arkasından dolaş.',
+     svg:svg(
+       p('M20,140 L105,140',C)+
+       p('M105,140 C125,140 138,127 138,113 C138,99 125,91 113,97 C101,103 99,117 105,140',C)+
+       p('M105,140 L245,140',C,6)+
+       cover(162,140)+
+       p('M162,175 L162,125',O)+
+       p('M162,115 C178,105 196,113 198,128',O)+
+       dot(162,175,O)+
+       txt(162,102,'&#8593; yukarı',O)
+     )},
+    {cap:'Ucu halkadan geri içeri sok, sık. Sabit halka oluştu.',
+     svg:svg(
+       p('M20,140 L105,140',C)+
+       p('M105,140 C125,140 138,127 138,113 C138,99 125,91 113,97 C101,103 99,117 105,140',C)+
+       p('M105,140 L245,140',C,6)+
+       cover(160,140)+
+       p('M155,105 C172,95 190,103 192,118 C194,133 180,145 162,142',O)+
+       p('M162,142 L145,142 L145,160',O)+
+       dot(145,160,O)+
+       ok(200,170)
+     )}
+  ]},
+  {id:'kazik',name:'Kazık',frames:[
+    {cap:'Halatı direk/babaya bir tam tur at.',
+     svg:svg(
+       line(140,10,140,210,LB,12)+
+       p('M20,100 L140,100',C)+
+       p('M140,100 C185,100 205,118 205,140 C205,162 183,170 160,164 C137,158 128,140 138,124',O)+
+       dot(138,124,O)+
+       txt(70,85,'Bir tam tur',C)
+     )},
+    {cap:'Çalışan ucu çapraz geçir — X şekli oluştur.',
+     svg:svg(
+       line(140,10,140,210,LB,12)+
+       p('M20,100 L140,100',C)+
+       cover(139,118)+
+       p('M140,125 C118,125 98,116 85,105',O)+
+       p('M140,108 C118,108 100,112 85,105',C,5)+
+       p('M85,105 L58,105 L58,78',O)+
+       dot(58,78,O)+
+       txt(50,68,'&#8593; çapraz',O)
+     )},
+    {cap:'Alttan sok, sık — kazık hazır.',
+     svg:svg(
+       line(140,10,140,210,LB,12)+
+       p('M20,100 L140,100',C)+
+       p('M140,118 C115,118 94,110 80,99 C70,91 68,80 78,74 C90,68 108,74 128,85 L140,92',O)+
+       cover(139,94)+
+       ok(200,145)
+     )}
+  ]},
+  {id:'camadan',name:'Camadan',frames:[
+    {cap:'İki ucu yan yana koy, çapraz geçir (sol üste, sağ alta).',
+     svg:svg(
+       p('M60,60 L220,160',C)+
+       p('M220,60 L60,160',O)+
+       dot(60,60,C)+ dot(220,60,O)+
+       txt(140,40,'Çapraz koy',W)
+     )},
+    {cap:'Sağ (turuncu) ucu solun altından geçir — 1. yarım bağ.',
+     svg:svg(
+       p('M65,58 L152,118',C)+
+       cover(124,108)+
+       p('M185,62 L124,105',O)+
+       p('M124,105 C108,115 92,120 75,114 L60,150',O)+
+       p('M152,118 L170,158',C)+
+       dot(60,150,O)+ dot(170,158,C)
+     )},
+    {cap:'Sol ucu da geçir. Simetrik: çek, sık — camadan hazır.',
+     svg:svg(
+       p('M90,48 C106,70 118,85 118,112 C118,138 106,152 90,158',C)+
+       p('M168,48 C152,70 140,85 140,112 C140,138 152,152 168,158',O)+
+       dot(90,48,C)+ dot(168,48,O)+
+       ok(130,188)
+     )}
+  ]},
+  {id:'piyan',name:'Piyan',frames:[
+    {cap:'Halatı nesneye (halka, direk) bir tam tur geçir.',
+     svg:svg(
+       line(140,10,140,210,LB,12)+
+       p('M20,108 L140,108',C)+
+       p('M140,108 C185,108 205,126 205,148 C205,170 183,178 160,172 C137,166 128,148 138,132',O)+
+       dot(138,132,O)+
+       txt(70,93,'Bir tur',C)
+     )},
+    {cap:'Çalışan ucu ana halatın üstünden çapraz geç — 1. yarım bağ.',
+     svg:svg(
+       line(140,10,140,210,LB,12)+
+       p('M20,108 L140,108',C)+
+       cover(139,122)+
+       p('M140,132 C118,132 98,122 84,110',O)+
+       p('M84,110 L62,110 L62,82',O)+
+       dot(62,82,O)+
+       txt(52,72,'1. yarım',O)
+     )},
+    {cap:'Aynı işlemi bir kez daha yap — piyan hazır.',
+     svg:svg(
+       line(140,10,140,210,LB,12)+
+       p('M20,108 L140,108',C)+
+       p('M58,96 C48,85 46,68 56,58 C66,48 84,49 108,55 L135,62',O,7)+
+       cover(133,64)+
+       p('M135,62 C155,67 163,80 158,94 C153,108 138,115 120,112',O)+
+       p('M120,112 L95,112 L80,125',O)+
+       dot(80,125,O)+
+       ok(200,170)
+     )}
+  ]}
+];
+
+var kIdx=0,fIdx=0,autoT=null;
+
+function renderTabs(){
+  var el=document.getElementById('knotTabs');
+  el.innerHTML=KNOTS.map(function(k,i){
+    return '<button class="'+(i===kIdx?'kt-active':'')+'" onclick="kSelect('+i+')">'+k.name+'</button>';
+  }).join('');
+}
+function renderDots(){
+  var el=document.getElementById('knotDots');
+  el.innerHTML=KNOTS[kIdx].frames.map(function(_,i){
+    return '<button class="k-dot'+(i===fIdx?' k-active':'')+'" onclick="kGoto('+i+')" aria-label="Adım '+(i+1)+'"></button>';
+  }).join('');
+}
+function renderFrame(){
+  var k=KNOTS[kIdx],f=k.frames[fIdx];
+  document.getElementById('knotSvgWrap').innerHTML=f.svg;
+  document.getElementById('knotCaption').textContent=f.cap;
+  document.getElementById('knotStepLabel').textContent='Adım '+(fIdx+1)+' / '+k.frames.length;
+  renderDots();
+}
+function kSelect(i){kIdx=i;fIdx=0;renderTabs();renderFrame();if(!prefR)resetAuto();}
+function kGoto(i){fIdx=i;renderFrame();if(!prefR)resetAuto();}
+function kPrev(){fIdx=fIdx>0?fIdx-1:KNOTS[kIdx].frames.length-1;renderFrame();if(!prefR)resetAuto();}
+function kNext(){fIdx=(fIdx+1)%KNOTS[kIdx].frames.length;renderFrame();if(!prefR)resetAuto();}
+function resetAuto(){if(autoT)clearInterval(autoT);autoT=setInterval(function(){fIdx=(fIdx+1)%KNOTS[kIdx].frames.length;renderFrame();},2200);}
+
+renderTabs();renderFrame();
+if(!prefR)resetAuto();
+})();
+</script>
 
 <!-- ─── DENİZCİLİK REHBERİ TEASER ─── -->
 <section style="background:linear-gradient(135deg,#0a1628 0%,#0d2045 100%);padding:3.5rem 1.5rem;border-top:1px solid rgba(0,180,216,.15);" id="rehber">
