@@ -20,7 +20,7 @@ from app.dependencies.person_document_policy import get_health_document_legal_ga
 from app.main import app
 from app.models.audit import AuditLog
 from app.models.club import Club
-from app.models.person import Person
+from app.models.person import Person, PersonRole
 from app.models.person_document import PersonDocument
 from app.models.person_guardian import PersonGuardian
 from app.models.user import User
@@ -581,3 +581,62 @@ async def test_coach_cannot_access_unassigned_athlete_documents(
     assert (
         await client.get(f"{URL}/{document_id}/view", headers=_auth(coach_token))
     ).status_code == 403
+
+
+async def test_athlete_list_for_coach_contains_only_assigned_athletes(
+    document_client, db_session, test_club
+):
+    client, _, _ = document_client
+    assigned = await _person(db_session, test_club, "Atanmış Liste")
+    unassigned = await _person(db_session, test_club, "Atanmamış Liste")
+    db_session.add_all([
+        PersonRole(person_id=assigned.id, role_code="sporcu"),
+        PersonRole(person_id=unassigned.id, role_code="sporcu"),
+    ])
+    _, coach_token = await _coach_account_with_athlete(
+        db_session, test_club, assigned
+    )
+    await db_session.flush()
+
+    response = await client.get(
+        "/api/v1/athletes",
+        headers=_auth(coach_token),
+        params={"limit": 100, "is_active": True},
+    )
+    assert response.status_code == 200
+    ids = {row["person_id"] for row in response.json()["items"]}
+    assert ids == {str(assigned.id)}
+
+
+async def test_coach_review_requires_assigned_athlete_scope(
+    document_client, db_session, test_club, yonetici_token
+):
+    client, _, _ = document_client
+    assigned = await _person(db_session, test_club, "Atanmış Onay")
+    unassigned = await _person(db_session, test_club, "Atanmamış Onay")
+    _, coach_token = await _coach_account_with_athlete(
+        db_session, test_club, assigned
+    )
+
+    assigned_upload = await client.post(
+        URL, headers=_auth(yonetici_token), data=_upload_data(assigned.id),
+        files={"file": ("assigned.pdf", PDF, "application/pdf")},
+    )
+    unassigned_upload = await client.post(
+        URL, headers=_auth(yonetici_token), data=_upload_data(unassigned.id),
+        files={"file": ("unassigned.pdf", PDF, "application/pdf")},
+    )
+    assert assigned_upload.status_code == 201
+    assert unassigned_upload.status_code == 201
+
+    approved = await client.patch(
+        f"{URL}/{assigned_upload.json()['id']}/approve",
+        headers=_auth(coach_token),
+    )
+    assert approved.status_code == 200
+    denied = await client.patch(
+        f"{URL}/{unassigned_upload.json()['id']}/reject",
+        headers=_auth(coach_token),
+        json={"rejection_reason": "Eksik"},
+    )
+    assert denied.status_code == 403

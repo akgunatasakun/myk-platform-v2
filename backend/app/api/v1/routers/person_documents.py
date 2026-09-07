@@ -338,9 +338,12 @@ async def approve_person_document(
     if current_user.role not in _REVIEWER_ROLES:
         raise HTTPException(status_code=403, detail="Bu işlem için yetkiniz yok.")
     document = await _get_document_or_404(document_id, club_id, db)
+    user, _ = await _access_context(
+        document.subject_person_id, club_id, current_user, db,
+        allow_coach_read=True,
+    )
     if document.is_sensitive and current_user.role in {"antrenor", "basantrenor"}:
         raise HTTPException(status_code=403, detail="Hassas belgeyi onaylama yetkiniz yok.")
-    user = await get_active_user(current_user, club_id, db)
     document.review_status = "approved"
     document.reviewed_by_user_id = user.id
     document.reviewed_at = datetime.now(timezone.utc)
@@ -371,9 +374,12 @@ async def reject_person_document(
     if current_user.role not in _REVIEWER_ROLES:
         raise HTTPException(status_code=403, detail="Bu işlem için yetkiniz yok.")
     document = await _get_document_or_404(document_id, club_id, db)
+    user, _ = await _access_context(
+        document.subject_person_id, club_id, current_user, db,
+        allow_coach_read=True,
+    )
     if document.is_sensitive and current_user.role in {"antrenor", "basantrenor"}:
         raise HTTPException(status_code=403, detail="Hassas belgeyi reddetme yetkiniz yok.")
-    user = await get_active_user(current_user, club_id, db)
     document.review_status = "rejected"
     document.rejection_reason = body.rejection_reason
     document.reviewed_by_user_id = user.id

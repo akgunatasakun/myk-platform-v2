@@ -38,6 +38,7 @@ from app.schemas.athlete import (
     _doc_status,
 )
 from app.schemas.auth import TokenPayload
+from app.services.training_scope_service import get_antrenor_enrolled_person_ids
 from fastapi import Request
 
 router = APIRouter(prefix="/athletes", tags=["athletes"])
@@ -146,6 +147,13 @@ async def list_athletes(
         )
         .distinct()
     )
+
+    # Antrenörler yalnızca atandıkları eğitimlere aktif kayıtlı sporcuları görür.
+    if current_user.role in {"antrenor", "basantrenor"}:
+        allowed_ids = await get_antrenor_enrolled_person_ids(
+            uuid.UUID(current_user.sub), club_id, db
+        )
+        base_query = base_query.where(Person.id.in_(allowed_ids))
 
     if search:
         pattern = f"%{search}%"
