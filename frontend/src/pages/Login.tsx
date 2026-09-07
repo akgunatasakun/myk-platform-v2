@@ -19,9 +19,8 @@ export default function Login() {
       await login({ club_slug: clubSlug, email, password })
       navigate('/dashboard')
     } catch (err: unknown) {
-      const msg =
-        (err as { response?: { data?: { detail?: string } } })?.response?.data
-          ?.detail ?? 'Giriş başarısız. Lütfen bilgilerinizi kontrol edin.'
+      const raw = (err as { response?: { data?: { detail?: unknown } } })?.response?.data?.detail
+      const msg = typeof raw === 'string' ? raw : 'Giriş başarısız. Lütfen bilgilerinizi kontrol edin.'
       setError(msg)
     }
   }
