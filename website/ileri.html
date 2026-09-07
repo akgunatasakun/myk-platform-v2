@@ -304,16 +304,47 @@ footer p{line-height:1.7;}
     <p style="color:rgba(255,255,255,.55);max-width:560px;margin:0 auto;font-size:.95rem;line-height:1.65;">Bayraklar, şamandıralar, COLREG ve RRS — ileri seviye denizcilik bilgisi ve yol hakkı sınavı.</p>
   </div>
 </section>
+<!-- ─── BÖLÜM SEKME ÇUBUĞU ─── -->
+<div id="ileriTabs" style="position:sticky;top:56px;z-index:900;background:rgba(8,18,40,.97);backdrop-filter:blur(16px);-webkit-backdrop-filter:blur(16px);border-bottom:1px solid rgba(255,255,255,.09);overflow-x:auto;-webkit-overflow-scrolling:touch;scrollbar-width:none;">
+  <div style="display:flex;min-width:max-content;padding:0 1rem;">
+    <a href="#bayraklar" class="it-tab it-active" data-sec="bayraklar">🏳️ Bayraklar</a>
+    <a href="#samandira" class="it-tab" data-sec="samandira">🔴 Şamandıralar</a>
+    <a href="#yol-hakki" class="it-tab" data-sec="yol-hakki">⚖️ Yol Hakkı</a>
+    <a href="#yhQuizWrap" class="it-tab" data-sec="sinav">🧭 Sınav</a>
+  </div>
+</div>
+<style>
+.it-tab{display:inline-flex;align-items:center;padding:.85rem 1.1rem;font-size:.82rem;font-weight:700;color:rgba(255,255,255,.5);text-decoration:none;border-bottom:2px solid transparent;white-space:nowrap;transition:color .18s,border-color .18s;min-height:48px;-webkit-tap-highlight-color:transparent;}
+.it-tab:hover{color:rgba(255,255,255,.85);}
+.it-tab.it-active{color:#00b4d8;border-bottom-color:#00b4d8;}
+#ileriTabs::-webkit-scrollbar{display:none;}
+</style>
+<script>
+(function(){
+  var tabs=document.querySelectorAll('.it-tab');
+  var anchors=['bayraklar','samandira','yol-hakki','yhQuizWrap'];
+  function setActive(id){
+    tabs.forEach(function(t){
+      t.classList.toggle('it-active',t.getAttribute('data-sec')===id||t.getAttribute('href')==='#'+id);
+    });
+  }
+  var io=new IntersectionObserver(function(entries){
+    entries.forEach(function(e){if(e.isIntersecting)setActive(e.target.id);});
+  },{rootMargin:'-56px 0px -60% 0px',threshold:0});
+  anchors.forEach(function(id){var el=document.getElementById(id);if(el)io.observe(el);});
+})();
+</script>
+
 <section class="signals-sec" id="isaretler">
 <div class="inner">
   <span class="sec-tag">🚢 Denizcilik Dili</span>
   <h2 class="sec-h2" style="text-align:center">Deniz İşaretlerini Tanı</h2>
   <p class="sec-sub" style="text-align:center">Her denizci bu işaretleri bilmek zorunda. Bayraklar, şamandıralar, yarış kuralları ve acil durumlar.</p>
 
-  <h3 class="subsec-h3">🏳️ Uluslararası Sinyal Bayrakları</h3>
+  <h3 class="subsec-h3" id="bayraklar">🏳️ Uluslararası Sinyal Bayrakları</h3>
   <div class="sig-grid"><div class="sig-card"><div class="sig-flag"><svg viewBox="0 0 70 50" xmlns="http://www.w3.org/2000/svg" style="width:70px;height:50px;border-radius:4px;display:block"><rect width="35" height="50" fill="#fff"/><rect x="35" width="35" height="50" fill="#005eb8"/><polygon points="35,0 70,25 35,50" fill="#005eb8"/><rect width="35" height="50" fill="#fff"/><polygon points="35,0 35,50 70,25" fill="#005eb8"/></svg></div><div class="sig-body"><div class="sig-letter">A</div><div class="sig-name">Alpha</div><div class="sig-meaning">Dalıcı var, yavaş geç</div><div class="sig-use">📍 Tekne altında dalgıç çalışıyor</div></div></div><div class="sig-card"><div class="sig-flag"><svg viewBox="0 0 70 50" xmlns="http://www.w3.org/2000/svg" style="width:70px;height:50px;border-radius:4px;display:block"><rect width="70" height="50" fill="#d10000"/></svg></div><div class="sig-body"><div class="sig-letter">B</div><div class="sig-name">Bravo</div><div class="sig-meaning">Tehlikeli yük taşıyorum</div><div class="sig-use">📍 Yakıt/patlayıcı yüklü tekne</div></div></div><div class="sig-card"><div class="sig-flag"><svg viewBox="0 0 70 50" xmlns="http://www.w3.org/2000/svg" style="width:70px;height:50px;border-radius:4px;display:block"><rect width="70" height="50" fill="#005eb8"/><rect x="0" y="0" width="35" height="25" fill="#005eb8"/><rect x="35" y="0" width="35" height="25" fill="#f5c518"/><rect x="0" y="25" width="35" height="25" fill="#f5c518"/><rect x="35" y="25" width="35" height="25" fill="#005eb8"/></svg></div><div class="sig-body"><div class="sig-letter">N</div><div class="sig-name">November</div><div class="sig-meaning">Hayır / Olumsuz</div><div class="sig-use">📍 Radyo iletişiminde "Hayır"</div></div></div><div class="sig-card"><div class="sig-flag"><svg viewBox="0 0 70 50" xmlns="http://www.w3.org/2000/svg" style="width:70px;height:50px;border-radius:4px;display:block"><rect width="35" height="50" fill="#f5c518"/><rect x="35" width="35" height="50" fill="#d10000"/></svg></div><div class="sig-body"><div class="sig-letter">O</div><div class="sig-name">Oscar</div><div class="sig-meaning">Adam denize düştü!</div><div class="sig-use">📍 Acil durum — kurtarma başlat</div></div></div><div class="sig-card"><div class="sig-flag"><svg viewBox="0 0 70 50" xmlns="http://www.w3.org/2000/svg" style="width:70px;height:50px;border-radius:4px;display:block"><rect width="70" height="50" fill="#f5c518"/></svg></div><div class="sig-body"><div class="sig-letter">Q</div><div class="sig-name">Quebec</div><div class="sig-meaning">Sağlığım yerinde, giriş izni istiyorum</div><div class="sig-use">📍 Yabancı limana ilk girerken</div></div></div><div class="sig-card"><div class="sig-flag"><svg viewBox="0 0 70 50" xmlns="http://www.w3.org/2000/svg" style="width:70px;height:50px;border-radius:4px;display:block"><rect width="70" height="50" fill="#005eb8"/><rect x="15" y="10" width="40" height="30" fill="#fff"/></svg></div><div class="sig-body"><div class="sig-letter">P</div><div class="sig-name">Papa</div><div class="sig-meaning">Hareket etmek üzereyim</div><div class="sig-use">📍 Limanda — tüm mürettebat gemiye</div></div></div><div class="sig-card"><div class="sig-flag"><svg viewBox="0 0 70 50" xmlns="http://www.w3.org/2000/svg" style="width:70px;height:50px;border-radius:4px;display:block"><rect width="70" height="50" fill="#fff"/><rect x="20" y="10" width="30" height="30" fill="#005eb8"/></svg></div><div class="sig-body"><div class="sig-letter">S</div><div class="sig-name">Sierra</div><div class="sig-meaning">Makinelerim geri vites</div><div class="sig-use">📍 Manevra uyarısı</div></div></div><div class="sig-card"><div class="sig-flag"><svg viewBox="0 0 70 50" xmlns="http://www.w3.org/2000/svg" style="width:70px;height:50px;border-radius:4px;display:block"><rect width="70" height="50" fill="#f5c518"/><line x1="0" y1="0" x2="70" y2="50" stroke="#005eb8" stroke-width="10"/><line x1="70" y1="0" x2="0" y2="50" stroke="#005eb8" stroke-width="10"/></svg></div><div class="sig-body"><div class="sig-letter">Y</div><div class="sig-name">Yankee</div><div class="sig-meaning">Demir sürüyorum</div><div class="sig-use">📍 Sürükleme uyarısı</div></div></div></div>
 
-  <h3 class="subsec-h3">🔴 Şamandıra Renkleri</h3>
+  <h3 class="subsec-h3" id="samandira">🔴 Şamandıra Renkleri</h3>
   <div class="buoy-grid"><div class="buoy-card"><div class="buoy-vis"><svg viewBox="0 0 60 80" style="width:52px;height:70px"><polygon points="30,5 50,55 10,55" fill="#d10000"/><rect x="27" y="55" width="6" height="20" fill="#888"/><circle cx="30" cy="58" r="4" fill="#d10000"/></svg></div><div class="buoy-body"><div class="buoy-label">Kırmızı – Sol Şamandıra</div><div class="buoy-rule">IALA sistemi: kırmızıyı sola bırakarak gir (Avrupa/Türkiye)</div><div class="buoy-use">💡 Kanala girerken kırmızı = sol (iskele)</div></div></div><div class="buoy-card"><div class="buoy-vis"><svg viewBox="0 0 60 80" style="width:52px;height:70px"><polygon points="30,5 50,55 10,55" fill="#1a7a1a"/><rect x="27" y="55" width="6" height="20" fill="#888"/><circle cx="30" cy="58" r="4" fill="#1a7a1a"/></svg></div><div class="buoy-body"><div class="buoy-label">Yeşil – Sağ Şamandıra</div><div class="buoy-rule">Kanala girerken yeşil = sağ (sancak tarafı)</div><div class="buoy-use">💡 Her zaman yeşili sağda bırak</div></div></div><div class="buoy-card"><div class="buoy-vis"><svg viewBox="0 0 60 80" style="width:52px;height:70px"><rect x="10" y="10" width="40" height="45" rx="20" fill="#f5c518"/><rect x="27" y="55" width="6" height="20" fill="#888"/></svg></div><div class="buoy-body"><div class="buoy-label">Sarı – Özel Şamandıra</div><div class="buoy-rule">Yarış alanı, deney bölgesi veya özel alan sınırı</div><div class="buoy-use">💡 Yaklaşma, anlam bölgeye göre değişir</div></div></div><div class="buoy-card"><div class="buoy-vis"><svg viewBox="0 0 60 90" style="width:52px;height:75px"><ellipse cx="30" cy="35" rx="22" ry="30" fill="#111" stroke="#d10000" stroke-width="4"/><rect x="27" y="62" width="6" height="22" fill="#888"/><circle cx="30" cy="20" r="5" fill="#d10000"/><circle cx="30" cy="50" r="5" fill="#d10000"/></svg></div><div class="buoy-body"><div class="buoy-label">Siyah+Kırmızı – Tehlike</div><div class="buoy-rule">Yalıtılmış tehlike şamandırası — etrafından geç</div><div class="buoy-use">💡 Batık kaya veya sığlık üzerinde</div></div></div></div>
 
   <h3 class="subsec-h3">🏁 Yarış İşaretleri</h3>
