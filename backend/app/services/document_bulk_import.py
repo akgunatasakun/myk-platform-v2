@@ -81,11 +81,10 @@ _MIME_BY_EXT: dict[str, str] = {
     ),
 }
 
-# Plan summary'de beklenen kesin değerler — import öncesi doğrulanır.
-_PLAN_CONTRACT: dict[str, int] = {
-    "logical_documents": 36,
-    "revisions": 36,
-    "pdf_docx_pairs": 36,
+# Plan summary'de sıfır olması zorunlu kalite kontrolleri.
+# Sayısal kontroller (logical_documents, revisions vb.) planın kendi
+# summary'sinden alınır — farklı batch boyutlarına izin verir.
+_PLAN_CONTRACT_ZEROS: dict[str, int] = {
     "unmatched_manifest": 0,
     "conflict_documents": 0,
     "ambiguous_pairs": 0,
@@ -220,7 +219,13 @@ def _verify_plan_sha256(plan_path: Path, expected: str | None) -> str:
 
 
 def _verify_plan_contract(summary: dict[str, Any]) -> None:
-    for key, expected_val in _PLAN_CONTRACT.items():
+    """Kalite kontrollerini doğrula.
+
+    Sayısal batch boyutu (logical_documents, revisions, pdf_docx_pairs)
+    planın kendi summary'sinden alınır; farklı batch boyutlarına izin verir.
+    Yalnızca hata/çelişki sayılarının sıfır olması zorunludur.
+    """
+    for key, expected_val in _PLAN_CONTRACT_ZEROS.items():
         actual_val = summary.get(key)
         if actual_val != expected_val:
             raise ValueError(
