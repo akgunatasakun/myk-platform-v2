@@ -364,7 +364,7 @@ async def test_dbi07_existing_code_adds_revision(db_session, active_club, tmp_pa
     )
     revs = revs_result.scalars().all()
     assert len(revs) == 2
-    assert revs[0].status == "superseded"
+    assert revs[0].status == "arsivlendi"
     assert revs[0].is_current is False
     assert revs[1].status == "yayinda"
     assert revs[1].is_current is True

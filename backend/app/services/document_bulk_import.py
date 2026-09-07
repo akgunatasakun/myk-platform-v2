@@ -603,7 +603,7 @@ async def _add_revision_to_existing(
         )
         for old_rev in old_revs.scalars().all():
             old_rev.is_current = False
-            old_rev.status = "superseded"
+            old_rev.status = "arsivlendi"
 
         # Yeni revizyon oluştur
         revision = DocumentRevision(
