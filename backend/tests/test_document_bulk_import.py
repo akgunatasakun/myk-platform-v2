@@ -310,10 +310,13 @@ async def test_dbi06_source_sha_mismatch_blocks(db_session, active_club, tmp_pat
 
 
 # ═══════════════════════════════════════════════════════════════════════════════
-# DBI-07  Duplicate kod (farklı içerik) → hard fail, overwrite yok
+# DBI-07  Mevcut kod + farklı SHA → yeni revizyon eklenir, eski superseded olur
 # ═══════════════════════════════════════════════════════════════════════════════
 @pytest.mark.asyncio
-async def test_dbi07_duplicate_document_code_blocks(db_session, active_club, tmp_path):
+async def test_dbi07_existing_code_adds_revision(db_session, active_club, tmp_path):
+    from sqlalchemy import select as sa_select
+    from app.models.documents import DocumentRevision
+
     storage = InMemoryStorageService()
     code = "MYK-DBI07-001"
 
@@ -332,12 +335,13 @@ async def test_dbi07_duplicate_document_code_blocks(db_session, active_club, tmp
         apply=True,
     )
     assert r1.success, r1.errors
+    assert r1.created_documents == 1
 
     src2 = tmp_path / "src2"
     src2.mkdir()
     _, _, entry2 = _setup_single_doc(src2, code,
-                                     pdf_content=b"different pdf",
-                                     docx_content=b"different docx")
+                                     pdf_content=b"updated pdf",
+                                     docx_content=b"updated docx")
     plan2_path = _write_plan_to(tmp_path / "plan2.json", _build_plan([entry2]))
 
     r2 = await import_document_plan(
@@ -348,8 +352,22 @@ async def test_dbi07_duplicate_document_code_blocks(db_session, active_club, tmp
         apply=True,
     )
 
-    assert not r2.success
-    assert any("çakışma" in e.lower() for e in r2.errors)
+    assert r2.success, r2.errors
+    assert r2.updated_documents == 1
+    assert r2.created_documents == 0
+
+    # Eski revizyon superseded, yeni revizyon is_current=True olmalı
+    revs_result = await db_session.execute(
+        sa_select(DocumentRevision).where(
+            DocumentRevision.document_id == uuid.UUID(r2.documents[0].document_id)
+        ).order_by(DocumentRevision.revision_no)
+    )
+    revs = revs_result.scalars().all()
+    assert len(revs) == 2
+    assert revs[0].status == "superseded"
+    assert revs[0].is_current is False
+    assert revs[1].status == "yayinda"
+    assert revs[1].is_current is True
 
 
 # ═══════════════════════════════════════════════════════════════════════════════
@@ -468,8 +486,8 @@ async def test_dbi11_current_revision_linked(db_session, active_club, tmp_path):
 
 
 # ═══════════════════════════════════════════════════════════════════════════════
-# DBI-12  Batch atomicity: code_b clashes → code_a DB writes rolled back
-#         + code_a's uploaded objects cleaned from storage
+# DBI-12  Batch atomicity: code_b kaynak dosyası eksik → code_a DB + storage
+#         geri alınır (partial commit yok)
 # ═══════════════════════════════════════════════════════════════════════════════
 @pytest.mark.asyncio
 async def test_dbi12_batch_transaction_atomic_on_failure(
@@ -478,57 +496,39 @@ async def test_dbi12_batch_transaction_atomic_on_failure(
     storage = InMemoryStorageService()
     code_a = "MYK-DBI12-A"
     code_b = "MYK-DBI12-B"
-    # Capture UUID before any rollback so we can query safely afterwards
     club_id = active_club.id
 
-    # Step 1: import code_b v1 alone → commits (also commits active_club)
-    src1 = tmp_path / "s1"
-    src1.mkdir()
-    _, _, entry_b1 = _setup_single_doc(src1, code_b,
-                                        pdf_content=b"b v1",
-                                        docx_content=b"b v1 docx")
-    r1 = await import_document_plan(
+    src = tmp_path / "s"
+    src.mkdir()
+    _, _, entry_a = _setup_single_doc(src, code_a,
+                                      pdf_content=b"a original",
+                                      docx_content=b"a docx")
+    _, _, entry_b = _setup_single_doc(src, code_b,
+                                      pdf_content=b"b original",
+                                      docx_content=b"b docx")
+
+    # code_b PDF'ini sil → _write_document kaynak bulunamadı hatasıyla dönecek
+    (src / f"{code_b}_R01.pdf").unlink()
+
+    r = await import_document_plan(
         db_session, storage,
         club_id=club_id,
-        plan_path=_write_plan_to(tmp_path / "p1.json", _build_plan([entry_b1])),
-        source_dir=src1,
-        apply=True,
-    )
-    assert r1.success, r1.errors
-
-    # Reset storage: track only step 2 uploads
-    storage._store.clear()
-
-    # Step 2: code_a (new OK) + code_b v2 (different SHA → clash after code_a write)
-    src2 = tmp_path / "s2"
-    src2.mkdir()
-    _, _, entry_a = _setup_single_doc(src2, code_a,
-                                       pdf_content=b"a original",
-                                       docx_content=b"a docx")
-    _, _, entry_b2 = _setup_single_doc(src2, code_b,
-                                        pdf_content=b"b v2 different",
-                                        docx_content=b"b v2 docx diff")
-
-    r2 = await import_document_plan(
-        db_session, storage,
-        club_id=club_id,
-        plan_path=_write_plan_to(tmp_path / "p2.json", _build_plan([entry_a, entry_b2])),
-        source_dir=src2,
+        plan_path=_write_plan_to(tmp_path / "plan.json", _build_plan([entry_a, entry_b])),
+        source_dir=src,
         apply=True,
     )
 
-    assert not r2.success
-    assert any("çakışma" in e.lower() for e in r2.errors)
-    # code_a's 2 uploaded objects must be cleaned up
+    assert not r.success
+    assert any("bulunamadı" in e for e in r.errors)
+    # code_a yüklenen object'leri temizlenmeli
     assert len(storage._store) == 0
-    # code_a must not be in DB (rolled back); use captured club_id (not active_club.id
-    # which would trigger a lazy-load on the expired object after rollback)
+    # code_a DB'ye yazılmamalı (rollback)
     db_docs = (await db_session.execute(
         select(Document).where(Document.club_id == club_id)
     )).scalars().all()
     codes_in_db = {d.code for d in db_docs}
     assert code_a not in codes_in_db
-    assert code_b in codes_in_db  # committed in step 1
+    assert code_b not in codes_in_db
 
 
 # ═══════════════════════════════════════════════════════════════════════════════
@@ -604,10 +604,10 @@ async def test_dbi14_second_identical_run_is_idempotent(
 
 
 # ═══════════════════════════════════════════════════════════════════════════════
-# DBI-15  İkinci run farklı SHA → hard fail (overwrite engellenir)
+# DBI-15  İkinci run farklı SHA → yeni revizyon eklenir (R02), R01 superseded
 # ═══════════════════════════════════════════════════════════════════════════════
 @pytest.mark.asyncio
-async def test_dbi15_second_run_different_hash_blocks(
+async def test_dbi15_second_run_different_hash_adds_revision(
     db_session, active_club, tmp_path
 ):
     storage = InMemoryStorageService()
@@ -626,6 +626,7 @@ async def test_dbi15_second_run_different_hash_blocks(
         apply=True,
     )
     assert r1.success, r1.errors
+    assert r1.created_documents == 1
 
     src2 = tmp_path / "v2"
     src2.mkdir()
@@ -640,8 +641,9 @@ async def test_dbi15_second_run_different_hash_blocks(
         apply=True,
     )
 
-    assert not r2.success
-    assert any("çakışma" in e.lower() for e in r2.errors)
+    assert r2.success, r2.errors
+    assert r2.updated_documents == 1
+    assert r2.created_documents == 0
 
 
 # ═══════════════════════════════════════════════════════════════════════════════

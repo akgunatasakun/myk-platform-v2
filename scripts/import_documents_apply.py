@@ -122,8 +122,9 @@ async def _run(args: argparse.Namespace) -> int:
 
     print(f"  Başarı    : {result.success}")
     print(f"  Uygulanan : {result.applied}")
-    print(f"  Oluşturulan belgeler : {result.created_documents}")
-    print(f"  Oluşturulan revizyon : {result.created_revisions}")
+    print(f"  Yeni belgeler        : {result.created_documents}")
+    print(f"  Güncellenen belgeler : {result.updated_documents}")
+    print(f"  Oluşturulan revizyon : {result.created_revisions + result.updated_revisions}")
     print(f"  Oluşturulan dosyalar : {result.created_files}")
     print(f"  Atlanan belgeler     : {result.skipped_documents}")
     if args.apply:

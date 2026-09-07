@@ -59,7 +59,7 @@ from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Any
 
-from sqlalchemy import select
+from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.config import get_settings
@@ -143,6 +143,7 @@ class DocumentResult:
     code: str
     title: str
     skipped: bool = False
+    updated: bool = False
     error: str | None = None
     files: list[FileResult] = field(default_factory=list)
 
@@ -152,6 +153,8 @@ class ImportResult:
     created_documents: int = 0
     created_revisions: int = 0
     created_files: int = 0
+    updated_documents: int = 0
+    updated_revisions: int = 0
     skipped_documents: int = 0
     skipped_revisions: int = 0
     skipped_files: int = 0
@@ -174,6 +177,8 @@ class ImportResult:
             "created_documents": self.created_documents,
             "created_revisions": self.created_revisions,
             "created_files": self.created_files,
+            "updated_documents": self.updated_documents,
+            "updated_revisions": self.updated_revisions,
             "skipped_documents": self.skipped_documents,
             "skipped_revisions": self.skipped_revisions,
             "skipped_files": self.skipped_files,
@@ -352,11 +357,17 @@ async def _write_document(
             doc_result.document_id = str(existing_id)
             doc_result.skipped = True
             return doc_result
-        doc_result.error = (
-            f"Kod çakışması: '{code}' zaten başka bir belgeye ait "
-            f"(id={existing_id}). Sessiz overwrite engellendi."
+        # Farklı SHA → mevcut belgeye yeni revizyon ekle, eskiyi superseded yap
+        return await _add_revision_to_existing(
+            db=db,
+            storage=storage,
+            club_id=club_id,
+            doc_plan=doc_plan,
+            source_dir=source_dir,
+            actor_user_id=actor_user_id,
+            existing_doc_id=existing_id,
+            run_uploaded_objects=run_uploaded_objects,
         )
-        return doc_result
 
     # ── Artifact'ları yükle ────────────────────────────────────────────────────
     document_id = uuid.uuid4()
@@ -491,6 +502,146 @@ async def _cleanup_local(
             pass
 
 
+async def _add_revision_to_existing(
+    db: AsyncSession,
+    storage: ObjectStorageService,
+    club_id: uuid.UUID,
+    doc_plan: dict[str, Any],
+    source_dir: Path,
+    actor_user_id: uuid.UUID | None,
+    existing_doc_id: uuid.UUID,
+    run_uploaded_objects: list[str],
+) -> DocumentResult:
+    """Mevcut belgeye yeni revizyon ekler, eski aktif revizyonu superseded yapar."""
+    code: str = doc_plan.get("code", "")
+    title: str = doc_plan.get("title", code)
+    files_in_plan: list[dict[str, Any]] = doc_plan.get("files", [])
+
+    doc_result = DocumentResult(
+        document_id=str(existing_doc_id), code=code, title=title, updated=True
+    )
+
+    # Bir sonraki revision_no'yu bul
+    rev_no_result = await db.execute(
+        select(func.max(DocumentRevision.revision_no)).where(
+            DocumentRevision.document_id == existing_doc_id
+        )
+    )
+    max_rev_no = rev_no_result.scalar_one_or_none() or 0
+    new_rev_no = max_rev_no + 1
+    new_rev_code = f"R{new_rev_no:02d}"
+
+    revision_id = uuid.uuid4()
+    local_uploaded: list[str] = []
+    file_records: list[tuple[DocumentRevisionFile, FileResult]] = []
+
+    for f_entry in files_in_plan:
+        fname: str = f_entry.get("filename", "")
+        role: str = f_entry.get("file_role", "source")
+        file_info: dict = f_entry.get("file_info", {})
+        expected_sha: str = file_info.get("sha256", "")
+
+        src_path = source_dir / fname
+        try:
+            file_bytes = src_path.read_bytes()
+        except FileNotFoundError:
+            doc_result.error = f"Kaynak dosya bulunamadı: {fname}"
+            doc_result.updated = False
+            await _cleanup_local(storage, local_uploaded, run_uploaded_objects)
+            return doc_result
+
+        actual_sha = _sha256_bytes(file_bytes)
+        if expected_sha and actual_sha != expected_sha.lower():
+            doc_result.error = (
+                f"SHA-256 uyuşmazlığı: {fname} — "
+                f"beklenen={expected_sha}, gerçek={actual_sha}"
+            )
+            doc_result.updated = False
+            await _cleanup_local(storage, local_uploaded, run_uploaded_objects)
+            return doc_result
+
+        ext = Path(fname).suffix.lower()
+        mime = _MIME_BY_EXT.get(ext, "application/octet-stream")
+        is_primary = (role == "published")
+
+        file_id = uuid.uuid4()
+        key = _storage_key(club_id, existing_doc_id, revision_id, file_id, fname)
+
+        await storage.upload(key, file_bytes, mime)
+        local_uploaded.append(key)
+        run_uploaded_objects.append(key)
+
+        rev_file = DocumentRevisionFile(
+            id=file_id,
+            revision_id=revision_id,
+            file_role=role,
+            original_filename=fname,
+            mime_type=mime,
+            file_size=len(file_bytes),
+            sha256=actual_sha,
+            storage_bucket=settings.storage_bucket_documents,
+            storage_key=key,
+            is_primary=is_primary,
+        )
+        file_result = FileResult(
+            file_id=str(file_id),
+            original_filename=fname,
+            file_role=role,
+            storage_key=key,
+            sha256=actual_sha,
+            file_size=len(file_bytes),
+        )
+        file_records.append((rev_file, file_result))
+
+    try:
+        # Mevcut aktif revizyonları superseded yap
+        old_revs = await db.execute(
+            select(DocumentRevision).where(
+                DocumentRevision.document_id == existing_doc_id,
+                DocumentRevision.is_current.is_(True),
+            )
+        )
+        for old_rev in old_revs.scalars().all():
+            old_rev.is_current = False
+            old_rev.status = "superseded"
+
+        # Yeni revizyon oluştur
+        revision = DocumentRevision(
+            id=revision_id,
+            document_id=existing_doc_id,
+            revision_code=new_rev_code,
+            revision_no=new_rev_no,
+            status="yayinda",
+            source="tyf_2026_bulk_import",
+            manifest_row_id=code,
+            is_current=True,
+            created_by_user_id=actor_user_id,
+        )
+        db.add(revision)
+        await db.flush()
+
+        for rev_file, _ in file_records:
+            db.add(rev_file)
+
+        # Document'ın current_revision_id'sini güncelle
+        doc_obj_result = await db.execute(
+            select(Document).where(Document.id == existing_doc_id)
+        )
+        doc_obj = doc_obj_result.scalar_one()
+        doc_obj.current_revision_id = revision_id
+
+        await db.flush()
+
+    except Exception as exc:
+        doc_result.error = f"DB yazma hatası: {exc}"
+        doc_result.updated = False
+        await _cleanup_local(storage, local_uploaded, run_uploaded_objects)
+        return doc_result
+
+    doc_result.files = [fr for _, fr in file_records]
+    return doc_result
+
+
 # ── Ana Import Fonksiyonu ─────────────────────────────────────────────────────
 
 async def import_document_plan(
@@ -577,21 +728,25 @@ async def import_document_plan(
         result.duration_seconds = time.monotonic() - t0
         return result
 
-    # ── 6. apply=False → preflight özeti ─────────────────────────────────────
+    # ── 6. Mevcut kod kontrolü (preflight ve apply için ortak) ───────────────
+    all_codes = [d.get("code", "") for d in write_documents]
+    existing_code_map = await _check_existing_codes(db, club_id, all_codes)
+    new_codes = [c for c in all_codes if c not in existing_code_map]
+    update_codes = [c for c in all_codes if c in existing_code_map]
+
+    # ── 7. apply=False → preflight özeti ─────────────────────────────────────
     if not apply:
-        result.created_documents = len(write_documents)
+        result.created_documents = len(new_codes)
+        result.updated_documents = len(update_codes)
         result.created_files = sum(len(d.get("files", [])) for d in write_documents)
         result.duration_seconds = time.monotonic() - t0
         logger.info(
-            "Preflight OK (apply=False) — %d belge %d dosya yazılmaya hazır",
+            "Preflight OK (apply=False) — %d yeni / %d güncelleme / %d dosya",
             result.created_documents,
+            result.updated_documents,
             result.created_files,
         )
         return result
-
-    # ── 7. Mevcut kod çakışması kontrolü (DB) ────────────────────────────────
-    all_codes = [d.get("code", "") for d in write_documents]
-    existing_code_map = await _check_existing_codes(db, club_id, all_codes)
 
     # ── 8. Batch yazma ────────────────────────────────────────────────────────
     batch_failed = False
@@ -618,6 +773,10 @@ async def import_document_plan(
             result.skipped_documents += 1
             result.skipped_revisions += 1
             result.skipped_files += len(doc_result.files)
+        elif doc_result.updated:
+            result.updated_documents += 1
+            result.updated_revisions += 1
+            result.created_files += len(doc_result.files)
         else:
             result.created_documents += 1
             result.created_revisions += 1
