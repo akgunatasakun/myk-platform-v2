@@ -44,6 +44,7 @@ router = APIRouter(prefix="/person-documents", tags=["person-documents"])
 settings = get_settings()
 DOWNLOADABLE_SCAN_STATUSES = {"clean", "skipped_dev"}
 ADMIN_ROLES = {"super_admin", "kulup_yonetici"}
+COACH_ROLES = {"antrenor", "basantrenor"}
 
 
 async def _access_context(
@@ -51,6 +52,8 @@ async def _access_context(
     club_id: uuid.UUID,
     current_user: TokenPayload,
     db: AsyncSession,
+    *,
+    allow_coach_read: bool = False,
 ):
     user = await get_active_user(current_user, club_id, db)
     subject = await get_subject_or_404(subject_person_id, club_id, db)
@@ -60,6 +63,10 @@ async def _access_context(
         link = await get_active_guardian_link(
             user.person_id, subject_person_id, club_id, db  # type: ignore[arg-type]
         )
+    elif current_user.role in COACH_ROLES and allow_coach_read:
+        allowed = await get_antrenor_enrolled_person_ids(user.id, club_id, db)
+        if subject_person_id not in allowed:
+            raise HTTPException(status_code=403, detail="Bu sporcu için yetkiniz yok.")
     elif current_user.role not in ADMIN_ROLES and current_user.role != "saglik_sorumlusu":
         raise HTTPException(status_code=403, detail="Bu evraklara erişim yetkiniz yok.")
     return user, link
@@ -217,7 +224,9 @@ async def list_person_documents(
     current_user: TokenPayload = Depends(get_current_user),
     db: AsyncSession = Depends(get_db),
 ) -> list[PersonDocumentOut]:
-    await _access_context(subject_person_id, club_id, current_user, db)
+    await _access_context(
+        subject_person_id, club_id, current_user, db, allow_coach_read=True
+    )
     result = await db.execute(
         select(PersonDocument).where(
             PersonDocument.club_id == club_id,
@@ -237,13 +246,20 @@ async def view_person_document(
     db: AsyncSession = Depends(get_db),
 ) -> PersonDocumentOut:
     document = await _get_document_or_404(document_id, club_id, db)
-    user, _ = await _access_context(document.subject_person_id, club_id, current_user, db)
+    user, _ = await _access_context(
+        document.subject_person_id, club_id, current_user, db, allow_coach_read=True
+    )
     await log_action(db, action="person_document_metadata_viewed", resource_type="person_document", resource_id=str(document.id), club_id=club_id, user_id=user.id, request=request)
     return PersonDocumentOut.model_validate(document)
 
 
-def _assert_file_access(document: PersonDocument, current_user: TokenPayload) -> None:
-    if document.document_type == "health_report" and current_user.role != "veli" and not has_permission(current_user.role, "health_file:read"):
+def _assert_file_access(
+    document: PersonDocument, current_user: TokenPayload, *, inline: bool
+) -> None:
+    if current_user.role in COACH_ROLES and not inline:
+        raise HTTPException(status_code=403, detail="Antrenörler evrakı indiremez; yalnız görüntüleyebilir.")
+    health_permission = "health_file:view" if inline else "health_file:read"
+    if document.document_type == "health_report" and current_user.role != "veli" and not has_permission(current_user.role, health_permission):
         raise HTTPException(status_code=403, detail="Sağlık raporu dosyasına erişim yetkiniz yok.")
     if document.scan_status in {"pending", "infected", "failed"}:
         raise HTTPException(status_code=423, detail="Dosya tarama bekleniyor veya güvenli değil")
@@ -265,7 +281,7 @@ async def _stream_document(
     db: AsyncSession,
     storage: ObjectStorageService,
 ) -> Response:
-    _assert_file_access(document, current_user)
+    _assert_file_access(document, current_user, inline=inline)
     try:
         data = await storage.download(document.storage_key)
     except KeyError as exc:
@@ -286,7 +302,9 @@ async def view_person_document_file(
     storage: ObjectStorageService = Depends(get_dms_storage),
 ) -> Response:
     document = await _get_document_or_404(document_id, club_id, db)
-    user, _ = await _access_context(document.subject_person_id, club_id, current_user, db)
+    user, _ = await _access_context(
+        document.subject_person_id, club_id, current_user, db, allow_coach_read=True
+    )
     return await _stream_document(document, inline=True, action="person_document_viewed", request=request, club_id=club_id, current_user=current_user, user_id=user.id, db=db, storage=storage)
 
 
@@ -300,7 +318,9 @@ async def download_person_document(
     storage: ObjectStorageService = Depends(get_dms_storage),
 ) -> Response:
     document = await _get_document_or_404(document_id, club_id, db)
-    user, _ = await _access_context(document.subject_person_id, club_id, current_user, db)
+    user, _ = await _access_context(
+        document.subject_person_id, club_id, current_user, db, allow_coach_read=True
+    )
     return await _stream_document(document, inline=False, action="person_document_downloaded", request=request, club_id=club_id, current_user=current_user, user_id=user.id, db=db, storage=storage)
 
 

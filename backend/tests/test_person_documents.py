@@ -24,6 +24,7 @@ from app.models.person import Person
 from app.models.person_document import PersonDocument
 from app.models.person_guardian import PersonGuardian
 from app.models.user import User
+from app.models.training import TrainingCourse, TrainingCourseInstructor, TrainingEnrollment
 from app.services.malware_scan import MalwareScanner, ScanStatus
 from app.services.storage import ObjectStorageService
 
@@ -138,6 +139,36 @@ async def _guardian_account(
     await db.flush()
     token = create_access_token(str(user.id), str(club.id), "veli")
     return user, link, token
+
+
+async def _coach_account_with_athlete(
+    db: AsyncSession, club: Club, athlete: Person
+) -> tuple[User, str]:
+    coach_person = await _person(db, club, "Antrenör")
+    coach = User(
+        id=uuid.uuid4(), club_id=club.id, person_id=coach_person.id,
+        email=f"coach-{uuid.uuid4().hex[:8]}@test.com",
+        password_hash=hash_password("Coach1234!"), full_name="Test Antrenör",
+        role="antrenor", is_active=True, is_deleted=False,
+    )
+    course = TrainingCourse(
+        id=uuid.uuid4(), club_id=club.id, name="Antrenör Evrak Testi",
+        capacity=10, fee=0, status="aktif",
+    )
+    db.add_all([coach, course])
+    await db.flush()
+    db.add_all([
+        TrainingCourseInstructor(
+            id=uuid.uuid4(), club_id=club.id, course_id=course.id,
+            person_id=coach_person.id,
+        ),
+        TrainingEnrollment(
+            id=uuid.uuid4(), club_id=club.id, course_id=course.id,
+            person_id=athlete.id, status="active", is_deleted=False,
+        ),
+    ])
+    await db.flush()
+    return coach, create_access_token(str(coach.id), str(club.id), "antrenor")
 
 
 def _upload_data(subject_id: uuid.UUID, **extra: str) -> dict[str, str]:
@@ -453,3 +484,100 @@ async def test_upload_view_download_audit(
     assert set(rows.scalars().all()) >= {
         "person_document_uploaded", "person_document_viewed", "person_document_downloaded"
     }
+
+
+async def test_coach_can_list_and_view_assigned_athlete_document_but_not_download(
+    document_client, db_session, test_club, yonetici_token
+):
+    client, _, _ = document_client
+    athlete = await _person(db_session, test_club, "Atanmış Sporcu")
+    coach, coach_token = await _coach_account_with_athlete(
+        db_session, test_club, athlete
+    )
+    upload = await client.post(
+        URL, headers=_auth(yonetici_token), data=_upload_data(athlete.id),
+        files={"file": ("kimlik.pdf", PDF, "application/pdf")},
+    )
+    assert upload.status_code == 201
+    document_id = upload.json()["id"]
+
+    listing = await client.get(
+        URL,
+        headers=_auth(coach_token),
+        params={"subject_person_id": str(athlete.id)},
+    )
+    assert listing.status_code == 200
+    assert [row["id"] for row in listing.json()] == [document_id]
+    assert "storage_key" not in listing.json()[0]
+
+    metadata = await client.get(f"{URL}/{document_id}", headers=_auth(coach_token))
+    assert metadata.status_code == 200
+    view = await client.get(f"{URL}/{document_id}/view", headers=_auth(coach_token))
+    assert view.status_code == 200
+    assert view.content == PDF
+    download = await client.get(
+        f"{URL}/{document_id}/download", headers=_auth(coach_token)
+    )
+    assert download.status_code == 403
+    assert "yalnız görüntüleyebilir" in download.json()["detail"]
+
+    rows = await db_session.execute(
+        select(AuditLog).where(
+            AuditLog.club_id == test_club.id,
+            AuditLog.resource_id == document_id,
+            AuditLog.user_id == coach.id,
+        )
+    )
+    assert {row.action for row in rows.scalars().all()} >= {
+        "person_document_metadata_viewed", "person_document_viewed"
+    }
+
+
+async def test_coach_can_view_assigned_athlete_health_file_but_not_download(
+    document_client, db_session, test_club, test_user
+):
+    client, storage, _ = document_client
+    athlete = await _person(db_session, test_club, "Sağlık Sporcu")
+    _, coach_token = await _coach_account_with_athlete(db_session, test_club, athlete)
+    document = PersonDocument(
+        id=uuid.uuid4(), club_id=test_club.id, subject_person_id=athlete.id,
+        uploaded_by_user_id=test_user.id, document_type="health_report",
+        original_filename="saglik.pdf", storage_key=f"health/{uuid.uuid4()}",
+        mime_type="application/pdf", size_bytes=len(PDF), scan_status="clean",
+        is_sensitive=True, processing_basis="test-basis",
+    )
+    db_session.add(document)
+    await db_session.flush()
+    await storage.upload(document.storage_key, PDF, "application/pdf")
+
+    view = await client.get(f"{URL}/{document.id}/view", headers=_auth(coach_token))
+    assert view.status_code == 200
+    download = await client.get(
+        f"{URL}/{document.id}/download", headers=_auth(coach_token)
+    )
+    assert download.status_code == 403
+
+
+async def test_coach_cannot_access_unassigned_athlete_documents(
+    document_client, db_session, test_club, yonetici_token
+):
+    client, _, _ = document_client
+    assigned = await _person(db_session, test_club, "Atanmış")
+    unassigned = await _person(db_session, test_club, "Atanmamış")
+    _, coach_token = await _coach_account_with_athlete(db_session, test_club, assigned)
+    upload = await client.post(
+        URL, headers=_auth(yonetici_token), data=_upload_data(unassigned.id),
+        files={"file": ("x.pdf", PDF, "application/pdf")},
+    )
+    assert upload.status_code == 201
+    document_id = upload.json()["id"]
+
+    listing = await client.get(
+        URL,
+        headers=_auth(coach_token),
+        params={"subject_person_id": str(unassigned.id)},
+    )
+    assert listing.status_code == 403
+    assert (
+        await client.get(f"{URL}/{document_id}/view", headers=_auth(coach_token))
+    ).status_code == 403
