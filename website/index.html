@@ -600,7 +600,7 @@ footer p{line-height:1.7;}
 
   <!-- 16:9 video -->
   <div style="border-radius:16px;overflow:hidden;aspect-ratio:16/9;background:#000;max-width:800px;margin:2rem auto 1rem;">
-    <iframe width="100%" height="100%"
+    <iframe id="d1-video" width="100%" height="100%"
       src="https://www.youtube.com/embed/GjKPPzbi1uk"
       title="D1 Yelkenli Tekne Eğitimi — Denizci Bağları | TYF Yelken TV"
       allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture"
@@ -613,10 +613,10 @@ footer p{line-height:1.7;}
 
   <!-- 4 konu chip -->
   <div style="display:flex;gap:.65rem;justify-content:center;flex-wrap:wrap;margin-bottom:3rem;">
-    <span style="background:rgba(0,180,216,.12);color:#4fc3f7;border:1px solid rgba(0,180,216,.25);border-radius:50px;padding:.35rem 1rem;font-size:.8rem;font-weight:700;">⚓ Denizcilik</span>
-    <span style="background:rgba(212,168,67,.12);color:#d4a843;border:1px solid rgba(212,168,67,.25);border-radius:50px;padding:.35rem 1rem;font-size:.8rem;font-weight:700;">🪢 Bağlar</span>
-    <span style="background:rgba(100,196,245,.12);color:#64c4f5;border:1px solid rgba(100,196,245,.25);border-radius:50px;padding:.35rem 1rem;font-size:.8rem;font-weight:700;">⛵ Tekne</span>
-    <span style="background:rgba(0,200,150,.12);color:#00c896;border:1px solid rgba(0,200,150,.25);border-radius:50px;padding:.35rem 1rem;font-size:.8rem;font-weight:700;">🎓 D1</span>
+    <button onclick="chipNav('denizcilik')" style="background:rgba(0,180,216,.12);color:#4fc3f7;border:1px solid rgba(0,180,216,.25);border-radius:50px;padding:.35rem 1rem;font-size:.8rem;font-weight:700;cursor:pointer;">⚓ Denizcilik</button>
+    <button onclick="chipNav('baglar')" style="background:rgba(212,168,67,.12);color:#d4a843;border:1px solid rgba(212,168,67,.25);border-radius:50px;padding:.35rem 1rem;font-size:.8rem;font-weight:700;cursor:pointer;">🪢 Bağlar</button>
+    <button onclick="chipNav('tekne')" style="background:rgba(100,196,245,.12);color:#64c4f5;border:1px solid rgba(100,196,245,.25);border-radius:50px;padding:.35rem 1rem;font-size:.8rem;font-weight:700;cursor:pointer;">⛵ Tekne</button>
+    <a href="https://www.youtube.com/@TYFYelkenTV" target="_blank" rel="noopener" style="background:rgba(0,200,150,.12);color:#00c896;border:1px solid rgba(0,200,150,.25);border-radius:50px;padding:.35rem 1rem;font-size:.8rem;font-weight:700;text-decoration:none;display:inline-flex;align-items:center;">🎓 D1</a>
   </div>
 
   <!-- Ayırıcı -->
@@ -632,6 +632,7 @@ footer p{line-height:1.7;}
   <div id="knotTabs" style="display:flex;gap:.5rem;justify-content:center;flex-wrap:wrap;margin-bottom:2rem;"></div>
 
   <!-- Flipbook -->
+  <div id="atolye"></div>
   <div id="knotDisplay" style="max-width:340px;margin:0 auto;">
     <div id="knotSvgWrap" style="background:#0c1420;border-radius:16px;overflow:hidden;display:flex;align-items:center;justify-content:center;padding:1rem;min-height:220px;"></div>
     <div id="knotCaption" style="margin:.9rem 0 .5rem;font-size:.93rem;color:#e8eef8;min-height:2.8rem;line-height:1.5;padding:0 .25rem;"></div>
@@ -654,6 +655,23 @@ footer p{line-height:1.7;}
 </style>
 
 <script>
+/* ─── Chip navigasyon ─── */
+function chipNav(type){
+  var vid=document.getElementById('d1-video');
+  if(type==='denizcilik'){
+    if(vid){vid.src='https://www.youtube.com/embed/GjKPPzbi1uk';}
+    document.getElementById('d1-video').scrollIntoView({behavior:'smooth',block:'center'});
+  } else if(type==='baglar'){
+    document.getElementById('atolye').scrollIntoView({behavior:'smooth',block:'start'});
+  } else if(type==='tekne'){
+    if(vid){
+      vid.src='https://www.youtube.com/embed/OZsYRg7MSNU';
+      vid.title='Optimist Yelkenli Tekne Parçaları | TYF Yelken TV';
+    }
+    document.getElementById('d1-video').scrollIntoView({behavior:'smooth',block:'center'});
+  }
+}
+
 /* ─── Pupa toast ─── */
 function closePupa(){
   var t=document.getElementById('pupaToast');
@@ -859,6 +877,12 @@ function resetAuto(){if(autoT)clearInterval(autoT);autoT=setInterval(function(){
 
 renderTabs();renderFrame();
 if(!prefR)resetAuto();
+
+/* Global'e aç — onclick="kSelect(i)" vb. için */
+window.kSelect=kSelect;
+window.kGoto=kGoto;
+window.kPrev=kPrev;
+window.kNext=kNext;
 })();
 </script>
 
