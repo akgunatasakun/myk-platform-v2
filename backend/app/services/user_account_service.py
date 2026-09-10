@@ -236,15 +236,17 @@ async def update_user(
     role: Optional[str],
     is_active: Optional[bool],
     full_name: Optional[str],
+    person_id: Optional[uuid.UUID] = None,
     assigner_role: str,
     assigner_user_id: uuid.UUID,
     db: AsyncSession,
 ) -> User:
-    """Kullanıcı rol/aktiflik/isim güncelleme."""
+    """Kullanıcı rol/aktiflik/isim/person_id güncelleme."""
     before = {
         "role": target_user.role,
         "is_active": target_user.is_active,
         "full_name": target_user.full_name,
+        "person_id": str(target_user.person_id) if target_user.person_id else None,
     }
 
     if role is not None and role != target_user.role:
@@ -266,10 +268,41 @@ async def update_user(
     if full_name is not None:
         target_user.full_name = full_name
 
+    if person_id is not None and person_id != target_user.person_id:
+        # Kişi kartı aynı kulübe ait ve aktif mi?
+        person_result = await db.execute(
+            select(Person).where(
+                Person.id == person_id,
+                Person.club_id == target_user.club_id,
+                Person.is_deleted.is_(False),
+            )
+        )
+        if person_result.scalar_one_or_none() is None:
+            raise HTTPException(
+                status_code=status.HTTP_404_NOT_FOUND,
+                detail="Belirtilen kişi kaydı bulunamadı veya bu kulübe ait değil.",
+            )
+        # G10: başka aktif kullanıcıya bağlı değil mi?
+        conflict = await db.execute(
+            select(User).where(
+                User.person_id == person_id,
+                User.id != target_user.id,
+                User.is_deleted.is_(False),
+                User.is_active.is_(True),
+            )
+        )
+        if conflict.scalar_one_or_none() is not None:
+            raise HTTPException(
+                status_code=status.HTTP_409_CONFLICT,
+                detail="Bu kişi kartı başka bir aktif kullanıcıya zaten bağlı.",
+            )
+        target_user.person_id = person_id
+
     after = {
         "role": target_user.role,
         "is_active": target_user.is_active,
         "full_name": target_user.full_name,
+        "person_id": str(target_user.person_id) if target_user.person_id else None,
     }
 
     if before != after:

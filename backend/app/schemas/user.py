@@ -78,6 +78,10 @@ class UserUpdate(BaseModel):
     role: Optional[str] = None
     is_active: Optional[bool] = None
     full_name: Optional[str] = Field(None, min_length=2, max_length=200)
+    person_id: Optional[uuid.UUID] = Field(
+        None,
+        description="Bağlanacak kişi kartı UUID'si. Mevcut bağlantıyı değiştirir.",
+    )
 
     @field_validator("role")
     @classmethod

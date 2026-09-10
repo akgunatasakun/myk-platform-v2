@@ -98,6 +98,10 @@ export default function UserFormModal({ isOpen, onClose, user, onSaved, onCreate
         if (form.role !== user.role) update.role = form.role
         if (form.is_active !== user.is_active) update.is_active = form.is_active
         if (form.full_name !== user.full_name) update.full_name = form.full_name
+        const currentPersonId = user.person_id ?? ''
+        if (form.person_id.trim() !== currentPersonId) {
+          update.person_id = form.person_id.trim() || null
+        }
         const resp = await usersApi.update(user.id, update)
         onSaved(resp.data)
         onClose()
@@ -174,36 +178,21 @@ export default function UserFormModal({ isOpen, onClose, user, onSaved, onCreate
             </select>
           </div>
 
-          {(!isEdit || form.role !== user?.role) && roleRequiresPerson && (
-            <div className="form-group">
-              <label>Person ID *</label>
-              <input
-                type="text"
-                className="form-control"
-                value={form.person_id}
-                onChange={(e) => set('person_id', e.target.value)}
-                placeholder="UUID formatında Person ID"
-              />
-              <small className="form-text text-muted">
-                '{form.role}' rolü için kişi kaydı bağlantısı zorunludur.
-              </small>
-            </div>
-          )}
-
-          {!isEdit && (
-            <div className="form-group">
-              <label>Person ID (isteğe bağlı)</label>
-              {!roleRequiresPerson && (
-                <input
-                  type="text"
-                  className="form-control"
-                  value={form.person_id}
-                  onChange={(e) => set('person_id', e.target.value)}
-                  placeholder="UUID formatında Person ID"
-                />
-              )}
-            </div>
-          )}
+          <div className="form-group">
+            <label>Bağlı Kişi Kartı {roleRequiresPerson ? '*' : '(isteğe bağlı)'}</label>
+            <input
+              type="text"
+              className="form-control"
+              value={form.person_id}
+              onChange={(e) => set('person_id', e.target.value)}
+              placeholder="UUID formatında Person ID"
+            />
+            <small className="form-text text-muted">
+              {roleRequiresPerson
+                ? `'${form.role}' rolü için kişi kaydı bağlantısı zorunludur.`
+                : 'Kişiler sayfasından ilgili kişinin UUID\'sini kopyalayın.'}
+            </small>
+          </div>
 
           {isEdit && (
             <div className="form-group">

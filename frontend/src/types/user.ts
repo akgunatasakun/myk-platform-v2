@@ -49,6 +49,7 @@ export interface UserUpdate {
   role?: Role;
   is_active?: boolean;
   full_name?: string;
+  person_id?: string | null;
 }
 
 /** Oluşturma yanıtı — temp_password yalnızca bir kez döner. */
