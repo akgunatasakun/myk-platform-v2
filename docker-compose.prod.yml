@@ -100,7 +100,9 @@ services:
     deploy:
       resources:
         limits:
-          memory: 1g   # İmza indir + daemon: ~700-900 MB; 4 GB sunucuda yetersiz olabilir
+          # İmza veritabanı 1 GB cgroup sınırını aşabildiği için 4 GB VPS'te
+          # host swap desteğiyle 2 GB üst sınır kullanılır.
+          memory: 2g
 
 volumes:
   postgres_data:
