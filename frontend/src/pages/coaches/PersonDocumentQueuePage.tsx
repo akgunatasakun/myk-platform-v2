@@ -19,7 +19,9 @@ export default function PersonDocumentQueuePage() {
   const [error, setError] = useState<string | null>(null)
   const [selectedPersonId, setSelectedPersonId] = useState<string | null>(null)
 
+  const ADMIN_ROLES = ['super_admin', 'kulup_yonetici', 'sportif_direktor', 'genel_sekreter']
   const docsRole: PersonDocumentsRole =
+    ADMIN_ROLES.includes(authUser?.role ?? '') ? 'admin' :
     authUser?.role === 'basantrenor' ? 'basantrenor' : 'antrenor'
 
   useEffect(() => {
