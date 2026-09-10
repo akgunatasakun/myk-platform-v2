@@ -325,6 +325,9 @@ async def download_person_document(
 
 
 _REVIEWER_ROLES = ADMIN_ROLES | {"antrenor", "basantrenor"}
+_COACH_REVIEWABLE_TYPES = {
+    "profile_photo", "parental_permission", "undertaking", "waiver"
+}
 
 
 @router.patch("/{document_id}/approve", response_model=PersonDocumentOut)
@@ -342,8 +345,11 @@ async def approve_person_document(
         document.subject_person_id, club_id, current_user, db,
         allow_coach_read=True,
     )
-    if document.is_sensitive and current_user.role in {"antrenor", "basantrenor"}:
-        raise HTTPException(status_code=403, detail="Hassas belgeyi onaylama yetkiniz yok.")
+    if (
+        current_user.role in COACH_ROLES
+        and document.document_type not in _COACH_REVIEWABLE_TYPES
+    ):
+        raise HTTPException(status_code=403, detail="Bu evrak türünü onaylama yetkiniz yok.")
     document.review_status = "approved"
     document.reviewed_by_user_id = user.id
     document.reviewed_at = datetime.now(timezone.utc)
@@ -378,8 +384,11 @@ async def reject_person_document(
         document.subject_person_id, club_id, current_user, db,
         allow_coach_read=True,
     )
-    if document.is_sensitive and current_user.role in {"antrenor", "basantrenor"}:
-        raise HTTPException(status_code=403, detail="Hassas belgeyi reddetme yetkiniz yok.")
+    if (
+        current_user.role in COACH_ROLES
+        and document.document_type not in _COACH_REVIEWABLE_TYPES
+    ):
+        raise HTTPException(status_code=403, detail="Bu evrak türünü reddetme yetkiniz yok.")
     document.review_status = "rejected"
     document.rejection_reason = body.rejection_reason
     document.reviewed_by_user_id = user.id

@@ -619,7 +619,9 @@ async def test_coach_review_requires_assigned_athlete_scope(
     )
 
     assigned_upload = await client.post(
-        URL, headers=_auth(yonetici_token), data=_upload_data(assigned.id),
+        URL,
+        headers=_auth(yonetici_token),
+        data=_upload_data(assigned.id, document_type="parental_permission"),
         files={"file": ("assigned.pdf", PDF, "application/pdf")},
     )
     unassigned_upload = await client.post(
@@ -640,3 +642,30 @@ async def test_coach_review_requires_assigned_athlete_scope(
         json={"rejection_reason": "Eksik"},
     )
     assert denied.status_code == 403
+
+
+async def test_coach_cannot_approve_or_reject_identity_copy(
+    document_client, db_session, test_club, yonetici_token
+):
+    client, _, _ = document_client
+    athlete = await _person(db_session, test_club, "Kimlik Sporcu")
+    _, coach_token = await _coach_account_with_athlete(
+        db_session, test_club, athlete
+    )
+    upload = await client.post(
+        URL, headers=_auth(yonetici_token), data=_upload_data(athlete.id),
+        files={"file": ("kimlik.pdf", PDF, "application/pdf")},
+    )
+    assert upload.status_code == 201
+    document_id = upload.json()["id"]
+
+    approve = await client.patch(
+        f"{URL}/{document_id}/approve", headers=_auth(coach_token)
+    )
+    reject = await client.patch(
+        f"{URL}/{document_id}/reject",
+        headers=_auth(coach_token),
+        json={"rejection_reason": "Test"},
+    )
+    assert approve.status_code == 403
+    assert reject.status_code == 403

@@ -21,6 +21,12 @@ import type {
 export type PersonDocumentsRole = 'veli' | 'antrenor' | 'basantrenor' | 'admin'
 
 const COACH_ROLES: ReadonlySet<PersonDocumentsRole> = new Set(['antrenor', 'basantrenor'])
+const COACH_REVIEWABLE_TYPES: ReadonlySet<PersonDocumentType> = new Set([
+  'profile_photo',
+  'parental_permission',
+  'undertaking',
+  'waiver',
+])
 
 const DOC_TYPE_LABELS: Record<PersonDocumentType, string> = {
   profile_photo: 'Profil Fotoğrafı',
@@ -209,6 +215,18 @@ export default function PersonDocumentsTab({ subjectPersonId, role }: Props) {
     }
   }
 
+  async function handleView(documentId: string) {
+    setActionLoading(documentId)
+    setActionError(null)
+    try {
+      await streamPersonDocument(documentId)
+    } catch (err: unknown) {
+      setActionError(httpErrorMessage(extractStatus(err)))
+    } finally {
+      setActionLoading(null)
+    }
+  }
+
   // ── Aksiyon: Admin Sil ───────────────────────────────────────────────────
 
   async function handleAdminDelete(documentId: string) {
@@ -356,7 +374,7 @@ export default function PersonDocumentsTab({ subjectPersonId, role }: Props) {
 
   if (isCoach) {
     const pendingQueue = docs.filter(
-      (d) => !d.is_sensitive && d.review_status === 'pending',
+      (d) => COACH_REVIEWABLE_TYPES.has(d.document_type) && d.review_status === 'pending',
     )
 
     return (
@@ -369,18 +387,18 @@ export default function PersonDocumentsTab({ subjectPersonId, role }: Props) {
 
         <div className="card" style={{ marginBottom: 16 }}>
           <div className="card-header">
-            Bekleyen Evraklar
+            Sporcu Evrakları
             {pendingQueue.length > 0 && (
               <span className="badge badge-aktif" style={{ marginLeft: 8 }}>
-                {pendingQueue.length}
+                {pendingQueue.length} bekleyen
               </span>
             )}
           </div>
           <div className="card-body">
-            {pendingQueue.length === 0 ? (
+            {docs.length === 0 ? (
               <div className="empty-state" style={{ padding: '16px 0' }}>
                 <div className="empty-state-icon">✓</div>
-                <div className="empty-state-title">Bekleyen evrak yok.</div>
+                <div className="empty-state-title">Yüklenmiş evrak yok.</div>
               </div>
             ) : (
               <div className="table-container">
@@ -389,17 +407,22 @@ export default function PersonDocumentsTab({ subjectPersonId, role }: Props) {
                     <tr>
                       <th>Tür</th>
                       <th>Dosya Adı</th>
+                      <th>Durum</th>
                       <th>Yüklendi</th>
                       <th>İşlemler</th>
                     </tr>
                   </thead>
                   <tbody>
-                    {pendingQueue.map((doc) => {
+                    {docs.map((doc) => {
                       const busy = actionLoading === doc.id
+                      const canReview =
+                        COACH_REVIEWABLE_TYPES.has(doc.document_type) &&
+                        doc.review_status === 'pending'
                       return (
                         <tr key={doc.id}>
                           <td>{DOC_TYPE_LABELS[doc.document_type] ?? doc.document_type}</td>
                           <td style={{ fontSize: 13 }}>{doc.original_filename}</td>
+                          <td><StatusBadge status={doc.review_status} /></td>
                           <td style={{ fontSize: 13 }}>
                             {new Date(doc.uploaded_at).toLocaleDateString('tr-TR')}
                           </td>
@@ -407,25 +430,29 @@ export default function PersonDocumentsTab({ subjectPersonId, role }: Props) {
                             <div style={{ display: 'flex', gap: 8 }}>
                               <button
                                 className="btn btn-ghost btn-sm"
-                                onClick={() => streamPersonDocument(doc.id)}
+                                onClick={() => { void handleView(doc.id) }}
                                 disabled={busy}
                               >
-                                Görüntüle
+                                {busy ? '…' : 'Görüntüle'}
                               </button>
-                              <button
-                                className="btn btn-primary btn-sm"
-                                onClick={() => handleApprove(doc.id)}
-                                disabled={busy}
-                              >
-                                {busy ? '…' : 'Onayla'}
-                              </button>
-                              <button
-                                className="btn btn-danger btn-sm"
-                                onClick={() => handleReject(doc.id)}
-                                disabled={busy}
-                              >
-                                Reddet
-                              </button>
+                              {canReview && (
+                                <>
+                                  <button
+                                    className="btn btn-primary btn-sm"
+                                    onClick={() => { void handleApprove(doc.id) }}
+                                    disabled={busy}
+                                  >
+                                    Onayla
+                                  </button>
+                                  <button
+                                    className="btn btn-danger btn-sm"
+                                    onClick={() => { void handleReject(doc.id) }}
+                                    disabled={busy}
+                                  >
+                                    Reddet
+                                  </button>
+                                </>
+                              )}
                             </div>
                           </td>
                         </tr>
