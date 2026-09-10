@@ -236,6 +236,11 @@ async def update_user(
     role: Optional[str],
     is_active: Optional[bool],
     full_name: Optional[str],
+    # person_id güncelleme için iki parametre:
+    #   update_person_id=False → alan payload'da yok, mevcut bağlantıyı koru
+    #   update_person_id=True, person_id=UUID → bağla/değiştir
+    #   update_person_id=True, person_id=None → bağlantıyı kaldır
+    update_person_id: bool = False,
     person_id: Optional[uuid.UUID] = None,
     assigner_role: str,
     assigner_user_id: uuid.UUID,
@@ -268,35 +273,70 @@ async def update_user(
     if full_name is not None:
         target_user.full_name = full_name
 
-    if person_id is not None and person_id != target_user.person_id:
-        # Kişi kartı aynı kulübe ait ve aktif mi?
-        person_result = await db.execute(
-            select(Person).where(
-                Person.id == person_id,
-                Person.club_id == target_user.club_id,
-                Person.is_deleted.is_(False),
+    if update_person_id and person_id != target_user.person_id:
+        effective_role = role if role is not None else target_user.role
+
+        if person_id is None:
+            # Bağlantı kaldırma: sporcu/antrenor için yasak
+            if effective_role in ROLES_REQUIRING_PERSON:
+                raise HTTPException(
+                    status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+                    detail=(
+                        f"'{effective_role}' rolündeki kullanıcıdan kişi kartı "
+                        "bağlantısı kaldırılamaz."
+                    ),
+                )
+            target_user.person_id = None
+        else:
+            # Kişi kartı aynı kulübe ait, aktif ve silinmemiş mi?
+            person_result = await db.execute(
+                select(Person).where(
+                    Person.id == person_id,
+                    Person.club_id == target_user.club_id,
+                    Person.is_deleted.is_(False),
+                )
             )
-        )
-        if person_result.scalar_one_or_none() is None:
-            raise HTTPException(
-                status_code=status.HTTP_404_NOT_FOUND,
-                detail="Belirtilen kişi kaydı bulunamadı veya bu kulübe ait değil.",
+            person = person_result.scalar_one_or_none()
+            if person is None:
+                raise HTTPException(
+                    status_code=status.HTTP_404_NOT_FOUND,
+                    detail="Belirtilen kişi kaydı bulunamadı veya bu kulübe ait değil.",
+                )
+            if not person.is_active:
+                raise HTTPException(
+                    status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+                    detail="Pasif kişi kaydına kullanıcı hesabı bağlanamaz.",
+                )
+            # K1: sporcu/antrenor → PersonRole uyumu
+            if effective_role in ROLES_REQUIRING_PERSON:
+                pr = await db.execute(
+                    select(PersonRole).where(
+                        PersonRole.person_id == person_id,
+                        PersonRole.role_code == effective_role,
+                    )
+                )
+                if pr.scalar_one_or_none() is None:
+                    raise HTTPException(
+                        status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+                        detail=(
+                            f"Kişi kaydında '{effective_role}' PersonRole bulunamadı."
+                        ),
+                    )
+            # G10: başka aktif kullanıcıya bağlı değil mi?
+            conflict = await db.execute(
+                select(User).where(
+                    User.person_id == person_id,
+                    User.id != target_user.id,
+                    User.is_deleted.is_(False),
+                    User.is_active.is_(True),
+                )
             )
-        # G10: başka aktif kullanıcıya bağlı değil mi?
-        conflict = await db.execute(
-            select(User).where(
-                User.person_id == person_id,
-                User.id != target_user.id,
-                User.is_deleted.is_(False),
-                User.is_active.is_(True),
-            )
-        )
-        if conflict.scalar_one_or_none() is not None:
-            raise HTTPException(
-                status_code=status.HTTP_409_CONFLICT,
-                detail="Bu kişi kartı başka bir aktif kullanıcıya zaten bağlı.",
-            )
-        target_user.person_id = person_id
+            if conflict.scalar_one_or_none() is not None:
+                raise HTTPException(
+                    status_code=status.HTTP_409_CONFLICT,
+                    detail="Bu kişi kartı başka bir aktif kullanıcıya zaten bağlı.",
+                )
+            target_user.person_id = person_id
 
     after = {
         "role": target_user.role,

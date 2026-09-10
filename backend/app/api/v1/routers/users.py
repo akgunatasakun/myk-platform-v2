@@ -212,6 +212,7 @@ async def update_user_endpoint(
         role=body.role,
         is_active=body.is_active,
         full_name=body.full_name,
+        update_person_id="person_id" in body.model_fields_set,
         person_id=body.person_id,
         assigner_role=current_user.role,
         assigner_user_id=uuid.UUID(current_user.sub),

@@ -692,3 +692,209 @@ async def test_find_or_create_user_for_approval_existing_user(
     assert user is not None
     assert user.id == regular_user.id
     assert temp_pw is None  # mevcut hesap — parola dokunulmadı
+
+
+# ─── update_user: person_id bağlantı testleri ────────────────────────────────
+
+@pytest.mark.asyncio
+async def test_update_user_link_person_ok(
+    db_session: AsyncSession, club: Club, admin: User, regular_user: User, person: Person
+):
+    """Aktif, aynı kulüp kişisine bağlantı eklenir."""
+    updated = await update_user(
+        target_user=regular_user,
+        role=None, is_active=None, full_name=None,
+        update_person_id=True,
+        person_id=person.id,
+        assigner_role=admin.role,
+        assigner_user_id=admin.id,
+        db=db_session,
+    )
+    assert updated.person_id == person.id
+
+
+@pytest.mark.asyncio
+async def test_update_user_link_person_foreign_club_404(
+    db_session: AsyncSession, club: Club, admin: User, regular_user: User
+):
+    """Yabancı kulüp kişisi → 404."""
+    from fastapi import HTTPException
+    other_club = Club(
+        id=uuid.uuid4(), slug=f"other-{uuid.uuid4().hex[:6]}",
+        name="Diğer Kulüp", plan="starter", is_active=True, settings={},
+    )
+    db_session.add(other_club)
+    other_person = Person(
+        id=uuid.uuid4(), club_id=other_club.id,
+        first_name="Yabancı", last_name="Kişi",
+        is_active=True, is_deleted=False, must_change_password=False,
+    )
+    db_session.add(other_person)
+    await db_session.flush()
+
+    with pytest.raises(HTTPException) as exc:
+        await update_user(
+            target_user=regular_user,
+            role=None, is_active=None, full_name=None,
+            update_person_id=True, person_id=other_person.id,
+            assigner_role=admin.role, assigner_user_id=admin.id,
+            db=db_session,
+        )
+    assert exc.value.status_code == 404
+
+
+@pytest.mark.asyncio
+async def test_update_user_link_inactive_person_422(
+    db_session: AsyncSession, club: Club, admin: User, regular_user: User
+):
+    """Pasif kişi kartına bağlantı → 422."""
+    from fastapi import HTTPException
+    inactive_person = Person(
+        id=uuid.uuid4(), club_id=club.id,
+        first_name="Pasif", last_name="Kişi",
+        is_active=False, is_deleted=False, must_change_password=False,
+    )
+    db_session.add(inactive_person)
+    await db_session.flush()
+
+    with pytest.raises(HTTPException) as exc:
+        await update_user(
+            target_user=regular_user,
+            role=None, is_active=None, full_name=None,
+            update_person_id=True, person_id=inactive_person.id,
+            assigner_role=admin.role, assigner_user_id=admin.id,
+            db=db_session,
+        )
+    assert exc.value.status_code == 422
+    assert "Pasif" in exc.value.detail
+
+
+@pytest.mark.asyncio
+async def test_update_user_link_person_already_linked_409(
+    db_session: AsyncSession, club: Club, admin: User, regular_user: User, person: Person
+):
+    """Aynı person_id başka aktif kullanıcıya bağlıysa → 409."""
+    from fastapi import HTTPException
+    other_user = User(
+        id=uuid.uuid4(), club_id=club.id,
+        email=f"other-{uuid.uuid4().hex[:6]}@test.com",
+        password_hash=hash_password("Pass1234!"),
+        full_name="Başka Kullanıcı", role="uye",
+        is_active=True, is_deleted=False,
+        person_id=person.id,
+    )
+    db_session.add(other_user)
+    await db_session.flush()
+
+    with pytest.raises(HTTPException) as exc:
+        await update_user(
+            target_user=regular_user,
+            role=None, is_active=None, full_name=None,
+            update_person_id=True, person_id=person.id,
+            assigner_role=admin.role, assigner_user_id=admin.id,
+            db=db_session,
+        )
+    assert exc.value.status_code == 409
+
+
+@pytest.mark.asyncio
+async def test_update_user_unlink_person_ok(
+    db_session: AsyncSession, club: Club, admin: User, person: Person
+):
+    """Yönetici rolündeki kullanıcıdan person_id kaldırılabilir."""
+    user_with_person = User(
+        id=uuid.uuid4(), club_id=club.id,
+        email=f"unlink-{uuid.uuid4().hex[:6]}@test.com",
+        password_hash=hash_password("Pass1234!"),
+        full_name="Bağlı Kullanıcı", role="kulup_yonetici",
+        is_active=True, is_deleted=False,
+        person_id=person.id,
+    )
+    db_session.add(user_with_person)
+    await db_session.flush()
+
+    updated = await update_user(
+        target_user=user_with_person,
+        role=None, is_active=None, full_name=None,
+        update_person_id=True, person_id=None,
+        assigner_role=admin.role, assigner_user_id=admin.id,
+        db=db_session,
+    )
+    assert updated.person_id is None
+
+
+@pytest.mark.asyncio
+async def test_update_user_unlink_person_sporcu_422(
+    db_session: AsyncSession, club: Club, admin: User, person: Person
+):
+    """sporcu rolündeki kullanıcıdan person_id kaldırılamaz → 422."""
+    from fastapi import HTTPException
+    pr = PersonRole(person_id=person.id, role_code="sporcu")
+    db_session.add(pr)
+    sporcu_user = User(
+        id=uuid.uuid4(), club_id=club.id,
+        email=f"sporcu-{uuid.uuid4().hex[:6]}@test.com",
+        password_hash=hash_password("Pass1234!"),
+        full_name="Sporcu Kullanıcı", role="sporcu",
+        is_active=True, is_deleted=False,
+        person_id=person.id,
+    )
+    db_session.add(sporcu_user)
+    await db_session.flush()
+
+    with pytest.raises(HTTPException) as exc:
+        await update_user(
+            target_user=sporcu_user,
+            role=None, is_active=None, full_name=None,
+            update_person_id=True, person_id=None,
+            assigner_role=admin.role, assigner_user_id=admin.id,
+            db=db_session,
+        )
+    assert exc.value.status_code == 422
+
+
+@pytest.mark.asyncio
+async def test_update_user_no_person_id_field_keeps_existing(
+    db_session: AsyncSession, club: Club, admin: User, person: Person
+):
+    """update_person_id=False ise mevcut bağlantı değişmez."""
+    user_with_person = User(
+        id=uuid.uuid4(), club_id=club.id,
+        email=f"keep-{uuid.uuid4().hex[:6]}@test.com",
+        password_hash=hash_password("Pass1234!"),
+        full_name="Bağlı Kullanıcı", role="kulup_yonetici",
+        is_active=True, is_deleted=False,
+        person_id=person.id,
+    )
+    db_session.add(user_with_person)
+    await db_session.flush()
+
+    updated = await update_user(
+        target_user=user_with_person,
+        role=None, is_active=None, full_name="Yeni İsim",
+        update_person_id=False,  # alan payload'da yok
+        assigner_role=admin.role, assigner_user_id=admin.id,
+        db=db_session,
+    )
+    assert updated.person_id == person.id  # değişmedi
+    assert updated.full_name == "Yeni İsim"
+
+
+@pytest.mark.asyncio
+async def test_update_user_person_id_audit_before_after(
+    db_session: AsyncSession, club: Club, admin: User, regular_user: User, person: Person
+):
+    """person_id değişimi audit before/after içinde görünür."""
+    from unittest.mock import AsyncMock, patch
+    with patch("app.services.user_account_service.log_action", new_callable=AsyncMock) as mock_log:
+        await update_user(
+            target_user=regular_user,
+            role=None, is_active=None, full_name=None,
+            update_person_id=True, person_id=person.id,
+            assigner_role=admin.role, assigner_user_id=admin.id,
+            db=db_session,
+        )
+        assert mock_log.called
+        call_kwargs = mock_log.call_args.kwargs
+        assert call_kwargs["before"]["person_id"] is None
+        assert call_kwargs["after"]["person_id"] == str(person.id)

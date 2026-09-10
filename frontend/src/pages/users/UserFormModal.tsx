@@ -1,7 +1,13 @@
 import { useEffect, useRef, useState } from 'react'
 import { usersApi } from '@/api/users'
+import { personsApi } from '@/api/persons'
 import type { UserOut, UserCreate, UserUpdate } from '@/types/user'
 import type { Role } from '@/types/auth'
+
+interface PersonOption {
+  id: string
+  label: string // "Ad Soyad (e-posta) · Rol"
+}
 
 // G8: Frontend rol listesi (super_admin kendi kendine atanamaz — backend da reddeder)
 const ROLE_OPTIONS: { value: Role; label: string }[] = [
@@ -53,6 +59,7 @@ export default function UserFormModal({ isOpen, onClose, user, onSaved, onCreate
   const [form, setForm] = useState<FormData>(EMPTY_FORM)
   const [saving, setSaving] = useState(false)
   const [error, setError] = useState<string | null>(null)
+  const [personOptions, setPersonOptions] = useState<PersonOption[]>([])
   const firstRef = useRef<HTMLInputElement>(null)
 
   const isEdit = Boolean(user)
@@ -71,6 +78,16 @@ export default function UserFormModal({ isOpen, onClose, user, onSaved, onCreate
       } else {
         setForm(EMPTY_FORM)
       }
+      // Kişi kartı listesini yükle
+      personsApi.list({ limit: 200, is_active: true }).then((r) => {
+        const items = (r.data as { items: Array<{ id: string; first_name: string; last_name: string; email?: string; roles?: Array<{ role_code: string }> }> }).items
+        setPersonOptions(
+          items.map((p) => ({
+            id: p.id,
+            label: `${p.first_name} ${p.last_name}${p.email ? ` · ${p.email}` : ''}`,
+          }))
+        )
+      }).catch(() => {/* sessiz başarısızlık */})
       setTimeout(() => firstRef.current?.focus(), 50)
     }
   }, [isOpen, user])
@@ -180,17 +197,20 @@ export default function UserFormModal({ isOpen, onClose, user, onSaved, onCreate
 
           <div className="form-group">
             <label>Bağlı Kişi Kartı {roleRequiresPerson ? '*' : '(isteğe bağlı)'}</label>
-            <input
-              type="text"
+            <select
               className="form-control"
               value={form.person_id}
               onChange={(e) => set('person_id', e.target.value)}
-              placeholder="UUID formatında Person ID"
-            />
+            >
+              <option value="">— Bağlantı yok —</option>
+              {personOptions.map((p) => (
+                <option key={p.id} value={p.id}>{p.label}</option>
+              ))}
+            </select>
             <small className="form-text text-muted">
               {roleRequiresPerson
                 ? `'${form.role}' rolü için kişi kaydı bağlantısı zorunludur.`
-                : 'Kişiler sayfasından ilgili kişinin UUID\'sini kopyalayın.'}
+                : 'Seçilmezse mevcut bağlantı kaldırılır.'}
             </small>
           </div>
 
