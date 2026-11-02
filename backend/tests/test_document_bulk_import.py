@@ -791,3 +791,102 @@ async def test_dbi18_import_report_counts_correct(db_session, active_club, tmp_p
     assert d["created_files"] == 6
     assert d["uploaded_objects_count"] == 6
     assert len(d["documents"]) == 3
+
+
+# ═══════════════════════════════════════════════════════════════════════════════
+# DBI-19..23  Opsiyonel revision_code / revision_status (taslak yükleme)
+# ═══════════════════════════════════════════════════════════════════════════════
+async def _apply(db_session, storage, club, tmp_path, name, entries, src):
+    return await import_document_plan(
+        db_session, storage,
+        club_id=club.id,
+        plan_path=_write_plan_to(tmp_path / name, _build_plan(entries)),
+        source_dir=src,
+        apply=True,
+    )
+
+
+@pytest.mark.asyncio
+async def test_dbi19_new_document_as_review_draft(db_session, active_club, tmp_path):
+    storage = InMemoryStorageService()
+    code = "MYK-DBI19-MAN-001"
+    _, _, entry = _setup_single_doc(tmp_path, code)
+    entry["revision_code"] = "R00"
+    entry["revision_status"] = "incelemede"
+
+    r = await _apply(db_session, storage, active_club, tmp_path, "p.json", [entry], tmp_path)
+    assert r.success, r.errors
+
+    doc = (await db_session.execute(
+        select(Document).where(Document.code == code))).scalar_one()
+    rev = (await db_session.execute(
+        select(DocumentRevision).where(DocumentRevision.document_id == doc.id))).scalar_one()
+    assert doc.content_status == "taslak"
+    assert rev.revision_code == "R00"
+    assert rev.revision_no == 0
+    assert rev.status == "incelemede"
+
+
+@pytest.mark.asyncio
+async def test_dbi20_draft_revision_does_not_supersede_published(
+    db_session, active_club, tmp_path
+):
+    storage = InMemoryStorageService()
+    code = "MYK-DBI20-001"
+    src1 = tmp_path / "v1"; src1.mkdir()
+    _, _, e1 = _setup_single_doc(src1, code, pdf_content=b"v1", docx_content=b"v1d")
+    r1 = await _apply(db_session, storage, active_club, tmp_path, "p1.json", [e1], src1)
+    assert r1.success, r1.errors
+    doc = (await db_session.execute(
+        select(Document).where(Document.code == code))).scalar_one()
+    published_rev_id = doc.current_revision_id
+
+    src2 = tmp_path / "v2"; src2.mkdir()
+    _, _, e2 = _setup_single_doc(src2, code, pdf_content=b"v2", docx_content=b"v2d")
+    e2["revision_code"] = "R02"
+    e2["revision_status"] = "incelemede"
+    r2 = await _apply(db_session, storage, active_club, tmp_path, "p2.json", [e2], src2)
+    assert r2.success, r2.errors
+
+    await db_session.refresh(doc)
+    revs = {x.revision_code: x for x in (await db_session.execute(
+        select(DocumentRevision).where(DocumentRevision.document_id == doc.id)
+    )).scalars().all()}
+    assert doc.current_revision_id == published_rev_id
+    assert revs["R01"].status == "yayinda" and revs["R01"].is_current is True
+    assert revs["R02"].status == "incelemede" and revs["R02"].is_current is False
+
+
+@pytest.mark.asyncio
+async def test_dbi21_invalid_revision_status_rejected(db_session, active_club, tmp_path):
+    storage = InMemoryStorageService()
+    _, _, entry = _setup_single_doc(tmp_path, "MYK-DBI21-001")
+    entry["revision_status"] = "arsivlendi"
+    r = await _apply(db_session, storage, active_club, tmp_path, "p.json", [entry], tmp_path)
+    assert not r.success
+    assert len(storage._store) == 0
+
+
+@pytest.mark.asyncio
+async def test_dbi22_invalid_revision_code_rejected(db_session, active_club, tmp_path):
+    storage = InMemoryStorageService()
+    _, _, entry = _setup_single_doc(tmp_path, "MYK-DBI22-001")
+    entry["revision_code"] = "Rev.02"
+    r = await _apply(db_session, storage, active_club, tmp_path, "p.json", [entry], tmp_path)
+    assert not r.success
+    assert len(storage._store) == 0
+
+
+@pytest.mark.asyncio
+async def test_dbi23_existing_revision_code_rejected(db_session, active_club, tmp_path):
+    storage = InMemoryStorageService()
+    code = "MYK-DBI23-001"
+    src1 = tmp_path / "v1"; src1.mkdir()
+    _, _, e1 = _setup_single_doc(src1, code, pdf_content=b"a", docx_content=b"ad")
+    assert (await _apply(db_session, storage, active_club, tmp_path, "p1.json", [e1], src1)).success
+    src2 = tmp_path / "v2"; src2.mkdir()
+    _, _, e2 = _setup_single_doc(src2, code, pdf_content=b"b", docx_content=b"bd")
+    e2["revision_code"] = "R01"
+    e2["revision_status"] = "taslak"
+    r2 = await _apply(db_session, storage, active_club, tmp_path, "p2.json", [e2], src2)
+    assert not r2.success

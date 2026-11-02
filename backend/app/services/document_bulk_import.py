@@ -91,6 +91,35 @@ _PLAN_CONTRACT_ZEROS: dict[str, int] = {
 }
 
 
+# Plan item'ında opsiyonel olarak verilebilen revizyon durumları.
+# Alan verilmezse eski davranış korunur: R01 / "yayinda".
+_ALLOWED_PLAN_REVISION_STATUSES: frozenset[str] = frozenset(
+    {"taslak", "incelemede", "yayinda"}
+)
+_REVISION_CODE_RE = re.compile(r"^R(\d{2})$")
+
+
+def _plan_revision_meta(
+    doc_plan: dict[str, Any], default_code: str, default_no: int
+) -> tuple[str, int, str]:
+    """Plan item'ından (revision_code, revision_no, revision_status) döndür.
+
+    Geriye dönük uyumlu: ``revision_code`` / ``revision_status`` alanları
+    yoksa ``default_code`` / ``default_no`` ve ``"yayinda"`` kullanılır.
+    """
+    status = doc_plan.get("revision_status") or "yayinda"
+    if status not in _ALLOWED_PLAN_REVISION_STATUSES:
+        raise ValueError(
+            f"Geçersiz revision_status: {status!r} "
+            f"(izin verilenler: {sorted(_ALLOWED_PLAN_REVISION_STATUSES)})"
+        )
+    code = doc_plan.get("revision_code") or default_code
+    m = _REVISION_CODE_RE.match(code)
+    if not m:
+        raise ValueError(f"Geçersiz revision_code: {code!r} (beklenen biçim: R00–R99)")
+    return code, int(m.group(1)), status
+
+
 # ── Yardımcı Fonksiyonlar ─────────────────────────────────────────────────────
 
 def _safe_filename(name: str) -> str:
@@ -341,6 +370,12 @@ async def _write_document(
 
     doc_result = DocumentResult(document_id="", code=code, title=title)
 
+    try:
+        rev_code, rev_no, rev_status = _plan_revision_meta(doc_plan, "R01", 1)
+    except ValueError as exc:
+        doc_result.error = str(exc)
+        return doc_result
+
     # Primary file (PDF/published) SHA'sını bul — idempotency check için
     primary_sha = ""
     for f in files_in_plan:
@@ -448,7 +483,7 @@ async def _write_document(
             code=code,
             title=title,
             document_type=document_type,
-            content_status="tamamlandi",
+            content_status="tamamlandi" if rev_status == "yayinda" else "taslak",
             current_revision_id=revision_id,
             is_active=True,
             is_deleted=False,
@@ -460,9 +495,9 @@ async def _write_document(
         revision = DocumentRevision(
             id=revision_id,
             document_id=document_id,
-            revision_code="R01",
-            revision_no=1,
-            status="yayinda",
+            revision_code=rev_code,
+            revision_no=rev_no,
+            status=rev_status,
             source="sprint14c_bulk_import",
             manifest_row_id=code,  # kod deduplication referansı
             is_current=True,
@@ -528,8 +563,26 @@ async def _add_revision_to_existing(
         )
     )
     max_rev_no = rev_no_result.scalar_one_or_none() or 0
-    new_rev_no = max_rev_no + 1
-    new_rev_code = f"R{new_rev_no:02d}"
+    try:
+        new_rev_code, new_rev_no, rev_status = _plan_revision_meta(
+            doc_plan, f"R{max_rev_no + 1:02d}", max_rev_no + 1
+        )
+    except ValueError as exc:
+        doc_result.error = str(exc)
+        doc_result.updated = False
+        return doc_result
+    publishes = rev_status == "yayinda"
+
+    dup_rev = await db.execute(
+        select(DocumentRevision.id).where(
+            DocumentRevision.document_id == existing_doc_id,
+            DocumentRevision.revision_code == new_rev_code,
+        )
+    )
+    if dup_rev.first() is not None:
+        doc_result.error = f"{code}: {new_rev_code} revizyonu zaten mevcut"
+        doc_result.updated = False
+        return doc_result
 
     revision_id = uuid.uuid4()
     local_uploaded: list[str] = []
@@ -594,16 +647,18 @@ async def _add_revision_to_existing(
         file_records.append((rev_file, file_result))
 
     try:
-        # Mevcut aktif revizyonları superseded yap
-        old_revs = await db.execute(
-            select(DocumentRevision).where(
-                DocumentRevision.document_id == existing_doc_id,
-                DocumentRevision.is_current.is_(True),
+        # Yalnızca yayımlanan revizyon eski aktif revizyonları arşivler.
+        # Taslak / incelemede revizyonlar yürürlükteki revizyona dokunmaz.
+        if publishes:
+            old_revs = await db.execute(
+                select(DocumentRevision).where(
+                    DocumentRevision.document_id == existing_doc_id,
+                    DocumentRevision.is_current.is_(True),
+                )
             )
-        )
-        for old_rev in old_revs.scalars().all():
-            old_rev.is_current = False
-            old_rev.status = "arsivlendi"
+            for old_rev in old_revs.scalars().all():
+                old_rev.is_current = False
+                old_rev.status = "arsivlendi"
 
         # Yeni revizyon oluştur
         revision = DocumentRevision(
@@ -611,10 +666,10 @@ async def _add_revision_to_existing(
             document_id=existing_doc_id,
             revision_code=new_rev_code,
             revision_no=new_rev_no,
-            status="yayinda",
+            status=rev_status,
             source="tyf_2026_bulk_import",
             manifest_row_id=code,
-            is_current=True,
+            is_current=publishes,
             created_by_user_id=actor_user_id,
         )
         db.add(revision)
@@ -623,12 +678,13 @@ async def _add_revision_to_existing(
         for rev_file, _ in file_records:
             db.add(rev_file)
 
-        # Document'ın current_revision_id'sini güncelle
-        doc_obj_result = await db.execute(
-            select(Document).where(Document.id == existing_doc_id)
-        )
-        doc_obj = doc_obj_result.scalar_one()
-        doc_obj.current_revision_id = revision_id
+        # Document'ın current_revision_id'sini yalnızca yayında revizyonda güncelle
+        if publishes:
+            doc_obj_result = await db.execute(
+                select(Document).where(Document.id == existing_doc_id)
+            )
+            doc_obj = doc_obj_result.scalar_one()
+            doc_obj.current_revision_id = revision_id
 
         await db.flush()
 
