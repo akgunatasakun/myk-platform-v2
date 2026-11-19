@@ -38,6 +38,8 @@ import UsersPage from '@/pages/users/UsersPage'
 import AuditPage from '@/pages/audit/AuditPage'
 import Forbidden from '@/pages/Forbidden'
 import NotFound from '@/pages/NotFound'
+import TasksPage from '@/pages/tasks/TasksPage'
+import { TASK_ROLES } from '@/api/tasks'
 
 // Rol grupları — AppShell ile senkron
 const ADMIN       = ['super_admin', 'kulup_yonetici']
@@ -49,6 +51,7 @@ const COACHES     = [...MANAGEMENT, 'sportif_direktor', 'basantrenor', 'antrenor
 
 // Route bazlı izin haritası — sadece kısıtlı rotalar (undefined = herkes)
 const ROUTE_ROLES: Record<string, string[]> = {
+  '/gorevler': TASK_ROLES,
   '/admin/applications':  SECRETARIAT,
   '/admin/applications/': SECRETARIAT,
   '/persons':             STAFF,
@@ -137,6 +140,7 @@ export default function App() {
         />
 
         {/* Protected */}
+        <Route path="/gorevler" element={<ProtectedRoute><TasksPage /></ProtectedRoute>} />
         <Route
           path="/dashboard"
           element={

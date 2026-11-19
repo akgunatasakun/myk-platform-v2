@@ -83,3 +83,5 @@ __all__ = [
     "DocumentRevision",
     "DocumentRevisionFile",
 ]
+
+from app.models.task import Task  # noqa: F401

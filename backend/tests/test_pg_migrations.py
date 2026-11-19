@@ -86,7 +86,7 @@ async def test_current_revision_is_head(engine):
     async with engine.connect() as conn:
         r = await conn.execute(text("SELECT version_num FROM alembic_version"))
         rev = r.scalar_one()
-    assert rev == "0027", f"Beklenen '0027', alınan '{rev!r}'"
+    assert rev == "0028", f"Beklenen '0028', alınan '{rev!r}'"
 
 
 # ── 2. Şema doğrulama ─────────────────────────────────────────────────────────
@@ -1184,3 +1184,46 @@ def test_0027_downgrade_removes_column():
         asyncio.get_event_loop().run_until_complete(_check())
     finally:
         run_alembic("upgrade", "head")
+
+
+# ── Migration 0028 ────────────────────────────────────────────────────────────
+
+@pytest.mark.asyncio
+async def test_0028_task_schema_and_app_grants(engine):
+    """UUID alanları, CHECK kuralları ve uygulama kullanıcısının yazma izni."""
+    async with engine.connect() as conn:
+        columns = await conn.execute(text("""
+            SELECT column_name, data_type FROM information_schema.columns
+            WHERE table_schema = 'public' AND table_name = 'tasks'
+        """))
+        types = dict(columns.all())
+        assert types['id'] == types['club_id'] == types['assigned_person_id'] == 'uuid'
+        assert types['due_date'] == 'date'
+        constraints = await conn.execute(text("""
+            SELECT conname FROM pg_constraint WHERE conrelid = 'tasks'::regclass
+        """))
+        assert {'ck_tasks_status', 'ck_tasks_priority'}.issubset(set(constraints.scalars()))
+        for privilege in ('SELECT', 'INSERT', 'UPDATE', 'DELETE'):
+            result = await conn.execute(text(
+                "SELECT has_table_privilege('myk_app', 'tasks', :privilege)"
+            ), {'privilege': privilege})
+            assert result.scalar() is True
+
+
+def test_0028_downgrade_and_upgrade():
+    """Yeni tablo önceki sürüme dönüşte kaldırılır, tekrar upgrade çalışır."""
+    try:
+        run_alembic('downgrade', '0027')
+
+        async def _check():
+            e = create_async_engine(DATABASE_URL, echo=False)
+            try:
+                async with e.connect() as conn:
+                    result = await conn.execute(text("SELECT to_regclass('public.tasks')"))
+                    assert result.scalar() is None
+            finally:
+                await e.dispose()
+
+        asyncio.get_event_loop().run_until_complete(_check())
+    finally:
+        run_alembic('upgrade', 'head')
