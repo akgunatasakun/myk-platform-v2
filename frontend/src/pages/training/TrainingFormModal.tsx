@@ -5,10 +5,8 @@
  */
 import { useEffect, useState } from 'react'
 import { trainingApi } from '@/api/training'
-import { personsApi } from '@/api/persons'
-import { PERSON_LIST_LIMIT } from '@/api/constants'
+import { useActiveCoaches } from '@/hooks/useActiveCoaches'
 import type { TrainingCourse, TrainingCourseCreate, TrainingCourseUpdate, CourseStatus, AttendanceMode } from '@/types/training'
-import type { Person } from '@/types/person'
 
 interface Props {
   isOpen: boolean
@@ -56,7 +54,7 @@ const STATUS_OPTIONS: { value: CourseStatus; label: string }[] = [
 export default function TrainingFormModal({ isOpen, onClose, course, onSaved }: Props) {
   const isEdit = !!course
   const [form, setForm] = useState<TrainingCourseCreate>(EMPTY)
-  const [antrenorler, setAntrenorler] = useState<Person[]>([])
+  const { coaches: antrenorler, loading: coachesLoading, error: coachesError, retry: retryCoaches } = useActiveCoaches(isOpen)
   const [saving, setSaving] = useState(false)
   const [error, setError] = useState<string | null>(null)
 
@@ -84,14 +82,6 @@ export default function TrainingFormModal({ isOpen, onClose, course, onSaved }: 
       setForm(EMPTY)
     }
   }, [isOpen, course])
-
-  // Antrenör rolüne sahip aktif kişileri yükle
-  useEffect(() => {
-    if (!isOpen) return
-    personsApi.list({ limit: PERSON_LIST_LIMIT, is_active: true, role_code: 'antrenor' })
-      .then((r) => setAntrenorler(r.data.items))
-      .catch((err) => console.error('[TrainingFormModal] antrenör listesi alınamadı:', err))
-  }, [isOpen])
 
   const set = (field: keyof TrainingCourseCreate, value: unknown) =>
     setForm((f) => ({ ...f, [field]: value ?? null }))
@@ -260,9 +250,18 @@ export default function TrainingFormModal({ isOpen, onClose, course, onSaved }: 
                   </span>
                 )}
               </label>
-              {antrenorler.length === 0 ? (
+              {coachesLoading ? (
+                <div role="status">Antrenörler yükleniyor…</div>
+              ) : coachesError ? (
+                <div role="alert" className="alert alert-error">
+                  <span>{coachesError}</span>
+                  <button type="button" className="btn btn-ghost" onClick={retryCoaches}>
+                    Tekrar Dene
+                  </button>
+                </div>
+              ) : antrenorler.length === 0 ? (
                 <div style={{ color: 'var(--color-text-muted)', fontSize: 13, padding: '6px 0' }}>
-                  Antrenor rolüne sahip aktif kişi bulunamadı.
+                  Antrenör rolüne sahip aktif kişi bulunamadı.
                 </div>
               ) : (
                 <div

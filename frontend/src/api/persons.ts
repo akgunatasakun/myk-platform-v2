@@ -18,6 +18,24 @@ export interface PersonListParams {
 export const personsApi = {
   list: (params?: PersonListParams) =>
     apiClient.get<PersonListResponse>('/persons', { params }),
+  listActiveCoaches: async (): Promise<Person[]> => {
+    const coaches: Person[] = [];
+    let total: number;
+    do {
+      const { data } = await personsApi.list({
+        skip: coaches.length,
+        limit: 100,
+        is_active: true,
+        role_code: 'antrenor',
+      });
+      total = data.total;
+      if (data.items.length === 0 && coaches.length < total) {
+        throw new Error('Antrenör listesi tamamlanamadı.');
+      }
+      coaches.push(...data.items);
+    } while (coaches.length < total);
+    return coaches;
+  },
   get: (id: string) =>
     apiClient.get<Person>(`/persons/${id}`),
   create: (data: PersonCreate) =>
