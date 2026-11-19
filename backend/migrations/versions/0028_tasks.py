@@ -58,6 +58,9 @@ def upgrade() -> None:
     for column in ("club_id", "assigned_person_id", "due_date", "status"):
         op.create_index(f"ix_tasks_{column}", "tasks", [column])
 
+    if op.get_bind().dialect.name == "postgresql":
+        op.execute("GRANT SELECT, INSERT, UPDATE, DELETE ON tasks TO myk_app")
+
 
 def downgrade() -> None:
     op.drop_table("tasks")
