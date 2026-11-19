@@ -20,6 +20,7 @@ from app.api.v1.routers.documents import router as documents_router
 from app.api.v1.routers.person_documents import router as person_documents_router
 from app.api.v1.routers.users import router as users_router
 from app.api.v1.routers.audit import router as audit_router
+from app.api.v1.routers.tasks import router as tasks_router
 from app.config import get_settings
 from app.core.scheduler import setup_scheduler
 from app.core.security import get_current_user
@@ -79,6 +80,7 @@ async def unhandled_exception_handler(request: Request, exc: Exception) -> JSONR
 
 # ─── Routers ──────────────────────────────────────────────────────────────────
 API_PREFIX = "/api/v1"
+app.include_router(tasks_router, prefix=API_PREFIX)
 
 app.include_router(health.router, prefix=API_PREFIX)
 app.include_router(auth.router, prefix=API_PREFIX)

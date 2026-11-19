@@ -2,6 +2,7 @@ import { useState, useEffect } from 'react'
 import { NavLink, useNavigate } from 'react-router-dom'
 import { useAuth } from '@/hooks/useAuth'
 import { usePendingApplications } from '@/hooks/usePendingApplications'
+import { TASK_ROLES } from '@/api/tasks'
 import { notificationsApi } from '@/api/notifications'
 
 interface NavItem {
@@ -44,6 +45,8 @@ const NAV_ITEMS: NavItem[] = [
   { path: '/antrenor-evrak-kuyrugu', label: 'Evrak Kuyruğu', icon: '📋', roles: [...ADMIN, 'basantrenor', 'antrenor'] },
   { path: '/yoklama',            label: 'Yoklama',            icon: '✅', roles: COACHES },
   { path: '/katilim',            label: 'Katılım (Öz)',       icon: '🙋', roles: ['sporcu'] },
+
+  { path: '/gorevler', label: 'Görevler', icon: '✓', roles: TASK_ROLES },
 
   // Operasyonel
   { path: '/tekneler',           label: 'Ekipmanlar',         icon: '🛟', roles: STAFF },

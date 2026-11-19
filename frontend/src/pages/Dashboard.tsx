@@ -12,6 +12,7 @@ import { useEffect, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
 import AppShell from '@/components/layout/AppShell'
 import MaintenanceAlerts from './MaintenanceAlerts'
+import TaskSummary from './tasks/TaskSummary'
 import { useAuth } from '@/hooks/useAuth'
 import { dashboardApi } from '@/api/dashboard'
 import type { AktiviteOut, DashboardStats, OturumOut } from '@/api/dashboard'
@@ -415,6 +416,7 @@ export default function Dashboard() {
             </div>
           </div>
 
+          <TaskSummary />
           <MaintenanceAlerts />
 
           {/* ── Son aktiviteler ───────────────────────────────────────────── */}
