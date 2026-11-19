@@ -4,6 +4,7 @@ import type {
   EquipmentCreate,
   EquipmentListResponse,
   EquipmentUpdate,
+  MaintenanceDueEquipment,
   MaintenanceDueListResponse,
   MaintenanceRecord,
   MaintenanceRecordCreate,
@@ -23,8 +24,15 @@ export const equipmentApi = {
   list: (params?: EquipmentListParams) =>
     apiClient.get<EquipmentListResponse>('/equipment', { params }),
 
-  maintenanceDue: () =>
-    apiClient.get<MaintenanceDueListResponse>('/equipment/maintenance-due'),
+  maintenanceDue: async () => {
+    const response = await apiClient.get<MaintenanceDueEquipment[] | MaintenanceDueListResponse>(
+      '/equipment/maintenance-due',
+    )
+    const data = Array.isArray(response.data)
+      ? { items: response.data, total: response.data.length }
+      : response.data
+    return { ...response, data }
+  },
 
   get: (id: string) =>
     apiClient.get<Equipment>(`/equipment/${id}`),

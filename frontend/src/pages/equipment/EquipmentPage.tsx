@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useState } from 'react'
-import { useNavigate } from 'react-router-dom'
+import { useNavigate, useSearchParams } from 'react-router-dom'
 import AppShell from '@/components/layout/AppShell'
 import EquipmentFormModal from './EquipmentFormModal'
 import { equipmentApi } from '@/api/equipment'
@@ -38,8 +38,18 @@ const PAGE_SIZE = 20
 
 export default function EquipmentPage() {
   const navigate = useNavigate()
+  const [searchParams, setSearchParams] = useSearchParams()
 
-  const [tab, setTab] = useState<Tab>('all')
+  const tab: Tab = searchParams.get('tab') === 'due' ? 'due' : 'all'
+  const setTab = (value: Tab) => {
+    setSearchParams((previous) => {
+      const next = new URLSearchParams(previous)
+      if (value === 'all') next.delete('tab')
+      else next.set('tab', value)
+      return next
+    })
+    setSkip(0)
+  }
   const [data, setData] = useState<EquipmentListResponse | null>(null)
   const [dueItems, setDueItems] = useState<MaintenanceDueEquipment[]>([])
   const [loading, setLoading] = useState(true)
@@ -88,6 +98,10 @@ export default function EquipmentPage() {
   }, [tab, statusFilter, skip, fetchAll, fetchDue])
 
   const handleSaved = (saved: Equipment) => {
+    if (tab === 'due') {
+      void fetchDue()
+      return
+    }
     setData((prev) => {
       if (!prev) return prev
       const exists = prev.items.some((e) => e.id === saved.id)
@@ -112,6 +126,10 @@ export default function EquipmentPage() {
     if (!window.confirm(`"${eq.name}" ekipmanını silmek istiyor musunuz?`)) return
     try {
       await equipmentApi.delete(eq.id)
+      if (tab === 'due') {
+        void fetchDue()
+        return
+      }
       setData((prev) =>
         prev
           ? { ...prev, items: prev.items.filter((x) => x.id !== eq.id), total: prev.total - 1 }
@@ -131,7 +149,9 @@ export default function EquipmentPage() {
 
     const maintDays = dueEq?.maintenance_due
       ? dueEq.maintenance_days_remaining !== null && dueEq.maintenance_days_remaining !== undefined
-        ? dueEq.maintenance_days_remaining <= 0
+        ? dueEq.maintenance_days_remaining === 0
+          ? 'Bakım bugün'
+          : dueEq.maintenance_days_remaining < 0
           ? `${Math.abs(dueEq.maintenance_days_remaining)} gün gecikti`
           : `${dueEq.maintenance_days_remaining} gün kaldı`
         : 'Bakım gerekli'
@@ -139,7 +159,9 @@ export default function EquipmentPage() {
 
     const insDays = dueEq?.insurance_due
       ? dueEq.insurance_days_remaining !== null && dueEq.insurance_days_remaining !== undefined
-        ? dueEq.insurance_days_remaining <= 0
+        ? dueEq.insurance_days_remaining === 0
+          ? 'Sigorta bugün sona eriyor'
+          : dueEq.insurance_days_remaining < 0
           ? `${Math.abs(dueEq.insurance_days_remaining)} gün gecikti`
           : `${dueEq.insurance_days_remaining} gün kaldı`
         : 'Sigorta gerekli'
