@@ -283,6 +283,17 @@ html, body {
 }
 
 /* ── Stat Cards ───────────────────────────────────────────────────────────── */
+.dashboard-sessions-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 20px;
+  margin-bottom: 20px;
+}
+
+.dashboard-sessions-grid .card-body {
+  overflow-x: auto;
+}
+
 .stat-cards-grid {
   display: grid;
   grid-template-columns: repeat(auto-fill, minmax(200px, 1fr));
@@ -1311,6 +1322,10 @@ html, body {
 
 /* ── Responsive ───────────────────────────────────────────────────────────── */
 @media (max-width: 768px) {
+  .dashboard-sessions-grid {
+    grid-template-columns: minmax(0, 1fr);
+  }
+
   .sidebar {
     position: fixed;
     top: 0;

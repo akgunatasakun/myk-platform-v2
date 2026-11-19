@@ -11,6 +11,8 @@
 import { useEffect, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
 import AppShell from '@/components/layout/AppShell'
+import MaintenanceAlerts from './MaintenanceAlerts'
+import { useAuth } from '@/hooks/useAuth'
 import { dashboardApi } from '@/api/dashboard'
 import type { AktiviteOut, DashboardStats, OturumOut } from '@/api/dashboard'
 
@@ -96,6 +98,14 @@ function StatCard({ label, value, icon, variant = 'default', onClick, subtitle }
     <div
       className={`stat-card${variant !== 'default' ? ` ${variant}` : ''}`}
       onClick={onClick}
+      role={onClick ? 'button' : undefined}
+      tabIndex={onClick ? 0 : undefined}
+      onKeyDown={onClick ? (event) => {
+        if (event.key === 'Enter' || event.key === ' ') {
+          event.preventDefault()
+          onClick()
+        }
+      } : undefined}
       style={onClick ? { cursor: 'pointer' } : undefined}
     >
       <div className="stat-card-icon">{icon}</div>
@@ -164,12 +174,12 @@ function OturumRow({ s, onClick }: { s: OturumOut; onClick: () => void }) {
         <span
           className="badge"
           style={{
-            background: s.status === 'yapildi' ? '#f0fdf4' : '#eff6ff',
-            color: s.status === 'yapildi' ? '#166534' : '#1d4ed8',
+            background: s.status === 'tamamlandi' ? '#f0fdf4' : '#eff6ff',
+            color: s.status === 'tamamlandi' ? '#166534' : '#1d4ed8',
             fontSize: 11,
           }}
         >
-          {s.status}
+          {{ planli: 'Planlı', tamamlandi: 'Tamamlandı', iptal: 'İptal' }[s.status] ?? s.status}
         </span>
       </td>
     </tr>
@@ -180,6 +190,8 @@ function OturumRow({ s, onClick }: { s: OturumOut; onClick: () => void }) {
 
 export default function Dashboard() {
   const navigate = useNavigate()
+  const { user } = useAuth()
+  const canReadClubPayments = ['super_admin', 'kulup_yonetici', 'baskan', 'muhasebe'].includes(user?.role ?? '')
   const [stats, setStats] = useState<DashboardStats | null>(null)
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
@@ -254,6 +266,14 @@ export default function Dashboard() {
               subtitle="bugün + 7 gün"
               onClick={() => navigate('/egitimler')}
             />
+            {canReadClubPayments && <StatCard
+              label="Vadesi Geçen Ödeme"
+              value={stats.vadesi_gecen_odeme}
+              icon="💳"
+              variant={stats.vadesi_gecen_odeme > 0 ? 'warning' : 'default'}
+              subtitle={fmtTL(stats.vadesi_gecen_odeme_toplami)}
+              onClick={() => navigate('/odemeler?tab=overdue')}
+            />}
             <StatCard
               label="Bakım / Hasarlı"
               value={stats.bakim_bekleyen_ekipman}
@@ -276,11 +296,11 @@ export default function Dashboard() {
                   color="#1d4ed8"
                 />
               )}
-              {stats.vadesi_gecen_odeme > 0 && (
+              {canReadClubPayments && stats.vadesi_gecen_odeme > 0 && (
                 <AlertRow
                   icon="💳"
                   text={`${stats.vadesi_gecen_odeme} vadesi geçmiş ödeme — ${fmtTL(stats.vadesi_gecen_odeme_toplami)}`}
-                  onClick={() => navigate('/odemeler')}
+                  onClick={() => navigate('/odemeler?tab=overdue')}
                 />
               )}
               {stats.bakim_bekleyen_ekipman > 0 && (
@@ -294,7 +314,7 @@ export default function Dashboard() {
           )}
 
           {/* ── Bugünün oturumları ────────────────────────────────────────── */}
-          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 20, marginBottom: 20 }}>
+          <div className="dashboard-sessions-grid">
             <div className="card">
               <div className="card-header">
                 Bugünün Oturumları
@@ -394,6 +414,8 @@ export default function Dashboard() {
               </div>
             </div>
           </div>
+
+          <MaintenanceAlerts />
 
           {/* ── Son aktiviteler ───────────────────────────────────────────── */}
           <div className="card">

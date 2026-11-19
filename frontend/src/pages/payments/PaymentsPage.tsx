@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useState } from 'react'
+import { useSearchParams } from 'react-router-dom'
 import AppShell from '@/components/layout/AppShell'
 import PaymentFormModal from './PaymentFormModal'
 import { paymentsApi } from '@/api/payments'
@@ -43,7 +44,17 @@ export default function PaymentsPage() {
   const { user } = useAuth()
   const canWrite = !READ_ONLY_ROLES.has(user?.role ?? '')
 
-  const [tab, setTab] = useState<Tab>('all')
+  const [searchParams, setSearchParams] = useSearchParams()
+  const tab: Tab = searchParams.get('tab') === 'overdue' ? 'overdue' : 'all'
+  const setTab = (value: Tab) => {
+    setSearchParams((previous) => {
+      const next = new URLSearchParams(previous)
+      if (value === 'all') next.delete('tab')
+      else next.set('tab', value)
+      return next
+    })
+    setSkip(0)
+  }
 
   const [data, setData] = useState<PaymentListResponse | null>(null)
   const [overdueItems, setOverdueItems] = useState<OverduePayment[]>([])
@@ -90,6 +101,10 @@ export default function PaymentsPage() {
   }, [tab, statusFilter, skip, fetchAll, fetchOverdue])
 
   const handleSaved = (saved: Payment) => {
+    if (tab === 'overdue') {
+      void fetchOverdue()
+      return
+    }
     setData((prev) => {
       if (!prev) return prev
       const exists = prev.items.some((p) => p.id === saved.id)
