@@ -24,6 +24,20 @@ export const equipmentApi = {
   list: (params?: EquipmentListParams) =>
     apiClient.get<EquipmentListResponse>('/equipment', { params }),
 
+  listAll: async (params?: Omit<EquipmentListParams, 'skip' | 'limit'>): Promise<EquipmentListResponse> => {
+    const items: Equipment[] = []
+    let total: number
+    do {
+      const { data } = await equipmentApi.list({ ...params, skip: items.length, limit: 200 })
+      total = data.total
+      if (data.items.length === 0 && items.length < total) {
+        throw new Error('Envanter listesi tamamlanamadı.')
+      }
+      items.push(...data.items)
+    } while (items.length < total)
+    return { items, total, skip: 0, limit: items.length }
+  },
+
   maintenanceDue: async () => {
     const response = await apiClient.get<MaintenanceDueEquipment[] | MaintenanceDueListResponse>(
       '/equipment/maintenance-due',

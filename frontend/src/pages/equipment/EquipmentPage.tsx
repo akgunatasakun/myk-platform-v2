@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useState } from 'react'
+import { useCallback, useEffect, useRef, useState } from 'react'
 import { useNavigate, useSearchParams } from 'react-router-dom'
 import AppShell from '@/components/layout/AppShell'
 import EquipmentFormModal from './EquipmentFormModal'
@@ -34,7 +34,7 @@ function fmt(date: string | null) {
 
 type Tab = 'all' | 'due'
 
-const PAGE_SIZE = 20
+type PageSize = 20 | 50 | 100 | 'all'
 
 export default function EquipmentPage() {
   const navigate = useNavigate()
@@ -57,57 +57,59 @@ export default function EquipmentPage() {
 
   const [statusFilter, setStatusFilter] = useState<EquipmentStatus | ''>('')
   const [skip, setSkip] = useState(0)
+  const [pageSize, setPageSize] = useState<PageSize>(20)
+  const requestId = useRef(0)
 
   const [modalOpen, setModalOpen] = useState(false)
   const [editEquipment, setEditEquipment] = useState<Equipment | undefined>(undefined)
 
   const fetchAll = useCallback(async (status: string, skipVal: number) => {
+    const currentRequest = ++requestId.current
     setLoading(true)
     setError(null)
     try {
-      const params: Record<string, unknown> = { skip: skipVal, limit: PAGE_SIZE }
-      if (status) params.status = status
-      const resp = await equipmentApi.list(params)
-      setData(resp.data)
+      const params = { status: status || undefined }
+      const result = pageSize === 'all'
+        ? await equipmentApi.listAll(params)
+        : (await equipmentApi.list({ ...params, skip: skipVal, limit: pageSize })).data
+      if (currentRequest === requestId.current) setData(result)
     } catch {
-      setError('Ekipmanlar yüklenemedi.')
+      if (currentRequest === requestId.current) setError('Ekipmanlar yüklenemedi.')
     } finally {
-      setLoading(false)
+      if (currentRequest === requestId.current) setLoading(false)
     }
-  }, [])
+  }, [pageSize])
 
   const fetchDue = useCallback(async () => {
+    const currentRequest = ++requestId.current
     setLoading(true)
     setError(null)
     try {
       const resp = await equipmentApi.maintenanceDue()
-      setDueItems(resp.data.items)
+      if (currentRequest === requestId.current) setDueItems(resp.data.items)
     } catch {
-      setError('Bakım listesi yüklenemedi.')
+      if (currentRequest === requestId.current) setError('Bakım listesi yüklenemedi.')
     } finally {
-      setLoading(false)
+      if (currentRequest === requestId.current) setLoading(false)
     }
   }, [])
 
   useEffect(() => {
+    const requests = requestId
     if (tab === 'all') {
       fetchAll(statusFilter, skip)
     } else {
       fetchDue()
     }
+    return () => { requests.current++ }
   }, [tab, statusFilter, skip, fetchAll, fetchDue])
 
-  const handleSaved = (saved: Equipment) => {
+  const handleSaved = () => {
     if (tab === 'due') {
       void fetchDue()
       return
     }
-    setData((prev) => {
-      if (!prev) return prev
-      const exists = prev.items.some((e) => e.id === saved.id)
-      if (exists) return { ...prev, items: prev.items.map((e) => (e.id === saved.id ? saved : e)) }
-      return { ...prev, items: [saved, ...prev.items], total: prev.total + 1 }
-    })
+    void fetchAll(statusFilter, skip)
   }
 
   const openCreate = () => {
@@ -130,18 +132,18 @@ export default function EquipmentPage() {
         void fetchDue()
         return
       }
-      setData((prev) =>
-        prev
-          ? { ...prev, items: prev.items.filter((x) => x.id !== eq.id), total: prev.total - 1 }
-          : prev
-      )
+      if (pageSize !== 'all' && skip > 0 && data && skip >= data.total - 1) {
+        setSkip(Math.max(0, skip - pageSize))
+      } else {
+        void fetchAll(statusFilter, skip)
+      }
     } catch {
       alert('Silme işlemi sırasında hata oluştu.')
     }
   }
 
-  const totalPages = data ? Math.ceil(data.total / PAGE_SIZE) : 0
-  const currentPage = Math.floor(skip / PAGE_SIZE) + 1
+  const totalPages = data && pageSize !== 'all' ? Math.ceil(data.total / pageSize) : 1
+  const currentPage = pageSize === 'all' ? 1 : Math.floor(skip / pageSize) + 1
 
   const renderRow = (eq: Equipment | MaintenanceDueEquipment) => {
     const isDue = tab === 'due'
@@ -254,6 +256,23 @@ export default function EquipmentPage() {
               <option key={o.value} value={o.value}>{o.label}</option>
             ))}
           </select>
+          <label style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+            Göster
+            <select
+              className="form-select"
+              style={{ width: 'auto' }}
+              value={pageSize}
+              onChange={(e) => {
+                setPageSize(e.target.value === 'all' ? 'all' : Number(e.target.value) as PageSize)
+                setSkip(0)
+              }}
+            >
+              <option value={20}>20 kayıt</option>
+              <option value={50}>50 kayıt</option>
+              <option value={100}>100 kayıt</option>
+              <option value="all">Tümünü göster</option>
+            </select>
+          </label>
         </div>
       )}
 
@@ -298,16 +317,21 @@ export default function EquipmentPage() {
             </table>
 
             {/* Pagination (sadece "all" tab) */}
-            {tab === 'all' && data && data.total > PAGE_SIZE && (
+            {tab === 'all' && data && pageSize === 'all' && (
+              <div className="pagination" role="status">
+                {data.items.length} ekipmanın tamamı gösteriliyor
+              </div>
+            )}
+            {tab === 'all' && data && pageSize !== 'all' && data.total > pageSize && (
               <div className="pagination">
                 <span>
-                  {data.total} ekipmandan {skip + 1}–{Math.min(skip + PAGE_SIZE, data.total)} arası gösteriliyor
+                  {data.total} ekipmandan {skip + 1}–{Math.min(skip + pageSize, data.total)} arası gösteriliyor
                 </span>
                 <div className="pagination-controls">
                   <button
                     className="btn btn-sm btn-secondary"
                     disabled={skip === 0}
-                    onClick={() => setSkip((s) => Math.max(0, s - PAGE_SIZE))}
+                    onClick={() => setSkip((s) => Math.max(0, s - pageSize))}
                   >
                     ← Önceki
                   </button>
@@ -316,8 +340,8 @@ export default function EquipmentPage() {
                   </span>
                   <button
                     className="btn btn-sm btn-secondary"
-                    disabled={skip + PAGE_SIZE >= data.total}
-                    onClick={() => setSkip((s) => s + PAGE_SIZE)}
+                    disabled={skip + pageSize >= data.total}
+                    onClick={() => setSkip((s) => s + pageSize)}
                   >
                     Sonraki →
                   </button>
