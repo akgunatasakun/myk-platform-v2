@@ -52,8 +52,6 @@ from app.models.documents import (
     DocumentRevision,
     DocumentRevisionFile,
 )
-from app.models.person_guardian import PersonGuardian
-from app.models.user import User
 from app.schemas.auth import TokenPayload
 from app.schemas.documents import (
     CategoryCreate,
@@ -69,6 +67,8 @@ from app.schemas.documents import (
 )
 from app.services.storage import ObjectStorageService
 
+from app.services.person_scope_service import get_own_person_ids
+
 router = APIRouter(prefix="/documents", tags=["documents"])
 
 
@@ -78,23 +78,8 @@ async def _get_doc_person_ids(
     db: AsyncSession,
     role: str,
 ) -> list[uuid.UUID]:
-    """Own-scope için erişilebilir person_id listesi (belge owner_id'ye karşı)."""
-    result = await db.execute(select(User.person_id).where(User.id == user_id))
-    person_id: uuid.UUID | None = result.scalar_one_or_none()
-    if not person_id:
-        return []
-    if role == "sporcu":
-        return [person_id]
-    if role == "veli":
-        result = await db.execute(
-            select(PersonGuardian.athlete_person_id).where(
-                PersonGuardian.guardian_person_id == person_id,
-                PersonGuardian.club_id == club_id,
-                PersonGuardian.is_active.is_(True),
-            )
-        )
-        return list(result.scalars().all())
-    return []
+    return await get_own_person_ids(user_id, club_id, db, role)
+
 
 settings = get_settings()
 

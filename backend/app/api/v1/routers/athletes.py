@@ -23,7 +23,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import selectinload
 
 from app.core.audit import log_action
-from app.core.rbac import SENSITIVE_FIELD_MASK_ROLES, require_permission
+from app.core.rbac import SENSITIVE_FIELD_MASK_ROLES, is_own_scope_only, require_permission
 from app.core.security import get_current_user
 from app.core.tenant import get_club_id
 from app.database import get_db
@@ -39,11 +39,20 @@ from app.schemas.athlete import (
 )
 from app.schemas.auth import TokenPayload
 from app.services.training_scope_service import get_antrenor_enrolled_person_ids
+from app.services.person_scope_service import get_own_person_ids
 from fastapi import Request
 
 router = APIRouter(prefix="/athletes", tags=["athletes"])
 
 ALERT_HORIZON_DAYS = 30
+
+
+async def _allowed_athlete_ids(user: TokenPayload, club_id: uuid.UUID, db: AsyncSession) -> list[uuid.UUID] | None:
+    if user.role in {"antrenor", "basantrenor"}:
+        return await get_antrenor_enrolled_person_ids(uuid.UUID(user.sub), club_id, db)
+    if is_own_scope_only(user.role, "sporcu:read"):
+        return await get_own_person_ids(uuid.UUID(user.sub), club_id, db, user.role)
+    return None
 
 
 def _should_mask(role: str) -> bool:
@@ -148,11 +157,8 @@ async def list_athletes(
         .distinct()
     )
 
-    # Antrenörler yalnızca atandıkları eğitimlere aktif kayıtlı sporcuları görür.
-    if current_user.role in {"antrenor", "basantrenor"}:
-        allowed_ids = await get_antrenor_enrolled_person_ids(
-            uuid.UUID(current_user.sub), club_id, db
-        )
+    allowed_ids = await _allowed_athlete_ids(current_user, club_id, db)
+    if allowed_ids is not None:
         base_query = base_query.where(Person.id.in_(allowed_ids))
 
     if search:
@@ -193,7 +199,7 @@ async def get_athlete_alerts(
     db: AsyncSession = Depends(get_db),
 ) -> list[AthleteAlertItem]:
     """Belgesi eksik, dolmuş veya 30 gün içinde dolacak sporcular + KVKK eksikleri."""
-    result = await db.execute(
+    stmt = (
         select(Person)
         .options(
             selectinload(Person.roles),
@@ -208,6 +214,10 @@ async def get_athlete_alerts(
         )
         .distinct()
     )
+    allowed_ids = await _allowed_athlete_ids(current_user, club_id, db)
+    if allowed_ids is not None:
+        stmt = stmt.where(Person.id.in_(allowed_ids))
+    result = await db.execute(stmt)
     persons = result.scalars().all()
 
     horizon = date.today() + timedelta(days=ALERT_HORIZON_DAYS)
@@ -277,6 +287,9 @@ async def get_athlete(
     db: AsyncSession = Depends(get_db),
 ) -> AthleteDetailOut:
     person = await _get_athlete_person(person_id, club_id, db)
+    allowed_ids = await _allowed_athlete_ids(current_user, club_id, db)
+    if allowed_ids is not None and person_id not in allowed_ids:
+        raise HTTPException(status_code=403, detail="Bu sporcuya erişim yetkiniz yok.")
     mask = _should_mask(current_user.role)
     base = _build_list_item(person, mask)
     ap: Optional[AthleteProfile] = person.athlete_profile  # type: ignore[assignment]

@@ -23,6 +23,9 @@ from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import selectinload
 
+from app.core.rbac import has_permission, is_own_scope_only
+from app.services.person_scope_service import get_own_person_ids
+from app.services.training_scope_service import get_antrenor_enrolled_person_ids, get_antrenor_course_ids
 from app.core.security import get_current_user
 from app.core.tenant import get_club_id
 from app.database import get_db
@@ -31,7 +34,7 @@ from app.models.equipment import Equipment
 from app.models.membership_application import MembershipApplication
 from app.models.payment import Payment
 from app.models.person import Person, PersonRole
-from app.models.training import TrainingCourse, TrainingSession
+from app.models.training import TrainingCourse, TrainingSession, TrainingEnrollment
 from app.schemas.auth import TokenPayload
 
 router = APIRouter(prefix="/dashboard", tags=["dashboard"])
@@ -114,17 +117,38 @@ def _oturum_out(s: TrainingSession) -> OturumOut:
 @router.get("/stats", response_model=DashboardStats)
 async def get_dashboard_stats(
     club_id: uuid.UUID = Depends(get_club_id),
-    _current_user: TokenPayload = Depends(get_current_user),
+    current_user: TokenPayload = Depends(get_current_user),
     db: AsyncSession = Depends(get_db),
 ) -> DashboardStats:
     today = date.today()
     tomorrow = today + timedelta(days=1)
     next7 = today + timedelta(days=7)
 
+    role = current_user.role
+    own_ids = await get_own_person_ids(uuid.UUID(current_user.sub), club_id, db, role)
+    people_scope = True if has_permission(role, "kisi:read") else Person.id.in_(own_ids)
+    if role in {"antrenor", "basantrenor"}:
+        people_scope = Person.id.in_(await get_antrenor_enrolled_person_ids(uuid.UUID(current_user.sub), club_id, db))
+    payment_scope = has_permission(role, "odeme:read")
+    if is_own_scope_only(role, "odeme:read"):
+        payment_scope = Payment.person_id.in_(own_ids)
+    course_scope = has_permission(role, "egitim:read")
+    if role in {"antrenor", "basantrenor"}:
+        course_scope = TrainingCourse.id.in_(await get_antrenor_course_ids(uuid.UUID(current_user.sub), club_id, db))
+    elif is_own_scope_only(role, "egitim:read"):
+        course_scope = TrainingCourse.id.in_(select(TrainingEnrollment.course_id).where(
+            TrainingEnrollment.club_id == club_id, TrainingEnrollment.person_id.in_(own_ids),
+            TrainingEnrollment.status == "active", TrainingEnrollment.is_deleted.is_(False),
+        ))
+    visible_courses = select(TrainingCourse.id).where(
+        TrainingCourse.club_id == club_id, TrainingCourse.is_deleted.is_(False), course_scope,
+    )
+
     # ── Kişi sayaçları ────────────────────────────────────────────────────────
     total_r = await db.execute(
         select(func.count(Person.id)).where(
             Person.club_id == club_id,
+            people_scope,
             Person.is_deleted.is_(False),
         )
     )
@@ -133,6 +157,7 @@ async def get_dashboard_stats(
     sporcu_r = await db.execute(
         select(func.count(Person.id.distinct())).where(
             Person.club_id == club_id,
+            people_scope,
             Person.is_deleted.is_(False),
             Person.is_active.is_(True),
             Person.id.in_(
@@ -145,6 +170,7 @@ async def get_dashboard_stats(
     uye_r = await db.execute(
         select(func.count(Person.id.distinct())).where(
             Person.club_id == club_id,
+            people_scope,
             Person.is_deleted.is_(False),
             Person.is_active.is_(True),
             Person.id.in_(
@@ -157,6 +183,7 @@ async def get_dashboard_stats(
     antrenor_r = await db.execute(
         select(func.count(Person.id.distinct())).where(
             Person.club_id == club_id,
+            people_scope,
             Person.is_deleted.is_(False),
             Person.is_active.is_(True),
             Person.id.in_(
@@ -170,6 +197,7 @@ async def get_dashboard_stats(
     basvuru_r = await db.execute(
         select(func.count(MembershipApplication.id)).where(
             MembershipApplication.club_id == club_id,
+            has_permission(role, "kisi:read"),
             MembershipApplication.status == "submitted",
             MembershipApplication.is_deleted.is_(False),
         )
@@ -183,6 +211,7 @@ async def get_dashboard_stats(
             func.coalesce(func.sum(Payment.amount), Decimal("0")),
         ).where(
             Payment.club_id == club_id,
+            payment_scope,
             Payment.status == "pending",
             Payment.due_date < today,
             Payment.is_deleted.is_(False),
@@ -196,6 +225,7 @@ async def get_dashboard_stats(
     bakim_r = await db.execute(
         select(func.count(Equipment.id)).where(
             Equipment.club_id == club_id,
+            has_permission(role, "ekipman:read"),
             Equipment.status.in_(["bakimda", "hasarli"]),
             Equipment.is_deleted.is_(False),
         )
@@ -207,6 +237,7 @@ async def get_dashboard_stats(
     kurs_r = await db.execute(
         select(func.count(TrainingCourse.id)).where(
             TrainingCourse.club_id == club_id,
+            course_scope,
             TrainingCourse.is_active.is_(True),
             TrainingCourse.is_deleted.is_(False),
             TrainingCourse.status.in_(["aktif", "planlandi"]),
@@ -218,6 +249,7 @@ async def get_dashboard_stats(
     yaklasan_count_r = await db.execute(
         select(func.count(TrainingSession.id)).where(
             TrainingSession.club_id == club_id,
+            TrainingSession.course_id.in_(visible_courses),
             TrainingSession.session_date >= today,
             TrainingSession.session_date <= next7,
             TrainingSession.status != "iptal",
@@ -234,6 +266,7 @@ async def get_dashboard_stats(
         )
         .where(
             TrainingSession.club_id == club_id,
+            TrainingSession.course_id.in_(visible_courses),
             TrainingSession.session_date == today,
             TrainingSession.status != "iptal",
         )
@@ -251,6 +284,7 @@ async def get_dashboard_stats(
         )
         .where(
             TrainingSession.club_id == club_id,
+            TrainingSession.course_id.in_(visible_courses),
             TrainingSession.session_date >= tomorrow,
             TrainingSession.session_date <= next7,
             TrainingSession.status != "iptal",
@@ -264,7 +298,7 @@ async def get_dashboard_stats(
     # ── Son aktiviteler ───────────────────────────────────────────────────────
     audit_r = await db.execute(
         select(AuditLog)
-        .where(AuditLog.club_id == club_id)
+        .where(AuditLog.club_id == club_id, has_permission(role, "audit:read"))
         .order_by(AuditLog.created_at.desc())
         .limit(15)
     )
