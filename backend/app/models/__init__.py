@@ -85,3 +85,5 @@ __all__ = [
 ]
 
 from app.models.task import Task  # noqa: F401
+
+from app.models.announcement import Announcement, AnnouncementAudience  # noqa: F401

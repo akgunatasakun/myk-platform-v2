@@ -12,6 +12,7 @@ import { useEffect, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
 import AppShell from '@/components/layout/AppShell'
 import MaintenanceAlerts from './MaintenanceAlerts'
+import AnnouncementSummary from './announcements/AnnouncementSummary'
 import TaskSummary from './tasks/TaskSummary'
 import { useAuth } from '@/hooks/useAuth'
 import { dashboardApi } from '@/api/dashboard'
@@ -416,6 +417,7 @@ export default function Dashboard() {
             </div>
           </div>
 
+          <AnnouncementSummary />
           <TaskSummary />
           <MaintenanceAlerts />
 

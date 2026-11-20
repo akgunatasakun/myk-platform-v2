@@ -38,6 +38,7 @@ import UsersPage from '@/pages/users/UsersPage'
 import AuditPage from '@/pages/audit/AuditPage'
 import Forbidden from '@/pages/Forbidden'
 import NotFound from '@/pages/NotFound'
+import AnnouncementsPage from '@/pages/announcements/AnnouncementsPage'
 import TasksPage from '@/pages/tasks/TasksPage'
 import { TASK_ROLES } from '@/api/tasks'
 
@@ -140,6 +141,7 @@ export default function App() {
         />
 
         {/* Protected */}
+        <Route path="/duyurular" element={<ProtectedRoute><AnnouncementsPage /></ProtectedRoute>} />
         <Route path="/gorevler" element={<ProtectedRoute><TasksPage /></ProtectedRoute>} />
         <Route
           path="/dashboard"

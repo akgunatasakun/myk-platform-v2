@@ -86,7 +86,7 @@ async def test_current_revision_is_head(engine):
     async with engine.connect() as conn:
         r = await conn.execute(text("SELECT version_num FROM alembic_version"))
         rev = r.scalar_one()
-    assert rev == "0028", f"Beklenen '0028', alınan '{rev!r}'"
+    assert rev == "0029", f"Beklenen '0029', alınan '{rev!r}'"
 
 
 # ── 2. Şema doğrulama ─────────────────────────────────────────────────────────
@@ -1225,5 +1225,35 @@ def test_0028_downgrade_and_upgrade():
                 await e.dispose()
 
         asyncio.get_event_loop().run_until_complete(_check())
+    finally:
+        run_alembic('upgrade', 'head')
+
+
+@pytest.mark.asyncio
+async def test_0029_announcements_schema_and_grants(engine):
+    async with engine.connect() as conn:
+        for table in ('announcements', 'announcement_audiences'):
+            result = await conn.execute(text('SELECT to_regclass(:table)'), {'table': 'public.' + table})
+            assert result.scalar() is not None
+            for privilege in ('SELECT', 'INSERT', 'UPDATE', 'DELETE'):
+                result = await conn.execute(text("SELECT has_table_privilege('myk_app', :table, :privilege)"), {'table': table, 'privilege': privilege})
+                assert result.scalar() is True
+        constraints = await conn.execute(text("SELECT conname FROM pg_constraint WHERE conrelid = 'announcements'::regclass"))
+        assert {'ck_announcements_status', 'ck_announcements_dates'}.issubset(set(constraints.scalars()))
+
+
+def test_0029_roundtrip():
+    try:
+        run_alembic('downgrade', '0028')
+        async def check():
+            e = create_async_engine(DATABASE_URL, echo=False)
+            try:
+                async with e.connect() as conn:
+                    for table in ('announcements', 'announcement_audiences'):
+                        r = await conn.execute(text('SELECT to_regclass(:table)'), {'table': 'public.' + table})
+                        assert r.scalar() is None
+            finally:
+                await e.dispose()
+        asyncio.get_event_loop().run_until_complete(check())
     finally:
         run_alembic('upgrade', 'head')
