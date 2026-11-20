@@ -86,7 +86,7 @@ async def test_current_revision_is_head(engine):
     async with engine.connect() as conn:
         r = await conn.execute(text("SELECT version_num FROM alembic_version"))
         rev = r.scalar_one()
-    assert rev == "0030", f"Beklenen '0030', alınan '{rev!r}'"
+    assert rev == "0031", f"Beklenen '0031', alınan '{rev!r}'"
 
 
 # ── 2. Şema doğrulama ─────────────────────────────────────────────────────────
@@ -1335,5 +1335,31 @@ def test_0030_existing_policy_privacy_backfill():
         asyncio.get_event_loop().run_until_complete(seed_legacy())
         run_alembic('upgrade', 'head')
         asyncio.get_event_loop().run_until_complete(verify())
+    finally:
+        run_alembic('upgrade', 'head')
+
+
+@pytest.mark.asyncio
+async def test_0031_training_payment_link_schema(engine):
+    async with engine.connect() as conn:
+        column = (await conn.execute(text("SELECT is_nullable FROM information_schema.columns WHERE table_schema='public' AND table_name='payments' AND column_name='training_enrollment_id'"))).scalar_one()
+        assert column == 'YES'
+        fk = (await conn.execute(text("SELECT confdeltype FROM pg_constraint WHERE conname='fk_payments_training_enrollment'"))).scalar_one()
+        assert fk == 'n'  # ON DELETE SET NULL
+        assert (await conn.execute(text("SELECT to_regclass('public.ix_payments_training_enrollment_id')"))).scalar_one() is not None
+
+
+def test_0031_roundtrip():
+    try:
+        run_alembic('downgrade', '0030')
+        async def check():
+            e = create_async_engine(DATABASE_URL)
+            try:
+                async with e.connect() as conn:
+                    r = await conn.execute(text("SELECT count(*) FROM information_schema.columns WHERE table_schema='public' AND table_name='payments' AND column_name='training_enrollment_id'"))
+                    assert r.scalar_one() == 0
+            finally:
+                await e.dispose()
+        asyncio.get_event_loop().run_until_complete(check())
     finally:
         run_alembic('upgrade', 'head')

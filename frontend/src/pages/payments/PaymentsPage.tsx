@@ -260,7 +260,7 @@ export default function PaymentsPage() {
                           {fmtAmount(p.amount)}
                         </strong>
                       </td>
-                      <td>{p.payment_type ?? '—'}</td>
+                      <td>{p.payment_type ?? '—'}{p.training_enrollment_id && <div style={{ fontSize: 11 }}>Eğitime bağlı</div>}</td>
                       <td>{p.payment_method ?? '—'}</td>
                       <td>
                         <span style={p.status === 'pending' && p.due_date && new Date(p.due_date) < new Date() ? { color: 'var(--color-danger)', fontWeight: 600 } : {}}>

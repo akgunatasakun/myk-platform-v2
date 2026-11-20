@@ -8,6 +8,7 @@ export type PaymentStatus = 'pending' | 'paid'
 // ── PaymentCreate ─────────────────────────────────────────────────────────────
 
 export interface PaymentCreate {
+  training_enrollment_id?: string | null
   person_id?: string | null
   amount: string               // Decimal → string
   payment_type?: string | null
@@ -20,9 +21,10 @@ export interface PaymentCreate {
 }
 
 // ── PaymentUpdate (kısıtlı alanlar) ──────────────────────────────────────────
-// Backend: yalnızca status, paid_at, payment_method, receipt_no, notes güncellenebilir
+// Backend: durum, tahsilat bilgileri, notlar ve eğitim bağlantısı güncellenebilir
 
 export interface PaymentUpdate {
+  training_enrollment_id?: string | null
   status?: PaymentStatus
   paid_at?: string | null
   payment_method?: string | null
@@ -36,6 +38,7 @@ export interface Payment {
   id: string
   club_id: string
   recorded_by_user_id: string | null
+  training_enrollment_id: string | null
   person_id: string | null
   person_name: string | null
   amount: string
@@ -77,3 +80,5 @@ export interface RevenueReport {
   items: RevenueByMonth[]
   toplam_gelir: string     // Decimal → string
 }
+
+export interface TrainingPaymentOption { id: string; course_id: string; course_name: string; person_id: string; fee: string }

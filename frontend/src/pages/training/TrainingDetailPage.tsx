@@ -3,6 +3,7 @@ import { useNavigate, useParams } from 'react-router-dom'
 import AppShell from '@/components/layout/AppShell'
 import TrainingFormModal from './TrainingFormModal'
 import SessionFormModal from './SessionFormModal'
+import PaymentFormModal from '@/pages/payments/PaymentFormModal'
 import { trainingApi } from '@/api/training'
 import { personsApi } from '@/api/persons'
 import { PERSON_LIST_LIMIT } from '@/api/constants'
@@ -57,6 +58,10 @@ const ENROLL_STATUS_LABEL: Record<string, string> = {
 
 const PAYMENT_STATUS_LABEL: Record<string, string> = {
   pending: 'Bekliyor',
+  partial: 'Kısmi Ödendi',
+  unlinked: 'Bağlı Kayıt Yok',
+  not_required: 'Ücretsiz',
+  restricted: '—',
   paid: 'Ödendi',
   overdue: 'Gecikti',
 }
@@ -95,6 +100,9 @@ export default function TrainingDetailPage() {
   const { user } = useAuth()
   const canWriteCourse = CAN_WRITE_COURSE.has(user?.role ?? '')
   const canTakeAttendance = CAN_TAKE_ATTENDANCE.has(user?.role ?? '')
+
+  const canRecordPayment = ['super_admin', 'kulup_yonetici', 'muhasebe'].includes(user?.role ?? '')
+  const [paymentContext, setPaymentContext] = useState<{ enrollmentId: string; personId: string; personName: string; courseName: string; balance: string } | undefined>()
 
   const [course, setCourse] = useState<TrainingCourse | null>(null)
   const [enrollments, setEnrollments] = useState<TrainingEnrollment[]>([])
@@ -139,10 +147,11 @@ export default function TrainingDetailPage() {
   useEffect(() => { load() }, [load])
 
   useEffect(() => {
+    if (!canWriteCourse) return
     personsApi.list({ limit: PERSON_LIST_LIMIT, is_active: true })
       .then((r) => setPersons(r.data.items))
       .catch((err) => console.error('[TrainingDetailPage] kişi listesi alınamadı:', err))
-  }, [])
+  }, [canWriteCourse])
 
   const loadReport = useCallback(async () => {
     if (!id || report) return
@@ -388,7 +397,7 @@ export default function TrainingDetailPage() {
       {tab === 'participants' && (
         <>
           {/* Katılımcı ekle */}
-          <form onSubmit={handleAddParticipant} style={{ display: 'flex', gap: 8, marginBottom: 16, alignItems: 'flex-end' }}>
+          {canWriteCourse && <form onSubmit={handleAddParticipant} style={{ display: 'flex', gap: 8, marginBottom: 16, alignItems: 'flex-end' }}>
             <div className="form-group" style={{ margin: 0, flex: 2 }}>
               <label className="form-label">Katılımcı Ekle</label>
               <select
@@ -416,13 +425,14 @@ export default function TrainingDetailPage() {
             <button type="submit" className="btn btn-primary" disabled={adding} style={{ flexShrink: 0 }}>
               {adding ? '…' : '+ Ekle'}
             </button>
-          </form>
+          </form>}
           {addError && (
             <div className="alert alert-error" style={{ marginBottom: 12 }}>
               <span>⚠️</span><span>{addError}</span>
             </div>
           )}
 
+          <p style={{ fontSize: 12 }}>Ödeme özeti güncel kurs ücreti ve bu eğitim kaydına bağlanan tahsilatlardan hesaplanır. Geçmiş ödemeler otomatik eşleştirilmez.</p>
           <div className="table-container">
             {enrollments.length === 0 ? (
               <div className="empty-state">
@@ -455,11 +465,13 @@ export default function TrainingDetailPage() {
                         <span className={`badge ${PAYMENT_STATUS_CLASS[e.payment_status] ?? ''}`}>
                           {PAYMENT_STATUS_LABEL[e.payment_status] ?? e.payment_status}
                         </span>
+                        {e.paid_amount != null && <div style={{ fontSize: 12 }}>Tahsil: {Number(e.paid_amount).toLocaleString('tr-TR')} ₺ · Kalan: {Number(e.balance ?? 0).toLocaleString('tr-TR')} ₺</div>}
+                        {canRecordPayment && Number(e.balance ?? 0) > 0 && <button className="btn btn-sm btn-secondary" onClick={() => setPaymentContext({ enrollmentId: e.id, personId: e.person_id, personName: e.person_name ?? '', courseName: course.name, balance: e.balance ?? course.fee })}>Ödeme Kaydı Ekle</button>}
                       </td>
                       <td>{new Date(e.enrolled_at).toLocaleDateString('tr-TR')}</td>
                       <td style={{ fontSize: 12 }}>{e.notes ?? '—'}</td>
                       <td>
-                        {e.status === 'active' && (
+                        {canWriteCourse && e.status === 'active' && (
                           <button
                             className="btn btn-sm btn-danger"
                             onClick={() => handleRemoveParticipant(e)}
@@ -565,6 +577,7 @@ export default function TrainingDetailPage() {
           })
         }}
       />
+      <PaymentFormModal isOpen={!!paymentContext} trainingContext={paymentContext} onClose={() => setPaymentContext(undefined)} onSaved={() => { setPaymentContext(undefined); void load() }} />
     </AppShell>
   )
 }

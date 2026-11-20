@@ -24,24 +24,26 @@ Tenant isolation: club_id JWT'den gelir, body'den asla kabul edilmez.
 RBAC: egitim:read/write, yoklama:read/write (mevcut RBAC matrisi kullanılır).
 """
 import uuid
+from decimal import Decimal
 from datetime import date, datetime, timedelta, timezone
 from typing import List, Optional
 from zoneinfo import ZoneInfo
 
 from fastapi import APIRouter, Depends, HTTPException, Query, Request, status
-from sqlalchemy import func, select
+from sqlalchemy import case, func, select
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import selectinload
 
 from app.core.audit import log_action
-from app.core.rbac import require_permission, is_own_scope_only
+from app.core.rbac import require_permission, is_own_scope_only, has_permission
 from app.services.event_service import emit_event
 from app.services.training_scope_service import get_antrenor_course_ids
 from app.core.security import get_current_user
 from app.core.tenant import get_club_id
 from app.database import get_db
 from app.models.person import Person, PersonRole
+from app.models.payment import Payment
 from app.models.user import User
 from app.models.training import (
     TrainingAttendance,
@@ -740,7 +742,7 @@ async def list_participants(
     P0-1 fix: status='active' filtresi eklendi — iptal kayıtlar hariç tutulur.
     RBAC Phase 3: sporcu/veli yalnızca kendi kaydını görür.
     """
-    await _get_course(course_id, club_id, db)
+    course = await _get_course(course_id, club_id, db)
 
     enrollment_q = (
         select(TrainingEnrollment)
@@ -768,9 +770,38 @@ async def list_participants(
     result = await db.execute(enrollment_q)
     enrollments = result.scalars().all()
 
+    payment_totals = {}
+    can_read_payments = has_permission(current_user.role, "odeme:read")
+    if can_read_payments and enrollments:
+        totals = await db.execute(select(
+            Payment.training_enrollment_id,
+            func.sum(case((Payment.status == "paid", Payment.amount), else_=0)),
+            func.count(Payment.id),
+        ).where(
+            Payment.club_id == club_id, Payment.is_deleted.is_(False),
+            Payment.training_enrollment_id.in_([e.id for e in enrollments]),
+        ).group_by(Payment.training_enrollment_id))
+        payment_totals = {row[0]: (row[1], row[2]) for row in totals}
     items = []
     for e in enrollments:
         out = TrainingEnrollmentOut.model_validate(e)
+        if can_read_payments:
+            paid, count = payment_totals.get(e.id, (Decimal("0"), 0))
+            out.paid_amount = paid
+            out.balance = max(Decimal("0"), course.fee - paid)
+            out.payment_count = count
+            if course.fee == 0:
+                out.payment_status = "not_required"
+            elif count == 0:
+                out.payment_status = "unlinked"
+            elif paid >= course.fee:
+                out.payment_status = "paid"
+            elif paid > 0:
+                out.payment_status = "partial"
+            else:
+                out.payment_status = "pending"
+        else:
+            out.payment_status = "restricted"
         out.person_name = _person_name(e.person)
         out.person_birth_date = e.person.birth_date if e.person else None
         items.append(out)
@@ -862,6 +893,13 @@ async def add_participant(
     )
 
     out = TrainingEnrollmentOut.model_validate(enrollment)
+    if has_permission(current_user.role, "odeme:read"):
+        out.payment_status = "not_required" if course.fee == 0 else "unlinked"
+        out.paid_amount = Decimal("0")
+        out.balance = course.fee
+        out.payment_count = 0
+    else:
+        out.payment_status = "restricted"
     out.person_name = _person_name(person)
     return out
 

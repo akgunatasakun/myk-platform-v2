@@ -204,8 +204,8 @@ class TrainingEnrollment(Base):
       - PostgreSQL: partial unique index (uq_training_enrollments_active) üzerinden
       - Tüm diyalektler: service katmanında explicit kontrol
 
-    payment_status: Sprint 6A'da cache olarak tutulur.
-    Sprint 6B'de payments domain devralır; bu alan özet/readonly olabilir.
+    payment_status eski uyumluluk alanıdır; katılımcı API'si ödeme özetini
+    payments.training_enrollment_id üzerinden anlık hesaplar.
     """
 
     __tablename__ = "training_enrollments"
