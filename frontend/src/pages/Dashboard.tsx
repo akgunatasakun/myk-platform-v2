@@ -15,6 +15,7 @@ import MaintenanceAlerts from './MaintenanceAlerts'
 import AnnouncementSummary from './announcements/AnnouncementSummary'
 import RenewalSummary from './renewals/RenewalSummary'
 import TaskSummary from './tasks/TaskSummary'
+import { peopleTarget } from '@/config/navigation'
 import { useAuth } from '@/hooks/useAuth'
 import { dashboardApi } from '@/api/dashboard'
 import type { AktiviteOut, DashboardStats, OturumOut } from '@/api/dashboard'
@@ -234,27 +235,27 @@ export default function Dashboard() {
               label="Toplam Kişi"
               value={stats.toplam_kisi}
               icon="👥"
-              onClick={() => navigate('/persons')}
+              onClick={() => navigate(peopleTarget(user?.role ?? ''))}
             />
             <StatCard
               label="Aktif Sporcu"
               value={stats.aktif_sporcu}
               icon="⛵"
               variant="ocean"
-              onClick={() => navigate('/sporcular')}
+              onClick={() => navigate(peopleTarget(user?.role ?? '', 'sporcu'))}
             />
             <StatCard
               label="Aktif Üye"
               value={stats.aktif_uye}
               icon="🏅"
               variant="success"
-              onClick={() => navigate('/uyeler')}
+              onClick={() => navigate(peopleTarget(user?.role ?? '', 'uye'))}
             />
             <StatCard
               label="Antrenör"
               value={stats.antrenor_sayisi}
               icon="🎯"
-              onClick={() => navigate('/antrenorler')}
+              onClick={() => navigate(peopleTarget(user?.role ?? '', 'antrenor'))}
             />
             <StatCard
               label="Aktif / Planlanan Kurs"

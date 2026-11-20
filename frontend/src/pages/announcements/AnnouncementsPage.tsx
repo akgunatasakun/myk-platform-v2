@@ -38,8 +38,8 @@ export default function AnnouncementsPage() {
     } catch { setNotice('Dışa aktarma tamamlanamadı. Tekrar deneyin.') }
     finally { setExporting(false) }
   }
-  return <AppShell title="Duyurular">
-    <div className="page-header"><h1 className="page-title">Duyurular</h1><div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}><button className="btn btn-ghost" disabled={exporting || !data} onClick={exportCsv}>{exporting ? 'Hazırlanıyor…' : 'CSV İndir'}</button>{canManage && <button className="btn btn-primary" onClick={() => setEditing(null)}>Yeni Duyuru</button>}</div></div>
+  return <AppShell title="Kulüp Panosu">
+    <div className="page-header"><h1 className="page-title">Kulüp Panosu</h1><div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}><button className="btn btn-ghost" disabled={exporting || !data} onClick={exportCsv}>{exporting ? 'Hazırlanıyor…' : 'CSV İndir'}</button>{canManage && <button className="btn btn-primary" onClick={() => setEditing(null)}>Yeni Duyuru</button>}</div></div>
     <div className="filter-bar">
       <input className="form-input" style={{ maxWidth: 300 }} aria-label="Duyuru ara" placeholder="Başlık veya metin ara…" value={search} onChange={(e) => { setSearch(e.target.value); setSkip(0) }} />
       {canManage && <select className="form-select" aria-label="Duyuru görünümü" value={manage ? 'manage' : 'published'} onChange={(e) => { setManage(e.target.value === 'manage'); setSkip(0); setStatus('') }}><option value="published">Bana Gösterilen Duyurular</option><option value="manage">Duyuru Yönetimi (Tümü)</option></select>}

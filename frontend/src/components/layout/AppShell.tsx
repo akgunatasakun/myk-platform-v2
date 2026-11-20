@@ -1,64 +1,9 @@
-import { useState, useEffect } from 'react'
-import { NavLink, useNavigate } from 'react-router-dom'
+import { useState, useEffect, useRef } from 'react'
+import { NavLink, Link, useLocation, useNavigate } from 'react-router-dom'
 import { useAuth } from '@/hooks/useAuth'
 import { usePendingApplications } from '@/hooks/usePendingApplications'
-import { DOCUMENT_READERS } from '@/api/documentAccess'
-import { RENEWAL_READERS } from '@/api/renewals'
-import { TASK_ROLES } from '@/api/tasks'
+import { itemActive, visibleNavigation } from '@/config/navigation'
 import { notificationsApi } from '@/api/notifications'
-
-interface NavItem {
-  path: string
-  label: string
-  icon: string
-  roles?: string[]
-}
-
-// Rol grupları — tek yerde tanımlı
-const ADMIN       = ['super_admin', 'kulup_yonetici']
-const MANAGEMENT  = [...ADMIN, 'baskan', 'yk_uyesi']
-const SECRETARIAT = [...MANAGEMENT, 'genel_sekreter', 'muhasebe']
-const STAFF       = [...SECRETARIAT, 'sportif_direktor', 'basantrenor', 'antrenor',
-                      'personel', 'saglik_sorumlusu', 'guvenlik_operasyon']
-const COACHES     = [...MANAGEMENT, 'sportif_direktor', 'basantrenor', 'antrenor', 'genel_sekreter']
-
-const NAV_ITEMS: NavItem[] = [
-  // Herkes
-  { path: '/duyurular', label: 'Duyurular', icon: '📣' },
-  { path: '/dashboard',          label: 'Genel Bakış',       icon: '📊' },
-  { path: '/bildirimler',        label: 'Bildirimler',        icon: '🔔' },
-  { path: '/belgeler',           label: 'Belgeler',           icon: '📂', roles: DOCUMENT_READERS },
-
-  // Yönetim + Personel
-  { path: '/admin/applications', label: 'Başvurular',         icon: '📋', roles: SECRETARIAT },
-  { path: '/persons',            label: 'Kişiler',            icon: '👥', roles: STAFF },
-  { path: '/users',              label: 'Kullanıcılar',       icon: '🔐', roles: [...MANAGEMENT, 'genel_sekreter'] },
-  { path: '/audit',              label: 'Denetim Kayıtları',  icon: '🛡️', roles: ADMIN },
-
-  // Kişi grupları — staff tam, rol sahibi kendi kaydını görür
-  { path: '/sporcular',          label: 'Sporcular',          icon: '⛵', roles: [...STAFF, 'sporcu'] },
-  { path: '/veliler',            label: 'Veliler',            icon: '👨‍👩‍👧', roles: [...SECRETARIAT, 'veli'] },
-  { path: '/uyeler',             label: 'Üyeler',             icon: '🏅', roles: [...SECRETARIAT, 'uye'] },
-  { path: '/antrenorler',        label: 'Antrenörler',        icon: '🎯', roles: [...SECRETARIAT, 'basantrenor', 'antrenor'] },
-
-  // Eğitim
-  { path: '/akademi',            label: 'Deniz Akademisi',    icon: '🪢', roles: [...STAFF, 'sporcu', 'veli'] },
-  { path: '/egitimler',          label: 'Eğitimler',          icon: '📚', roles: [...STAFF, 'sporcu', 'veli'] },
-  { path: '/kutuphane',          label: 'Eğitim Kütüphanesi', icon: '📖', roles: COACHES },
-  { path: '/antrenor-evrak-kuyrugu', label: 'Evrak Kuyruğu', icon: '📋', roles: [...ADMIN, 'basantrenor', 'antrenor'] },
-  { path: '/yoklama',            label: 'Yoklama',            icon: '✅', roles: COACHES },
-  { path: '/katilim',            label: 'Katılım (Öz)',       icon: '🙋', roles: ['sporcu'] },
-
-  { path: '/gorevler', label: 'Görevler', icon: '✓', roles: TASK_ROLES },
-
-  { path: '/yenilemeler', label: 'Yenileme Takibi', icon: '📑', roles: RENEWAL_READERS },
-  // Operasyonel
-  { path: '/tekneler',           label: 'Ekipmanlar',         icon: '🛟', roles: STAFF },
-  { path: '/odemeler',           label: 'Ödemeler',           icon: '💳', roles: [...SECRETARIAT, 'sporcu', 'veli', 'uye'] },
-  { path: '/raporlar',           label: 'Raporlar',           icon: '📈', roles: SECRETARIAT },
-  { path: '/takvim',             label: 'Takvim',             icon: '📅', roles: [...STAFF, 'sporcu', 'veli', 'uye'] },
-  { path: '/ayarlar',            label: 'Ayarlar',            icon: '⚙️', roles: ADMIN },
-]
 
 interface AppShellProps {
   children: React.ReactNode
@@ -70,6 +15,18 @@ export default function AppShell({ children, title }: AppShellProps) {
   const [unreadNotifications, setUnreadNotifications] = useState(0)
   const { user, logout } = useAuth()
   const navigate = useNavigate()
+  const location = useLocation()
+  const [menuSearch, setMenuSearch] = useState('')
+  const [expanded, setExpanded] = useState<Record<string, boolean>>({})
+  const hamburger = useRef<HTMLButtonElement>(null)
+  const groups = visibleNavigation(user?.role ?? '', menuSearch)
+
+  useEffect(() => {
+    if (!sidebarOpen) return
+    const escape = (e: KeyboardEvent) => { if (e.key === 'Escape') { setSidebarOpen(false); hamburger.current?.focus() } }
+    window.addEventListener('keydown', escape)
+    return () => window.removeEventListener('keydown', escape)
+  }, [sidebarOpen])
   const pendingApplications = usePendingApplications()
 
   // Bildirim badge sayısını çek (60 saniyede bir yenile)
@@ -100,7 +57,7 @@ export default function AppShell({ children, title }: AppShellProps) {
     <div className="app-shell">
       {/* Mobile overlay */}
       {sidebarOpen && (
-        <div className="sidebar-overlay" onClick={closeSidebar} />
+        <button className="sidebar-overlay" aria-label="Menüyü kapat" onClick={closeSidebar} />
       )}
 
       {/* Sidebar */}
@@ -113,37 +70,26 @@ export default function AppShell({ children, title }: AppShellProps) {
           </div>
         </div>
 
-        <nav>
+        <nav id="main-navigation" aria-label="Ana menü">
+          <div className="sidebar-search"><input type="search" aria-label="Menüde ara" placeholder="Menüde ara…" value={menuSearch} onChange={(e) => setMenuSearch(e.target.value)} /></div>
+          {groups.length === 0 && <p className="sidebar-no-results" role="status">Eşleşen menü bulunamadı.</p>}
           <ul className="sidebar-nav">
-            {NAV_ITEMS.filter((item) => !item.roles || (user?.role && item.roles.includes(user.role))).map((item) => {
-              const showAppBadge =
-                item.path === '/admin/applications' && pendingApplications > 0
-              const showNotifBadge =
-                item.path === '/bildirimler' && unreadNotifications > 0
-              return (
-                <li key={item.path}>
-                  <NavLink
-                    to={item.path}
-                    className={({ isActive }) =>
-                      `sidebar-nav-item${isActive ? ' active' : ''}`
-                    }
-                    onClick={closeSidebar}
-                  >
-                    <span className="sidebar-nav-item-icon">{item.icon}</span>
-                    <span style={{ flex: 1 }}>{item.label}</span>
-                    {showAppBadge && (
-                      <span className="sidebar-nav-badge">
-                        {pendingApplications > 99 ? '99+' : pendingApplications}
-                      </span>
-                    )}
-                    {showNotifBadge && (
-                      <span className="sidebar-nav-badge">
-                        {unreadNotifications > 99 ? '99+' : unreadNotifications}
-                      </span>
-                    )}
-                  </NavLink>
-                </li>
-              )
+            {groups.map((group) => {
+              const activeGroup = group.items.some((item) => itemActive(item, location.pathname))
+              const open = !!menuSearch.trim() || (expanded[group.id] ?? (activeGroup || group.id === 'home'))
+              return <li key={group.id} className="sidebar-group">
+                <button type="button" className={`sidebar-group-toggle${activeGroup ? ' current' : ''}`} aria-expanded={open} aria-controls={`nav-${group.id}`} onClick={() => setExpanded((old) => ({ ...old, [group.id]: !open }))}>
+                  <span aria-hidden="true">{group.icon}</span><span>{group.label}</span><span className="sidebar-group-chevron" aria-hidden="true">{open ? '⌄' : '›'}</span>
+                </button>
+                <ul id={`nav-${group.id}`} className="sidebar-group-items" hidden={!open}>
+                  {group.items.map((item) => <li key={item.path}>
+                    <NavLink to={item.path} className={() => `sidebar-nav-item${itemActive(item, location.pathname) ? ' active' : ''}`} onClick={closeSidebar}>
+                      <span className="sidebar-nav-item-icon" aria-hidden="true">{item.icon}</span><span style={{ flex: 1 }}>{item.label}</span>
+                      {item.path === '/admin/applications' && pendingApplications > 0 && <span className="sidebar-nav-badge" aria-label={`${pendingApplications} bekleyen başvuru`}>{pendingApplications > 99 ? '99+' : pendingApplications}</span>}
+                    </NavLink>
+                  </li>)}
+                </ul>
+              </li>
             })}
           </ul>
         </nav>
@@ -166,13 +112,19 @@ export default function AppShell({ children, title }: AppShellProps) {
       <div className="app-shell-body">
         <header className="topbar">
           <button
+            ref={hamburger}
             className="topbar-hamburger"
+            aria-expanded={sidebarOpen}
+            aria-controls="main-navigation"
             onClick={() => setSidebarOpen((o) => !o)}
             aria-label="Menüyü aç/kapat"
           >
             ☰
           </button>
           <div className="topbar-title">{title ?? 'Mersin Yelken Yat ve Su Sporları Kulübü'}</div>
+          <Link to="/bildirimler" className={`topbar-notifications${location.pathname === '/bildirimler' ? ' active' : ''}`} aria-label={unreadNotifications > 0 ? `Bildirimler, ${unreadNotifications} okunmamış` : 'Bildirimler'} title="Sistem bildirimleri" onClick={closeSidebar}>
+            <span aria-hidden="true">🔔</span>{unreadNotifications > 0 && <span className="topbar-notification-count" aria-hidden="true">{unreadNotifications > 99 ? '99+' : unreadNotifications}</span>}
+          </Link>
         </header>
 
         <main className="main-content">

@@ -1,7 +1,10 @@
-import { useCallback, useEffect, useRef, useState } from 'react'
-import { useNavigate } from 'react-router-dom'
+import { useEffect, useState } from 'react'
+import { Link, useNavigate, useSearchParams } from 'react-router-dom'
 import AppShell from '@/components/layout/AppShell'
 import PersonFormModal from './PersonFormModal'
+import { useAuth } from '@/hooks/useAuth'
+import { ADMIN, isRouteAllowed } from '@/config/access'
+import { PERSON_FILTERS, PERSON_PAGE_SIZE, personFilters, personListParams } from './personFilters'
 import { personsApi } from '@/api/persons'
 import type { Person, PersonRoleCode, PersonListResponse } from '@/types/person'
 
@@ -14,101 +17,72 @@ const ROLE_LABELS: Record<PersonRoleCode, string> = {
   misafir: 'Misafir',
 }
 
-const PAGE_SIZE = 20
+const PAGE_SIZE = PERSON_PAGE_SIZE
+const PROFILE_PATHS: Partial<Record<PersonRoleCode, string>> = { sporcu: '/sporcular', veli: '/veliler', uye: '/uyeler', antrenor: '/antrenorler' }
 
-function RoleBadge({ code }: { code: PersonRoleCode }) {
-  return (
-    <span className={`badge badge-${code}`}>
-      {ROLE_LABELS[code] ?? code}
-    </span>
-  )
+function RoleBadge({ code, personId, userRole }: { code: PersonRoleCode; personId: string; userRole: string }) {
+  const path = PROFILE_PATHS[code]
+  return path && isRouteAllowed(path, userRole)
+    ? <Link className={`badge badge-${code}`} to={`${path}/${personId}`} onClick={(e) => e.stopPropagation()} title={`${ROLE_LABELS[code]} ayrıntılarını aç`}>{ROLE_LABELS[code]}</Link>
+    : <span className={`badge badge-${code}`}>{ROLE_LABELS[code] ?? code}</span>
 }
 
 export default function PersonsPage() {
   const navigate = useNavigate()
+  const { user } = useAuth()
+  const canWrite = ADMIN.includes(user?.role ?? '')
+  const [params, setParams] = useSearchParams()
+  const { search, role: roleFilter, active: activeFilter, skip } = personFilters(params)
+  const [refresh, setRefresh] = useState(0)
+  const filterPath = PROFILE_PATHS[roleFilter as PersonRoleCode]
+  const changeFilter = (key: string, value: string) => setParams((old) => {
+    const next = new URLSearchParams(old)
+    if (value) next.set(key, value); else next.delete(key)
+    next.delete('page')
+    return next
+  }, { replace: key === 'q' })
+  const changePage = (nextSkip: number) => setParams((old) => {
+    const next = new URLSearchParams(old)
+    if (nextSkip) next.set('page', String(nextSkip / PAGE_SIZE + 1)); else next.delete('page')
+    return next
+  })
   const [data, setData] = useState<PersonListResponse | null>(null)
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
 
-  const [search, setSearch] = useState('')
-  const [roleFilter, setRoleFilter] = useState('')
-  const [activeFilter, setActiveFilter] = useState<string>('')
-  const [skip, setSkip] = useState(0)
-
   const [modalOpen, setModalOpen] = useState(false)
   const [editPerson, setEditPerson] = useState<Person | undefined>(undefined)
 
-  const debounceRef = useRef<ReturnType<typeof setTimeout> | null>(null)
-
-  const fetchPersons = useCallback(
-    async (searchVal: string, role: string, active: string, skipVal: number) => {
-      setLoading(true)
-      setError(null)
+  useEffect(() => {
+    let cancelled = false
+    setLoading(true)
+    setError(null)
+    const requestParams = personListParams(new URLSearchParams({ q: search, role: roleFilter, active: activeFilter, page: String(skip / PAGE_SIZE + 1) }))
+    const timer = setTimeout(async () => {
       try {
-        const params: Record<string, unknown> = {
-          skip: skipVal,
-          limit: PAGE_SIZE,
+        const response = await personsApi.list(requestParams)
+        if (cancelled) return
+        if (skip > 0 && skip >= response.data.total) {
+          const lastPage = Math.max(1, Math.ceil(response.data.total / PAGE_SIZE))
+          setParams((old) => { const next = new URLSearchParams(old); if (lastPage > 1) next.set('page', String(lastPage)); else next.delete('page'); return next }, { replace: true })
+          return
         }
-        if (searchVal) params.search = searchVal
-        if (role) params.role_code = role
-        if (active !== '') params.is_active = active === 'true'
-
-        const resp = await personsApi.list(params)
-        setData(resp.data)
-      } catch {
-        setError('Kişiler yüklenemedi.')
-      } finally {
-        setLoading(false)
-      }
-    },
-    []
-  )
-
-  useEffect(() => {
-    if (debounceRef.current) clearTimeout(debounceRef.current)
-    debounceRef.current = setTimeout(() => {
-      setSkip(0)
-      fetchPersons(search, roleFilter, activeFilter, 0)
+        setData(response.data)
+      } catch { if (!cancelled) setError('Kişi rehberi yüklenemedi.') }
+      finally { if (!cancelled) setLoading(false) }
     }, 300)
-    return () => {
-      if (debounceRef.current) clearTimeout(debounceRef.current)
-    }
-  }, [search, roleFilter, activeFilter, fetchPersons])
+    return () => { cancelled = true; clearTimeout(timer) }
+  }, [search, roleFilter, activeFilter, skip, refresh, setParams])
 
-  useEffect(() => {
-    fetchPersons(search, roleFilter, activeFilter, skip)
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [skip])
-
-  const handleSaved = (saved: Person) => {
-    setData((prev) => {
-      if (!prev) return prev
-      const exists = prev.items.some((p) => p.id === saved.id)
-      if (exists) {
-        return {
-          ...prev,
-          items: prev.items.map((p) => (p.id === saved.id ? saved : p)),
-        }
-      }
-      return {
-        ...prev,
-        items: [saved, ...prev.items],
-        total: prev.total + 1,
-      }
-    })
-  }
+  const handleSaved = () => setRefresh((value) => value + 1)
 
   const handleDeactivate = async (person: Person, e: React.MouseEvent) => {
     e.stopPropagation()
-    if (!window.confirm(`${person.first_name} ${person.last_name} kişisini pasife almak istiyor musunuz?`))
+    if (!window.confirm(`${person.first_name} ${person.last_name} kişisini ${person.is_active ? 'pasife' : 'aktife'} almak istiyor musunuz?`))
       return
     try {
-      const resp = await personsApi.update(person.id, { is_active: !person.is_active })
-      setData((prev) =>
-        prev
-          ? { ...prev, items: prev.items.map((p) => (p.id === person.id ? resp.data : p)) }
-          : prev
-      )
+      await personsApi.update(person.id, { is_active: !person.is_active })
+      setRefresh((value) => value + 1)
     } catch {
       alert('İşlem sırasında hata oluştu.')
     }
@@ -124,11 +98,7 @@ export default function PersonsPage() {
       return
     try {
       await personsApi.delete(person.id)
-      setData((prev) =>
-        prev
-          ? { ...prev, items: prev.items.filter((p) => p.id !== person.id), total: prev.total - 1 }
-          : prev
-      )
+      setRefresh((value) => value + 1)
     } catch {
       alert('Silme işlemi sırasında hata oluştu.')
     }
@@ -149,14 +119,17 @@ export default function PersonsPage() {
   const currentPage = Math.floor(skip / PAGE_SIZE) + 1
 
   return (
-    <AppShell title="Kişiler">
+    <AppShell title="Kişi Rehberi">
       <div className="page-header">
-        <h1 className="page-title">Kişiler</h1>
-        <button className="btn btn-primary" onClick={openCreate}>
+        <div><h1 className="page-title">Kişi Rehberi</h1><p>Kişi türünü seçerek listeyi daraltın. Bir kişi birden fazla grupta yer alabilir.</p></div>
+        {canWrite && <button className="btn btn-primary" onClick={openCreate}>
           + Yeni Kişi
-        </button>
+        </button>}
       </div>
 
+      <div className="person-role-filters" role="group" aria-label="Kişi türü">
+        {PERSON_FILTERS.map((filter) => <button type="button" key={filter.value} className={`person-role-filter${roleFilter === filter.value ? ' selected' : ''}`} aria-pressed={roleFilter === filter.value} onClick={() => changeFilter('role', filter.value)}>{filter.label}</button>)}
+      </div>
       {/* Filter bar */}
       <div className="filter-bar">
         <div className="filter-search">
@@ -165,31 +138,18 @@ export default function PersonsPage() {
             type="text"
             className="filter-search-input"
             placeholder="Ad, soyad, e-posta veya telefon ara..."
+            aria-label="Kişi ara"
             value={search}
-            onChange={(e) => setSearch(e.target.value)}
+            onChange={(e) => changeFilter('q', e.target.value)}
           />
         </div>
 
         <select
           className="form-select"
-          style={{ width: 'auto', minWidth: 140 }}
-          value={roleFilter}
-          onChange={(e) => setRoleFilter(e.target.value)}
-        >
-          <option value="">Tüm Roller</option>
-          <option value="sporcu">Sporcu</option>
-          <option value="uye">Üye</option>
-          <option value="veli">Veli</option>
-          <option value="antrenor">Antrenör</option>
-          <option value="personel">Personel</option>
-          <option value="misafir">Misafir</option>
-        </select>
-
-        <select
-          className="form-select"
           style={{ width: 'auto', minWidth: 120 }}
+          aria-label="Kişi durumu"
           value={activeFilter}
-          onChange={(e) => setActiveFilter(e.target.value)}
+          onChange={(e) => changeFilter('active', e.target.value)}
         >
           <option value="">Tüm Durum</option>
           <option value="true">Aktif</option>
@@ -197,11 +157,15 @@ export default function PersonsPage() {
         </select>
       </div>
 
+      <div className="directory-context">
+        <p role="status">{loading ? 'Kişiler yükleniyor…' : error ? '' : `${data?.total ?? 0} kişi${roleFilter ? ` · ${ROLE_LABELS[roleFilter as PersonRoleCode]}` : ''}`}</p>
+        {filterPath && isRouteAllowed(filterPath, user?.role ?? '') && <Link className="btn btn-sm btn-secondary" to={filterPath}>{ROLE_LABELS[roleFilter as PersonRoleCode]} İşlemlerini Aç</Link>}
+      </div>
       {/* Error */}
       {error && (
-        <div className="alert alert-error">
+        <div className="alert alert-error" role="alert">
           <span>⚠️</span>
-          <span>{error}</span>
+          <span>{error}</span><button className="btn btn-sm btn-ghost" onClick={() => setRefresh((value) => value + 1)}>Tekrar Dene</button>
         </div>
       )}
 
@@ -229,7 +193,7 @@ export default function PersonsPage() {
                   <th>Ad Soyad</th>
                   <th>Telefon</th>
                   <th>E-posta</th>
-                  <th>Roller</th>
+                  <th>Kişi Türü</th>
                   <th>Durum</th>
                   <th>İşlemler</th>
                 </tr>
@@ -251,7 +215,7 @@ export default function PersonsPage() {
                       <div style={{ display: 'flex', gap: 4, flexWrap: 'wrap' }}>
                         {person.role_codes.length > 0
                           ? person.role_codes.map((code) => (
-                              <RoleBadge key={code} code={code} />
+                              <RoleBadge key={code} code={code} personId={person.id} userRole={user?.role ?? ''} />
                             ))
                           : '—'}
                       </div>
@@ -264,7 +228,7 @@ export default function PersonsPage() {
                       </span>
                     </td>
                     <td>
-                      <div style={{ display: 'flex', gap: 6 }}>
+                      {canWrite && <div style={{ display: 'flex', gap: 6 }}>
                         <button
                           className="btn btn-sm btn-secondary"
                           onClick={(e) => openEdit(person, e)}
@@ -285,7 +249,7 @@ export default function PersonsPage() {
                         >
                           🗑
                         </button>
-                      </div>
+                      </div>}
                     </td>
                   </tr>
                 ))}
@@ -303,7 +267,7 @@ export default function PersonsPage() {
                   <button
                     className="btn btn-sm btn-secondary"
                     disabled={skip === 0}
-                    onClick={() => setSkip((s) => Math.max(0, s - PAGE_SIZE))}
+                    onClick={() => changePage(Math.max(0, skip - PAGE_SIZE))}
                   >
                     ← Önceki
                   </button>
@@ -313,7 +277,7 @@ export default function PersonsPage() {
                   <button
                     className="btn btn-sm btn-secondary"
                     disabled={skip + PAGE_SIZE >= data.total}
-                    onClick={() => setSkip((s) => s + PAGE_SIZE)}
+                    onClick={() => changePage(skip + PAGE_SIZE)}
                   >
                     Sonraki →
                   </button>

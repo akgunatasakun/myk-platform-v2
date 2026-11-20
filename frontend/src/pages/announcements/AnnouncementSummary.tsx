@@ -14,7 +14,7 @@ export default function AnnouncementSummary() {
       .catch(() => { if (!cancelled) setError(true) })
     return () => { cancelled = true }
   }, [attempt])
-  return <section className="card" style={{ marginBottom: 20 }} aria-label="Kulüp duyuruları"><div className="card-header">Kulüp Duyuruları</div><div className="card-body">
+  return <section className="card" style={{ marginBottom: 20 }} aria-label="Kulüp duyuruları"><div className="card-header">Kulüp Panosu</div><div className="card-body">
     {error ? <div role="alert">Duyurular yüklenemedi. <button className="btn btn-ghost" onClick={() => setAttempt((n) => n + 1)}>Tekrar Dene</button></div> : !items ? <p role="status">Duyurular yükleniyor…</p> : !items.length ? <p>Güncel duyuru bulunmuyor.</p> : items.map((a) => <div key={a.id} style={{ marginBottom: 16, overflowWrap: 'anywhere' }}><strong>{a.important && '📌 '}{a.title}</strong><p style={{ whiteSpace: 'pre-wrap' }}>{a.body.length > 300 ? a.body.slice(0, 300) + '…' : a.body}</p></div>)}
     <Link to="/duyurular">Tüm duyuruları aç</Link>
   </div></section>

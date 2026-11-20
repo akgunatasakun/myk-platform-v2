@@ -161,7 +161,7 @@ export default function NotificationsPage() {
   const unreadCount = notifications.filter((n) => n.acknowledged_at === null).length
 
   return (
-    <AppShell title="Bildirimler">
+    <AppShell title="Sistem Bildirimleri">
       <div className="page-header">
         <h1 className="page-title">🔔 Bildirimler</h1>
 
