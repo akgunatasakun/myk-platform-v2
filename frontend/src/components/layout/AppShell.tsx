@@ -22,6 +22,7 @@ const COACHES     = [...MANAGEMENT, 'sportif_direktor', 'basantrenor', 'antrenor
 
 const NAV_ITEMS: NavItem[] = [
   // Herkes
+  { path: '/duyurular', label: 'Duyurular', icon: '📣' },
   { path: '/dashboard',          label: 'Genel Bakış',       icon: '📊' },
   { path: '/bildirimler',        label: 'Bildirimler',        icon: '🔔' },
   { path: '/belgeler',           label: 'Belgeler',           icon: '📂' },

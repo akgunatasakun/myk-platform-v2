@@ -1390,3 +1390,6 @@ html, body {
 /* Görev kartları telefonda tek, geniş ekranda iki sütun. */
 .task-grid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 16px; }
 @media (max-width: 768px) { .task-grid { grid-template-columns: minmax(0, 1fr); } }
+
+.announcement-audiences { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 10px; }
+@media (max-width: 600px) { .announcement-audiences { grid-template-columns: minmax(0, 1fr); } }
