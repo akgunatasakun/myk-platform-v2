@@ -32,8 +32,6 @@ from app.core.tenant import get_club_id
 from app.database import get_db
 from app.models.payment import Payment
 from app.models.person import Person
-from app.models.person_guardian import PersonGuardian
-from app.models.user import User
 from app.schemas.auth import TokenPayload
 from app.schemas.payment import (
     OverduePaymentOut,
@@ -45,6 +43,8 @@ from app.schemas.payment import (
     RevenueReport,
 )
 
+from app.services.person_scope_service import get_own_person_ids
+
 router = APIRouter(prefix="/payments", tags=["payments"])
 
 
@@ -55,22 +55,7 @@ async def _get_ward_ids(
     club_id: uuid.UUID,
     db: AsyncSession,
 ) -> list[uuid.UUID]:
-    """Veli'nin bağlı sporcularının (ward) person_id listesini döndür."""
-    # Önce user'ın person_id'sini bul
-    result = await db.execute(
-        select(User.person_id).where(User.id == user_id)
-    )
-    person_id = result.scalar_one_or_none()
-    if not person_id:
-        return []
-    # Guardian bağlantısından ward'ları al
-    result = await db.execute(
-        select(PersonGuardian.athlete_person_id).where(
-            PersonGuardian.guardian_person_id == person_id,
-            PersonGuardian.club_id == club_id,
-        )
-    )
-    return list(result.scalars().all())
+    return await get_own_person_ids(user_id, club_id, db, "veli")
 
 
 # ─── Yardımcılar ─────────────────────────────────────────────────────────────

@@ -42,7 +42,6 @@ from app.core.security import get_current_user
 from app.core.tenant import get_club_id
 from app.database import get_db
 from app.models.person import Person, PersonRole
-from app.models.person_guardian import PersonGuardian
 from app.models.user import User
 from app.models.training import (
     TrainingAttendance,
@@ -73,6 +72,8 @@ from app.schemas.training import (
     TrainingSessionOut,
     TrainingSessionUpdate,
 )
+
+from app.services.person_scope_service import get_own_person_ids
 
 router = APIRouter(prefix="/trainings", tags=["training"])
 _ISTANBUL = ZoneInfo("Europe/Istanbul")
@@ -133,30 +134,7 @@ async def _get_own_person_ids(
     db: AsyncSession,
     role: str,
 ) -> list[uuid.UUID]:
-    """Own-scope için erişilebilir person_id listesi döndür.
-
-    - sporcu: [kendi person_id]
-    - veli: [ward'larının person_id listesi]
-    - diğer: [] (own-scope beklenmiyor)
-    """
-    result = await db.execute(select(User.person_id).where(User.id == user_id))
-    person_id: uuid.UUID | None = result.scalar_one_or_none()
-    if not person_id:
-        return []
-
-    if role == "sporcu":
-        return [person_id]
-
-    if role == "veli":
-        result = await db.execute(
-            select(PersonGuardian.athlete_person_id).where(
-                PersonGuardian.guardian_person_id == person_id,
-                PersonGuardian.club_id == club_id,
-            )
-        )
-        return list(result.scalars().all())
-
-    return []
+    return await get_own_person_ids(user_id, club_id, db, role)
 
 
 async def _assert_own_scope_course_access(

@@ -545,12 +545,16 @@ async def _clear_primary_for_athlete(
 async def list_guardians(
     person_id: uuid.UUID,
     club_id: uuid.UUID = Depends(get_club_id),
-    _current_user: TokenPayload = Depends(get_current_user),
+    current_user: TokenPayload = Depends(get_current_user),
     _perm: None = Depends(require_permission("kisi:read")),
     db: AsyncSession = Depends(get_db),
 ) -> List[PersonGuardianOut]:
     # Sporcu bu kulübe ait mi?
     await _get_person_for_club(person_id, club_id, db)
+    if current_user.role == "antrenor":
+        allowed_ids = await get_antrenor_enrolled_person_ids(uuid.UUID(current_user.sub), club_id, db)
+        if person_id not in allowed_ids:
+            raise HTTPException(status_code=403, detail="Bu kişiye erişim yetkiniz yok.")
 
     result = await db.execute(
         select(PersonGuardian)
@@ -574,12 +578,16 @@ async def list_guardians(
 async def list_guardian_athletes(
     person_id: uuid.UUID,
     club_id: uuid.UUID = Depends(get_club_id),
-    _current_user: TokenPayload = Depends(get_current_user),
+    current_user: TokenPayload = Depends(get_current_user),
     _perm: None = Depends(require_permission("kisi:read")),
     db: AsyncSession = Depends(get_db),
 ) -> List[GuardianAthleteOut]:
     # Veli kişisi gerçekten bu tenant içinde mevcut mu?
     await _get_person_for_club(person_id, club_id, db)
+    if current_user.role == "antrenor":
+        allowed_ids = await get_antrenor_enrolled_person_ids(uuid.UUID(current_user.sub), club_id, db)
+        if person_id not in allowed_ids:
+            raise HTTPException(status_code=403, detail="Bu kişiye erişim yetkiniz yok.")
 
     result = await db.execute(
         select(PersonGuardian)
@@ -594,6 +602,8 @@ async def list_guardian_athletes(
         )
     )
     links = result.scalars().all()
+    if current_user.role == "antrenor":
+        links = [link for link in links if link.athlete_person_id in allowed_ids]
 
     return [GuardianAthleteOut.model_validate(link) for link in links]
 
