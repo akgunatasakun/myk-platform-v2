@@ -1344,7 +1344,7 @@ async def test_0031_training_payment_link_schema(engine):
     async with engine.connect() as conn:
         column = (await conn.execute(text("SELECT is_nullable FROM information_schema.columns WHERE table_schema='public' AND table_name='payments' AND column_name='training_enrollment_id'"))).scalar_one()
         assert column == 'YES'
-        fk = (await conn.execute(text("SELECT confdeltype FROM pg_constraint WHERE conname='fk_payments_training_enrollment'"))).scalar_one()
+        fk = (await conn.execute(text("SELECT confdeltype::text FROM pg_constraint WHERE conname='fk_payments_training_enrollment'"))).scalar_one()
         assert fk == 'n'  # ON DELETE SET NULL
         assert (await conn.execute(text("SELECT to_regclass('public.ix_payments_training_enrollment_id')"))).scalar_one() is not None
 
