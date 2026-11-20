@@ -120,9 +120,8 @@ def has_permission(role: str, permission: str) -> bool:
     if len(parts) >= 2 and parts[1] == "*":
         return False
 
-    # read:own → izin var
-    own_ns = f"{parts[0]}:read:own"
-    return own_ns in perms
+    # Own izin yalnız aynı eyleme karşılık gelir; read:own yazma vermez.
+    return len(parts) == 2 and f"{permission}:own" in perms
 
 
 def is_own_scope_only(role: str, permission: str) -> bool:

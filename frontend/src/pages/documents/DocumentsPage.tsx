@@ -1,6 +1,8 @@
 import { useCallback, useEffect, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
 import AppShell from '@/components/layout/AppShell'
+import { useAuth } from '@/hooks/useAuth'
+import { DOCUMENT_MANAGERS } from '@/api/documentAccess'
 import { documentsApi } from '@/api/documents'
 import type { Document, DocumentType, ContentStatus } from '@/types/document'
 
@@ -61,6 +63,7 @@ interface CreateModalProps {
 }
 
 function CreateDocumentModal({ isOpen, onClose, onSaved }: CreateModalProps) {
+  const [managementOnly, setManagementOnly] = useState(false)
   const [code, setCode] = useState('')
   const [title, setTitle] = useState('')
   const [docType, setDocType] = useState<DocumentType>('diger')
@@ -73,11 +76,12 @@ function CreateDocumentModal({ isOpen, onClose, onSaved }: CreateModalProps) {
     setSaving(true)
     setError(null)
     try {
-      const resp = await documentsApi.create({ code: code.trim(), title: title.trim(), document_type: docType })
+      const resp = await documentsApi.create({ code: code.trim(), title: title.trim(), document_type: docType, management_only: managementOnly })
       onSaved(resp.data)
       setCode('')
       setTitle('')
       setDocType('diger')
+      setManagementOnly(false)
       onClose()
     } catch (err: unknown) {
       const msg = (err as { response?: { data?: { detail?: string } } })?.response?.data?.detail
@@ -124,6 +128,7 @@ function CreateDocumentModal({ isOpen, onClose, onSaved }: CreateModalProps) {
               />
             </div>
             <div className="form-group">
+              <label><input type="checkbox" checked={managementOnly} onChange={(e) => setManagementOnly(e.target.checked)} /> Yalnız Yönetim (poliçe ve sözleşmeler)</label>
               <label className="form-label">Belge Türü</label>
               <select
                 className="form-select"
@@ -151,6 +156,8 @@ function CreateDocumentModal({ isOpen, onClose, onSaved }: CreateModalProps) {
 }
 
 export default function DocumentsPage() {
+  const { user } = useAuth()
+  const canManage = DOCUMENT_MANAGERS.includes(user?.role ?? '')
   const navigate = useNavigate()
 
   const [docs, setDocs] = useState<Document[]>([])
@@ -207,9 +214,9 @@ export default function DocumentsPage() {
     <AppShell title="Belgeler">
       <div className="page-header">
         <h1 className="page-title">Belgeler</h1>
-        <button className="btn btn-primary" onClick={() => setModalOpen(true)}>
+        {canManage && <button className="btn btn-primary" onClick={() => setModalOpen(true)}>
           + Yeni Belge
-        </button>
+        </button>}
       </div>
 
       {/* Filtreler */}
@@ -281,7 +288,7 @@ export default function DocumentsPage() {
                   <td>
                     <strong>{doc.code}</strong>
                   </td>
-                  <td>{doc.title}</td>
+                  <td>{doc.title}{doc.management_only && <span className="badge badge-secondary"> · Yalnız Yönetim</span>}</td>
                   <td>
                     <span className="badge badge-secondary">
                       {TYPE_LABEL[doc.document_type] ?? doc.document_type}
@@ -294,12 +301,12 @@ export default function DocumentsPage() {
                   </td>
                   <td>
                     <div style={{ display: 'flex', gap: 6 }} onClick={(e) => e.stopPropagation()}>
-                      <button
+                      {canManage && <button
                         className="btn btn-sm btn-danger"
                         onClick={(e) => handleDelete(doc, e)}
                       >
                         Sil
-                      </button>
+                      </button>}
                     </div>
                   </td>
                 </tr>

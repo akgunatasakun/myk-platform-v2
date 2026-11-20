@@ -36,12 +36,22 @@ from sqlalchemy.orm import selectinload
 
 from app.config import get_settings
 from app.core.audit import log_action
-from app.core.rbac import has_permission, require_permission, is_own_scope_only
+from app.core.document_access import (
+    MANAGEMENT_DOCUMENT_READERS,
+    is_management_document,
+    management_document_filter,
+)
+from app.core.rbac import has_permission, is_own_scope_only, require_permission
 from app.core.security import get_current_user
 from app.core.tenant import get_club_id
 from app.database import get_db
 from app.dependencies.documents_storage import get_dms_storage
-from app.models.documents import Document, DocumentCategory, DocumentRevision, DocumentRevisionFile
+from app.models.documents import (
+    Document,
+    DocumentCategory,
+    DocumentRevision,
+    DocumentRevisionFile,
+)
 from app.models.person_guardian import PersonGuardian
 from app.models.user import User
 from app.schemas.auth import TokenPayload
@@ -80,6 +90,7 @@ async def _get_doc_person_ids(
             select(PersonGuardian.athlete_person_id).where(
                 PersonGuardian.guardian_person_id == person_id,
                 PersonGuardian.club_id == club_id,
+                PersonGuardian.is_active.is_(True),
             )
         )
         return list(result.scalars().all())
@@ -135,6 +146,7 @@ async def _get_document_or_404(
     db: AsyncSession,
     *,
     load_revisions: bool = False,
+    user: TokenPayload,
 ) -> Document:
     q = select(Document).where(
         Document.id == document_id,
@@ -149,6 +161,8 @@ async def _get_document_or_404(
     doc = result.scalar_one_or_none()
     if doc is None:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Belge bulunamadı.")
+    if user.role not in MANAGEMENT_DOCUMENT_READERS and await is_management_document(db, doc.id, club_id):
+        raise HTTPException(status_code=404, detail="Belge bulunamadı.")
     return doc
 
 
@@ -191,6 +205,8 @@ async def list_documents(
         Document.club_id == club_id,
         Document.is_deleted.is_(False),
     )
+    if current_user.role not in MANAGEMENT_DOCUMENT_READERS:
+        stmt = stmt.where(~management_document_filter())
     # Own-scope: sporcu/veli yalnızca kendilerine ait (owner_type="person") belgeleri görür
     if is_own_scope_only(current_user.role, "belge:read"):
         person_ids = await _get_doc_person_ids(
@@ -229,6 +245,7 @@ TYF_CODE_PREFIX = "TYF-"
 async def list_kutuphane_documents(
     q: Optional[str] = Query(default=None),
     club_id: uuid.UUID = Depends(get_club_id),
+    current_user: TokenPayload = Depends(get_current_user),
     _: None = Depends(require_permission("kutuphane:read")),
     db: AsyncSession = Depends(get_db),
 ) -> List[DocumentOut]:
@@ -237,6 +254,7 @@ async def list_kutuphane_documents(
         Document.club_id == club_id,
         Document.is_deleted.is_(False),
         Document.code.like(f"{TYF_CODE_PREFIX}%"),
+        ~management_document_filter(),
     )
     if q:
         like = f"%{q}%"
@@ -249,12 +267,13 @@ async def list_kutuphane_documents(
 async def get_kutuphane_document(
     document_id: uuid.UUID,
     club_id: uuid.UUID = Depends(get_club_id),
+    current_user: TokenPayload = Depends(get_current_user),
     _: None = Depends(require_permission("kutuphane:read")),
     db: AsyncSession = Depends(get_db),
 ) -> DocumentDetailOut:
     """TYF Eğitim Kütüphanesi — tek doküman detayı (revizyon + dosyalar)."""
-    doc = await _get_document_or_404(document_id, club_id, db, load_revisions=True)
-    if not doc.code.startswith(TYF_CODE_PREFIX):
+    doc = await _get_document_or_404(document_id, club_id, db, load_revisions=True, user=current_user)
+    if not doc.code.startswith(TYF_CODE_PREFIX) or await is_management_document(db, doc.id, club_id):
         raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Bu belge kütüphane kapsamında değil.")
     return DocumentDetailOut.model_validate(doc)
 
@@ -339,7 +358,7 @@ async def get_document(
     _: None = Depends(require_permission("belge:read")),
     db: AsyncSession = Depends(get_db),
 ) -> DocumentDetailOut:
-    doc = await _get_document_or_404(document_id, club_id, db, load_revisions=True)
+    doc = await _get_document_or_404(document_id, club_id, db, load_revisions=True, user=current_user)
     # Own-scope: sporcu/veli yalnızca kendi belgesine erişebilir
     if is_own_scope_only(current_user.role, "belge:read"):
         person_ids = await _get_doc_person_ids(
@@ -386,6 +405,7 @@ async def create_document(
         id=uuid.uuid4(),
         club_id=club_id,
         code=body.code,
+        management_only=body.management_only or body.code.startswith(("MYK-POL-", "MYK-SOZ-")),
         title=body.title,
         document_type=body.document_type,
         content_status=body.content_status,
@@ -423,11 +443,15 @@ async def update_document(
     _: None = Depends(require_permission("belge:create")),
     db: AsyncSession = Depends(get_db),
 ) -> DocumentOut:
-    doc = await _get_document_or_404(document_id, club_id, db)
+    doc = await _get_document_or_404(document_id, club_id, db, user=current_user)
     update_data = body.model_dump(exclude_unset=True)
 
     if not update_data:
         return DocumentOut.model_validate(doc)
+    if update_data.get("management_only") is False and await is_management_document(db, doc.id, club_id):
+        raise HTTPException(status_code=409, detail="Yönetim belgesinin erişim kısıtı kaldırılamaz.")
+    if (update_data.get("code") or doc.code).startswith(("MYK-POL-", "MYK-SOZ-")):
+        update_data["management_only"] = True
 
     # category_id tenant doğrulaması
     if "category_id" in update_data and update_data["category_id"] is not None:
@@ -467,7 +491,7 @@ async def delete_document(
     _: None = Depends(require_permission("belge:delete")),
     db: AsyncSession = Depends(get_db),
 ) -> None:
-    doc = await _get_document_or_404(document_id, club_id, db)
+    doc = await _get_document_or_404(document_id, club_id, db, user=current_user)
     doc.is_deleted = True
     await db.flush()
 
@@ -482,7 +506,7 @@ async def list_revisions(
     _: None = Depends(require_permission("belge:read")),
     db: AsyncSession = Depends(get_db),
 ) -> List[RevisionDetailOut]:
-    doc = await _get_document_or_404(document_id, club_id, db)
+    doc = await _get_document_or_404(document_id, club_id, db, user=current_user)
     # Own-scope: sporcu/veli yalnızca kendi belgesinin revizyonlarını görür
     if is_own_scope_only(current_user.role, "belge:read"):
         person_ids = await _get_doc_person_ids(
@@ -520,7 +544,7 @@ async def create_revision(
     _: None = Depends(require_permission("belge:create")),
     db: AsyncSession = Depends(get_db),
 ) -> RevisionOut:
-    doc = await _get_document_or_404(document_id, club_id, db)
+    doc = await _get_document_or_404(document_id, club_id, db, user=current_user)
 
     # Duplicate revision_code kontrolü
     existing = await db.execute(
@@ -609,7 +633,7 @@ async def upload_revision_file(
     storage: ObjectStorageService = Depends(get_dms_storage),
 ) -> RevisionFileOut:
     # Tenant + varlık kontrolü
-    await _get_document_or_404(document_id, club_id, db)
+    await _get_document_or_404(document_id, club_id, db, user=current_user)
     await _get_revision_or_404(revision_id, document_id, db)
 
     # Dosya oku
@@ -731,14 +755,14 @@ async def download_revision_file(
                      DOCX ve diğer türler her zaman attachment olarak döner.
     """
     # Tenant + izin kontrolü
-    doc = await _get_document_or_404(document_id, club_id, db)
+    doc = await _get_document_or_404(document_id, club_id, db, user=current_user)
     has_belge = has_permission(current_user.role, "belge:read")
     has_kutuphane = has_permission(current_user.role, "kutuphane:read")
     if not has_belge and not has_kutuphane:
         raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Yetkiniz yok.")
     if has_kutuphane and not has_belge:
         # Kütüphane erişimi: yalnızca TYF dokümanları
-        if not doc.code.startswith(TYF_CODE_PREFIX):
+        if not doc.code.startswith(TYF_CODE_PREFIX) or await is_management_document(db, doc.id, club_id):
             raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Bu dosyaya erişim yetkiniz yok.")
     elif has_belge and is_own_scope_only(current_user.role, "belge:read"):
         person_ids = await _get_doc_person_ids(

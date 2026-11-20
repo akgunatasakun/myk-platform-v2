@@ -39,6 +39,9 @@ import AuditPage from '@/pages/audit/AuditPage'
 import Forbidden from '@/pages/Forbidden'
 import NotFound from '@/pages/NotFound'
 import AnnouncementsPage from '@/pages/announcements/AnnouncementsPage'
+import RenewalsPage from '@/pages/renewals/RenewalsPage'
+import { DOCUMENT_READERS } from '@/api/documentAccess'
+import { RENEWAL_READERS } from '@/api/renewals'
 import TasksPage from '@/pages/tasks/TasksPage'
 import { TASK_ROLES } from '@/api/tasks'
 
@@ -52,6 +55,8 @@ const COACHES     = [...MANAGEMENT, 'sportif_direktor', 'basantrenor', 'antrenor
 
 // Route bazlı izin haritası — sadece kısıtlı rotalar (undefined = herkes)
 const ROUTE_ROLES: Record<string, string[]> = {
+  '/yenilemeler': RENEWAL_READERS,
+  '/belgeler': DOCUMENT_READERS,
   '/gorevler': TASK_ROLES,
   '/admin/applications':  SECRETARIAT,
   '/admin/applications/': SECRETARIAT,
@@ -141,6 +146,7 @@ export default function App() {
         />
 
         {/* Protected */}
+        <Route path="/yenilemeler" element={<ProtectedRoute><RenewalsPage /></ProtectedRoute>} />
         <Route path="/duyurular" element={<ProtectedRoute><AnnouncementsPage /></ProtectedRoute>} />
         <Route path="/gorevler" element={<ProtectedRoute><TasksPage /></ProtectedRoute>} />
         <Route
