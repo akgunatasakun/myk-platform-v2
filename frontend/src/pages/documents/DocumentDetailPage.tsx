@@ -1,6 +1,8 @@
 import { useEffect, useState } from 'react'
 import { useParams, useNavigate } from 'react-router-dom'
 import AppShell from '@/components/layout/AppShell'
+import { useAuth } from '@/hooks/useAuth'
+import { DOCUMENT_MANAGERS } from '@/api/documentAccess'
 import { documentsApi } from '@/api/documents'
 import type {
   Document,
@@ -326,6 +328,8 @@ function UploadFileSection({ docId, revId, onUploaded }: {
 }
 
 export default function DocumentDetailPage() {
+  const { user } = useAuth()
+  const canManage = DOCUMENT_MANAGERS.includes(user?.role ?? '')
   const { id } = useParams<{ id: string }>()
   const navigate = useNavigate()
 
@@ -414,6 +418,7 @@ export default function DocumentDetailPage() {
       {/* Belge başlığı */}
       <div className="card" style={{ marginBottom: 20 }}>
         <div className="card-body">
+          {doc.management_only && <p><strong>Erişim: Yalnız Yönetim</strong></p>}
           <h1 style={{ margin: '0 0 4px', fontSize: 22 }}>{doc.title}</h1>
           <div style={{ color: 'var(--color-text-muted)', fontSize: 14 }}>
             <strong>{doc.code}</strong> &nbsp;·&nbsp; {DOC_TYPE_LABEL[doc.document_type] ?? doc.document_type} &nbsp;·&nbsp; {doc.content_status}
@@ -427,12 +432,12 @@ export default function DocumentDetailPage() {
         <div style={{ width: 240, flexShrink: 0 }}>
           <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 8 }}>
             <strong style={{ fontSize: 14 }}>Revizyonlar ({revisions.length})</strong>
-            <button
+            {canManage && <button
               className="btn btn-sm btn-primary"
               onClick={() => setNewRevModalOpen(true)}
             >
               + Yeni
-            </button>
+            </button>}
           </div>
 
           {revisions.length === 0 ? (
@@ -491,11 +496,11 @@ export default function DocumentDetailPage() {
                 docId={doc.id}
                 revId={selectedRevision.id}
               />
-              <UploadFileSection
+              {canManage && <UploadFileSection
                 docId={doc.id}
                 revId={selectedRevision.id}
                 onUploaded={handleFileUploaded}
-              />
+              />}
             </div>
           ) : (
             <div style={{ color: 'var(--color-text-muted)' }}>

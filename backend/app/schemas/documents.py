@@ -6,7 +6,7 @@ import uuid
 from datetime import date, datetime
 from typing import List, Literal, Optional
 
-from pydantic import BaseModel, ConfigDict
+from pydantic import BaseModel, ConfigDict, field_validator
 
 DOCUMENT_TYPES = Literal[
     "prosedur", "talimati", "form", "el_kitabi", "egitim_materyali",
@@ -49,6 +49,7 @@ class CategoryOut(BaseModel):
 # ── Document ──────────────────────────────────────────────────────────────────
 
 class DocumentCreate(BaseModel):
+    management_only: bool = False
     model_config = ConfigDict(extra="forbid")
 
     code: str
@@ -61,6 +62,15 @@ class DocumentCreate(BaseModel):
 
 
 class DocumentUpdate(BaseModel):
+    management_only: Optional[bool] = None
+
+    @field_validator("management_only")
+    @classmethod
+    def management_flag_not_null(cls, value):
+        if value is None:
+            raise ValueError("Erişim kısıtı boş olamaz.")
+        return value
+
     model_config = ConfigDict(extra="forbid")
 
     code: Optional[str] = None
@@ -74,6 +84,7 @@ class DocumentUpdate(BaseModel):
 
 
 class DocumentOut(BaseModel):
+    management_only: bool
     model_config = ConfigDict(from_attributes=True)
 
     id: uuid.UUID

@@ -268,6 +268,14 @@ async def listing(
 
 async def save(db, user, club, request, data, item=None, previous=None):
     await validate(db, club, data)
+    document = (
+        await db.execute(
+            select(Document).where(
+                Document.id == data.document_id, Document.club_id == club
+            )
+        )
+    ).scalar_one()
+    document.management_only = True
     before = (
         {k: str(getattr(item, k)) for k in RenewalInput.model_fields} if item else None
     )

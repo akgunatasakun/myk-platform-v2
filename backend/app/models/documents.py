@@ -67,6 +67,7 @@ class Document(Base):
     content_status: Mapped[str] = mapped_column(String(32), nullable=False, default="taslak")
     owner_type: Mapped[Optional[str]] = mapped_column(String(64), nullable=True)
     owner_id: Mapped[Optional[uuid.UUID]] = mapped_column(nullable=True)
+    management_only: Mapped[bool] = mapped_column(Boolean(), nullable=False, default=False, server_default="false")
     # current_revision_id: NO FK constraint (circular ref — service manages)
     current_revision_id: Mapped[Optional[uuid.UUID]] = mapped_column(nullable=True)
     is_active: Mapped[bool] = mapped_column(Boolean(), nullable=False, default=True)

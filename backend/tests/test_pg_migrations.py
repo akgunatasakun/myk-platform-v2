@@ -1308,3 +1308,32 @@ def test_0030_roundtrip():
         asyncio.get_event_loop().run_until_complete(check())
     finally:
         run_alembic('upgrade', 'head')
+
+
+def test_0030_existing_policy_privacy_backfill():
+    """Mevcut MYK-POL/MYK-SOZ kayıtları dosya taşımadan yönetimle sınırlanır."""
+    club_id, doc_id = uuid.uuid4(), uuid.uuid4()
+    async def seed_legacy():
+        e = create_async_engine(DATABASE_URL, echo=False)
+        try:
+            async with e.begin() as conn:
+                await conn.execute(text("INSERT INTO clubs (id, slug, name, plan, is_active) VALUES (:id, :slug, 'Privacy PG', 'starter', true)"), {'id': club_id, 'slug': uuid.uuid4().hex})
+                await conn.execute(text("INSERT INTO doc_documents (id, club_id, code, title, document_type) VALUES (:id, :club, :code, 'Poliçe', 'diger')"), {'id': doc_id, 'club': club_id, 'code': 'MYK-POL-' + uuid.uuid4().hex})
+        finally:
+            await e.dispose()
+    async def verify():
+        e = create_async_engine(DATABASE_URL, echo=False)
+        try:
+            async with e.begin() as conn:
+                r = await conn.execute(text('SELECT management_only FROM doc_documents WHERE id = :id'), {'id': doc_id})
+                assert r.scalar_one() is True
+                await conn.execute(text('DELETE FROM clubs WHERE id = :id'), {'id': club_id})
+        finally:
+            await e.dispose()
+    try:
+        run_alembic('downgrade', '0029')
+        asyncio.get_event_loop().run_until_complete(seed_legacy())
+        run_alembic('upgrade', 'head')
+        asyncio.get_event_loop().run_until_complete(verify())
+    finally:
+        run_alembic('upgrade', 'head')

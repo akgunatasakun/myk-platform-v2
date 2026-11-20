@@ -10,6 +10,15 @@ depends_on = None
 
 
 def upgrade():
+    op.add_column(
+        "doc_documents",
+        sa.Column(
+            "management_only", sa.Boolean(), nullable=False, server_default=sa.false()
+        ),
+    )
+    op.execute(
+        "UPDATE doc_documents SET management_only = true WHERE code LIKE 'MYK-POL-%' OR code LIKE 'MYK-SOZ-%'"
+    )
     op.create_table(
         "document_renewals",
         sa.Column("id", sa.Uuid(), primary_key=True),
@@ -85,3 +94,4 @@ def upgrade():
 
 def downgrade():
     op.drop_table("document_renewals")
+    op.drop_column("doc_documents", "management_only")

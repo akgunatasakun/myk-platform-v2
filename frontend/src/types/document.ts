@@ -66,6 +66,7 @@ export interface DocumentRevision {
 }
 
 export interface Document {
+  management_only: boolean
   id: string
   club_id: string
   code: string
@@ -84,6 +85,7 @@ export interface Document {
 }
 
 export interface DocumentCreate {
+  management_only?: boolean
   code: string
   title: string
   document_type: DocumentType
