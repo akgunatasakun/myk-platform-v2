@@ -152,7 +152,7 @@ export default function UsersPage() {
   const currentPage = Math.floor(skip / PAGE_SIZE) + 1
 
   return (
-    <AppShell title="Kullanıcılar">
+    <AppShell title="Hesaplar ve Yetkiler">
       {/* G5: Geçici parola uyarısı */}
       {tempPassword && (
         <div className="alert alert-warning" style={{ marginBottom: 16 }}>
@@ -173,7 +173,7 @@ export default function UsersPage() {
       )}
 
       <div className="page-header">
-        <h1 className="page-title">Kullanıcılar</h1>
+        <h1 className="page-title">Hesaplar ve Yetkiler</h1>
         <button className="btn btn-primary" onClick={openCreate}>
           + Yeni Kullanıcı
         </button>

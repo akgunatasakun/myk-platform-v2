@@ -1393,3 +1393,30 @@ html, body {
 
 .announcement-audiences { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 10px; }
 @media (max-width: 600px) { .announcement-audiences { grid-template-columns: minmax(0, 1fr); } }
+
+/* Gruplu menü ve kişi türü filtreleri */
+.sidebar { overflow: hidden; }
+.sidebar-logo, .sidebar-footer { flex-shrink: 0; }
+.sidebar nav { flex: 1; min-height: 0; overflow-y: auto; }
+.sidebar-nav { padding: 4px 0 12px; margin: 0; }
+.sidebar-search { padding: 0 14px 12px; }
+.sidebar-search input { width: 100%; padding: 9px 10px; border: 1px solid rgba(255,255,255,.25); border-radius: 7px; background: rgba(255,255,255,.08); color: white; font: inherit; font-size: 13px; }
+.sidebar-search input::placeholder { color: rgba(255,255,255,.65); }
+.sidebar-search input:focus-visible, .sidebar-group-toggle:focus-visible, .sidebar-nav-item:focus-visible { outline: 2px solid #7dd3fc; outline-offset: -2px; }
+.sidebar-no-results { padding: 0 16px; font-size: 13px; color: rgba(255,255,255,.8); }
+.sidebar-group-toggle { display: flex; align-items: center; gap: 10px; width: 100%; padding: 12px 16px; border: 0; background: transparent; color: rgba(255,255,255,.9); font: inherit; font-size: 13px; font-weight: 600; cursor: pointer; text-align: left; }
+.sidebar-group-toggle:hover, .sidebar-group-toggle.current { background: rgba(255,255,255,.06); }
+.sidebar-group-chevron { margin-left: auto; font-size: 18px; }
+.sidebar-group-items { list-style: none; margin: 0; padding: 0 0 7px; }
+.sidebar-group-items[hidden] { display: none; }
+.sidebar-group-items .sidebar-nav-item { padding-left: 27px; font-size: 13px; }
+.topbar-title { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.topbar-notifications { position: relative; display: inline-flex; align-items: center; justify-content: center; flex-shrink: 0; width: 42px; height: 42px; border-radius: 10px; text-decoration: none; font-size: 21px; }
+.topbar-notifications:hover, .topbar-notifications.active { background: #eaf2fc; }
+.topbar-notification-count { position: absolute; top: 1px; right: -2px; min-width: 18px; padding: 1px 4px; border-radius: 10px; background: #dc2626; color: white; font-size: 10px; font-weight: 700; text-align: center; }
+.person-role-filters { display: flex; flex-wrap: wrap; gap: 8px; margin-bottom: 18px; }
+.person-role-filter { border: 1px solid var(--color-border); border-radius: 20px; padding: 8px 16px; background: white; color: var(--color-text); font: inherit; font-size: 14px; cursor: pointer; }
+.person-role-filter.selected { background: var(--color-navy); border-color: var(--color-navy); color: white; }
+.person-role-filter:focus-visible, .topbar-notifications:focus-visible { outline: 2px solid var(--color-ocean); outline-offset: 3px; }
+.directory-context { display: flex; align-items: center; justify-content: space-between; flex-wrap: wrap; gap: 10px; margin-bottom: 14px; }
+@media (max-width: 768px) { .person-role-filter { min-height: 44px; padding: 8px 14px; } .sidebar-overlay { border: 0; padding: 0; } }
