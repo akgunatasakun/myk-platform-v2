@@ -42,6 +42,7 @@ import AnnouncementsPage from '@/pages/announcements/AnnouncementsPage'
 import RenewalsPage from '@/pages/renewals/RenewalsPage'
 import TasksPage from '@/pages/tasks/TasksPage'
 import { isRouteAllowed } from '@/config/access'
+import CertificatesPage from '@/pages/certificates/CertificatesPage'
 
 function ProtectedRoute({ children }: { children: React.ReactNode }) {
   const { isAuthenticated, isLoading, user } = useAuth()
@@ -92,6 +93,7 @@ export default function App() {
         />
 
         {/* Protected */}
+        <Route path="/sertifikalar" element={<ProtectedRoute><CertificatesPage /></ProtectedRoute>} />
         <Route path="/yenilemeler" element={<ProtectedRoute><RenewalsPage /></ProtectedRoute>} />
         <Route path="/duyurular" element={<ProtectedRoute><AnnouncementsPage /></ProtectedRoute>} />
         <Route path="/gorevler" element={<ProtectedRoute><TasksPage /></ProtectedRoute>} />

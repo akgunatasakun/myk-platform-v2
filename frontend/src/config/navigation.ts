@@ -2,6 +2,7 @@ import { ADMIN, MANAGEMENT, SECRETARIAT, STAFF, COACHES, isRouteAllowed } from '
 import { DOCUMENT_READERS } from '@/api/documentAccess'
 import { RENEWAL_READERS } from '@/api/renewals'
 import { TASK_ROLES } from '@/api/tasks'
+import { CERTIFICATE_READERS } from '@/api/certificates'
 
 export interface NavItem { path: string; label: string; icon: string; roles?: string[]; hideFor?: string[]; activePaths?: string[] }
 export interface NavGroup { id: string; label: string; icon: string; items: NavItem[] }
@@ -26,6 +27,7 @@ export const NAV_GROUPS: NavGroup[] = [
     { path: '/egitimler', label: 'Kurslar', icon: '📚', roles: [...STAFF, 'sporcu', 'veli'] },
     { path: '/takvim', label: 'Takvim', icon: '📅', roles: [...STAFF, 'sporcu', 'veli', 'uye'] },
     { path: '/yoklama', label: 'Yoklama', icon: '✅', roles: COACHES },
+    { path: '/sertifikalar', label: 'Sertifika Kayıtları', icon: '📜', roles: CERTIFICATE_READERS },
     { path: '/katilim', label: 'Katılımım', icon: '🙋', roles: ['sporcu'] },
     { path: '/akademi', label: 'Deniz Akademisi', icon: '🪢', roles: [...STAFF, 'sporcu', 'veli'] },
     { path: '/kutuphane', label: 'Eğitim Kütüphanesi', icon: '📖', roles: COACHES },

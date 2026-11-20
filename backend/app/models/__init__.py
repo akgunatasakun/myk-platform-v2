@@ -89,3 +89,5 @@ from app.models.task import Task  # noqa: F401
 from app.models.announcement import Announcement, AnnouncementAudience  # noqa: F401
 
 from app.models.renewal import DocumentRenewal  # noqa: F401
+
+from app.models.certificate import TrainingCertificate  # noqa: F401

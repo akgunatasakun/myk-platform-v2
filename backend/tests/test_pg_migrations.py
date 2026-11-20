@@ -86,7 +86,7 @@ async def test_current_revision_is_head(engine):
     async with engine.connect() as conn:
         r = await conn.execute(text("SELECT version_num FROM alembic_version"))
         rev = r.scalar_one()
-    assert rev == "0031", f"Beklenen '0031', alınan '{rev!r}'"
+    assert rev == "0032", f"Beklenen '0032', alınan '{rev!r}'"
 
 
 # ── 2. Şema doğrulama ─────────────────────────────────────────────────────────
@@ -1358,6 +1358,60 @@ def test_0031_roundtrip():
                 async with e.connect() as conn:
                     r = await conn.execute(text("SELECT count(*) FROM information_schema.columns WHERE table_schema='public' AND table_name='payments' AND column_name='training_enrollment_id'"))
                     assert r.scalar_one() == 0
+            finally:
+                await e.dispose()
+        asyncio.get_event_loop().run_until_complete(check())
+    finally:
+        run_alembic('upgrade', 'head')
+
+
+@pytest.mark.asyncio
+async def test_0032_certificate_schema_and_grants(engine):
+    async with engine.connect() as conn:
+        assert (await conn.execute(text("SELECT to_regclass('public.training_certificates')"))).scalar_one() is not None
+        for privilege in ['SELECT', 'INSERT', 'UPDATE', 'DELETE']:
+            assert (await conn.execute(text("SELECT has_table_privilege('myk_app', 'training_certificates', :privilege)"), {'privilege': privilege})).scalar_one() is True
+        constraints = set((await conn.execute(text("SELECT conname FROM pg_constraint WHERE conrelid = 'training_certificates'::regclass"))).scalars())
+        assert {'uq_certificates_club_number', 'ck_certificates_status', 'ck_certificates_issued_fields', 'ck_certificates_dates'}.issubset(constraints)
+        assert (await conn.execute(text("SELECT to_regclass('public.uq_certificates_live_enrollment')"))).scalar_one() is not None
+
+
+@pytest.mark.asyncio
+async def test_0032_live_enrollment_unique_on_postgres(engine):
+    from sqlalchemy.ext.asyncio import AsyncSession
+    from sqlalchemy.exc import IntegrityError
+    from app.models.club import Club
+    from app.models.certificate import TrainingCertificate
+    from tests.test_certificates import setup
+    async with AsyncSession(engine, expire_on_commit=False) as db:
+        club = Club(slug=uuid.uuid4().hex, name='Certificate PG', settings={})
+        db.add(club)
+        await db.flush()
+        _, _, enr = await setup(db, club)
+        def item():
+            return TrainingCertificate(club_id=club.id, enrollment_id=enr.id, title='D1', person_name='Test', course_name='D1')
+        first = item()
+        db.add(first)
+        await db.flush()
+        with pytest.raises(IntegrityError):
+            async with db.begin_nested():
+                db.add(item())
+                await db.flush()
+        first.is_deleted = True
+        await db.flush()
+        db.add(item())
+        await db.flush()
+        await db.rollback()
+
+
+def test_0032_roundtrip():
+    try:
+        run_alembic('downgrade', '0031')
+        async def check():
+            e = create_async_engine(DATABASE_URL)
+            try:
+                async with e.connect() as conn:
+                    assert (await conn.execute(text("SELECT to_regclass('public.training_certificates')"))).scalar_one() is None
             finally:
                 await e.dispose()
         asyncio.get_event_loop().run_until_complete(check())
