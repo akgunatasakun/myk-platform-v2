@@ -1,6 +1,7 @@
 import { DOCUMENT_READERS } from '@/api/documentAccess'
 import { RENEWAL_READERS } from '@/api/renewals'
 import { TASK_ROLES } from '@/api/tasks'
+import { CERTIFICATE_READERS } from '@/api/certificates'
 
 // Mevcut rota izinleri. Menü düzeni bu yetkileri genişletmez.
 export const ADMIN       = ['super_admin', 'kulup_yonetici']
@@ -12,6 +13,7 @@ export const COACHES     = [...MANAGEMENT, 'sportif_direktor', 'basantrenor', 'a
 
 // Route bazlı izin haritası — sadece kısıtlı rotalar (undefined = herkes)
 const ROUTE_ROLES: Record<string, string[]> = {
+  '/sertifikalar': CERTIFICATE_READERS,
   '/yenilemeler': RENEWAL_READERS,
   '/belgeler': DOCUMENT_READERS,
   '/gorevler': TASK_ROLES,

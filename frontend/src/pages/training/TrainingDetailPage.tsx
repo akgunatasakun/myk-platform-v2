@@ -16,6 +16,7 @@ import type {
 } from '@/types/training'
 import type { Person } from '@/types/person'
 import { useAuth } from '@/hooks/useAuth'
+import { CERTIFICATE_READERS } from '@/api/certificates'
 
 // Kurs/oturum oluşturma-düzenleme-silme yetkisi olan roller
 const CAN_WRITE_COURSE = new Set(['super_admin', 'kulup_yonetici', 'sportif_direktor', 'basantrenor'])
@@ -396,6 +397,7 @@ export default function TrainingDetailPage() {
       {/* Participants tab */}
       {tab === 'participants' && (
         <>
+          {CERTIFICATE_READERS.includes(user?.role ?? '') && <button className="btn btn-secondary" style={{ marginBottom: 12 }} onClick={() => navigate(`/sertifikalar?course_id=${course.id}`)}>Eğitimin Sertifika Kayıtları</button>}
           {/* Katılımcı ekle */}
           {canWriteCourse && <form onSubmit={handleAddParticipant} style={{ display: 'flex', gap: 8, marginBottom: 16, alignItems: 'flex-end' }}>
             <div className="form-group" style={{ margin: 0, flex: 2 }}>
@@ -455,7 +457,7 @@ export default function TrainingDetailPage() {
                 <tbody>
                   {enrollments.map((e) => (
                     <tr key={e.id} style={{ opacity: e.status !== 'active' ? 0.6 : 1 }}>
-                      <td><strong>{e.person_name ?? e.person_id}</strong></td>
+                      <td><strong>{e.person_name ?? e.person_id}</strong>{CERTIFICATE_READERS.includes(user?.role ?? '') && <div><button className="btn btn-sm btn-ghost" onClick={() => navigate(`/sertifikalar?course_id=${course.id}&enrollment_id=${e.id}`)}>Sertifika Kayıtları</button></div>}</td>
                       <td>
                         <span className={`badge ${e.status === 'active' ? 'badge-aktif' : 'badge-iptal'}`}>
                           {ENROLL_STATUS_LABEL[e.status] ?? e.status}
