@@ -86,7 +86,7 @@ async def test_current_revision_is_head(engine):
     async with engine.connect() as conn:
         r = await conn.execute(text("SELECT version_num FROM alembic_version"))
         rev = r.scalar_one()
-    assert rev == "0029", f"Beklenen '0029', alınan '{rev!r}'"
+    assert rev == "0030", f"Beklenen '0030', alınan '{rev!r}'"
 
 
 # ── 2. Şema doğrulama ─────────────────────────────────────────────────────────
@@ -1252,6 +1252,57 @@ def test_0029_roundtrip():
                     for table in ('announcements', 'announcement_audiences'):
                         r = await conn.execute(text('SELECT to_regclass(:table)'), {'table': 'public.' + table})
                         assert r.scalar() is None
+            finally:
+                await e.dispose()
+        asyncio.get_event_loop().run_until_complete(check())
+    finally:
+        run_alembic('upgrade', 'head')
+
+
+@pytest.mark.asyncio
+async def test_0030_renewals_postgres_query_and_unique_period(engine):
+    """Gerçek PostgreSQL tarih aritmetiği ve açık dönem benzersizliği."""
+    from datetime import timedelta
+    from sqlalchemy.ext.asyncio import AsyncSession
+    from sqlalchemy.exc import IntegrityError
+    from app.api.v1.routers.renewals import listing, today
+    from app.models.club import Club
+    from app.models.documents import Document
+    from app.models.renewal import DocumentRenewal
+
+    async with AsyncSession(engine, expire_on_commit=False) as session:
+        c = Club(slug=uuid.uuid4().hex, name='Renewal PG', plan='starter', settings={})
+        session.add(c)
+        await session.flush()
+        documents = []
+        for days in (None, -1, 0, 30, 31):
+            d = Document(club_id=c.id, code=uuid.uuid4().hex, title='Poliçe', document_type='diger')
+            session.add(d)
+            await session.flush()
+            documents.append(d)
+            session.add(DocumentRenewal(club_id=c.id, document_id=d.id, kind='police', expires_on=today() + timedelta(days=days) if days is not None else None))
+        await session.flush()
+        result = await listing(db=session, user=None, club=c.id, view='uyari', kind=None, search='', skip=0, limit=20)
+        assert result.total == 4
+        assert {r.state for r in result.items} == {'eksik', 'gecikti', 'yaklasiyor'}
+        with pytest.raises(IntegrityError):
+            async with session.begin_nested():
+                session.add(DocumentRenewal(club_id=c.id, document_id=documents[0].id, kind='police'))
+                await session.flush()
+        for privilege in ('SELECT', 'INSERT', 'UPDATE', 'DELETE'):
+            r = await session.execute(text("SELECT has_table_privilege('myk_app', 'document_renewals', :p)"), {'p': privilege})
+            assert r.scalar() is True
+
+
+def test_0030_roundtrip():
+    try:
+        run_alembic('downgrade', '0029')
+        async def check():
+            e = create_async_engine(DATABASE_URL, echo=False)
+            try:
+                async with e.connect() as conn:
+                    r = await conn.execute(text("SELECT to_regclass('public.document_renewals')"))
+                    assert r.scalar() is None
             finally:
                 await e.dispose()
         asyncio.get_event_loop().run_until_complete(check())

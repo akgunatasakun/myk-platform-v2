@@ -2,6 +2,7 @@ import { useState, useEffect } from 'react'
 import { NavLink, useNavigate } from 'react-router-dom'
 import { useAuth } from '@/hooks/useAuth'
 import { usePendingApplications } from '@/hooks/usePendingApplications'
+import { RENEWAL_READERS } from '@/api/renewals'
 import { TASK_ROLES } from '@/api/tasks'
 import { notificationsApi } from '@/api/notifications'
 
@@ -49,6 +50,7 @@ const NAV_ITEMS: NavItem[] = [
 
   { path: '/gorevler', label: 'Görevler', icon: '✓', roles: TASK_ROLES },
 
+  { path: '/yenilemeler', label: 'Yenileme Takibi', icon: '📑', roles: RENEWAL_READERS },
   // Operasyonel
   { path: '/tekneler',           label: 'Ekipmanlar',         icon: '🛟', roles: STAFF },
   { path: '/odemeler',           label: 'Ödemeler',           icon: '💳', roles: [...SECRETARIAT, 'sporcu', 'veli', 'uye'] },
