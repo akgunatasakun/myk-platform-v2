@@ -251,6 +251,9 @@ class TrainingEnrollmentOut(BaseModel):
     person_birth_date: Optional[date] = None    # computed — yaş istemci tarafında hesaplanır
     status: str
     payment_status: str
+    paid_amount: Optional[Decimal] = None
+    balance: Optional[Decimal] = None
+    payment_count: Optional[int] = None
     notes: Optional[str] = None
     enrolled_at: datetime
     cancelled_at: Optional[datetime] = None

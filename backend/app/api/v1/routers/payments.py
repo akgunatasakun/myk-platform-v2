@@ -31,6 +31,7 @@ from app.core.security import get_current_user
 from app.core.tenant import get_club_id
 from app.database import get_db
 from app.models.payment import Payment
+from app.models.training import TrainingCourse, TrainingEnrollment
 from app.models.person import Person
 from app.schemas.auth import TokenPayload
 from app.schemas.payment import (
@@ -41,6 +42,7 @@ from app.schemas.payment import (
     PaymentUpdate,
     RevenueByMonth,
     RevenueReport,
+    TrainingPaymentOption,
 )
 
 from app.services.person_scope_service import get_own_person_ids
@@ -101,6 +103,7 @@ def _to_out(payment: Payment) -> PaymentOut:
 async def list_payments(
     status_filter: Optional[str] = Query(default=None, alias="status"),
     person_id: Optional[uuid.UUID] = Query(default=None),
+    training_enrollment_id: Optional[uuid.UUID] = Query(default=None),
     skip: int = Query(default=0, ge=0),
     limit: int = Query(default=50, ge=1, le=200),
     club_id: uuid.UUID = Depends(get_club_id),
@@ -124,6 +127,8 @@ async def list_payments(
         q = q.where(Payment.person_id.in_(ward_ids))
         person_id = None  # own-scope'da dışarıdan person_id filtresi kabul edilmez
 
+    if training_enrollment_id is not None:
+        q = q.where(Payment.training_enrollment_id == training_enrollment_id)
     if status_filter:
         q = q.where(Payment.status == status_filter)
     if person_id:
@@ -263,6 +268,41 @@ async def revenue_report(
     return RevenueReport(items=items, toplam_gelir=toplam_gelir)
 
 
+@router.get("/training-enrollments", response_model=List[TrainingPaymentOption])
+async def training_payment_options(
+    person_id: uuid.UUID,
+    club_id: uuid.UUID = Depends(get_club_id),
+    _: None = Depends(require_permission("odeme:write")),
+    db: AsyncSession = Depends(get_db),
+):
+    result = await db.execute(select(TrainingEnrollment, TrainingCourse).join(
+        TrainingCourse, TrainingCourse.id == TrainingEnrollment.course_id,
+    ).where(
+        TrainingEnrollment.club_id == club_id, TrainingCourse.club_id == club_id,
+        TrainingEnrollment.person_id == person_id,
+        TrainingEnrollment.is_deleted.is_(False), TrainingCourse.is_deleted.is_(False),
+        TrainingEnrollment.status.in_(["active", "completed"]),
+    ).order_by(TrainingEnrollment.enrolled_at.desc()))
+    return [TrainingPaymentOption(id=e.id, course_id=c.id, course_name=c.name, person_id=e.person_id, fee=c.fee) for e, c in result.all()]
+
+
+async def _validate_training_link(
+    enrollment_id: uuid.UUID, person_id: Optional[uuid.UUID], club_id: uuid.UUID, db: AsyncSession,
+) -> None:
+    result = await db.execute(select(TrainingEnrollment).join(TrainingCourse).where(
+        TrainingEnrollment.id == enrollment_id, TrainingEnrollment.club_id == club_id,
+        TrainingCourse.club_id == club_id, TrainingCourse.is_deleted.is_(False),
+        TrainingEnrollment.is_deleted.is_(False),
+    ))
+    enrollment = result.scalar_one_or_none()
+    if enrollment is None:
+        raise HTTPException(status_code=404, detail="Eğitim kaydı bulunamadı.")
+    if enrollment.status not in {"active", "completed"}:
+        raise HTTPException(status_code=409, detail="İptal edilmiş eğitim kaydına ödeme bağlanamaz.")
+    if person_id != enrollment.person_id:
+        raise HTTPException(status_code=422, detail="Ödemenin kişisi ile eğitim katılımcısı aynı olmalıdır.")
+
+
 # ─── Tekil ödeme ─────────────────────────────────────────────────────────────
 
 @router.get("/{payment_id}", response_model=PaymentOut)
@@ -311,11 +351,15 @@ async def create_payment(
                 detail="Belirtilen kişi bu kulüpte bulunamadı.",
             )
 
+    if body.training_enrollment_id is not None:
+        await _validate_training_link(body.training_enrollment_id, body.person_id, club_id, db)
+
     payment = Payment(
         id=uuid.uuid4(),
         club_id=club_id,
         recorded_by_user_id=uuid.UUID(current_user.sub),
         person_id=body.person_id,
+        training_enrollment_id=body.training_enrollment_id,
         amount=body.amount,
         payment_type=body.payment_type,
         payment_method=body.payment_method,
@@ -340,6 +384,7 @@ async def create_payment(
             "amount": str(payment.amount),
             "status": payment.status,
             "payment_type": payment.payment_type or "",
+            "training_enrollment_id": str(payment.training_enrollment_id) if payment.training_enrollment_id else None,
         },
         request=request,
     )
@@ -383,6 +428,8 @@ async def update_payment(
     if not update_data:
         return _to_out(payment)
 
+    if update_data.get("training_enrollment_id") is not None and update_data["training_enrollment_id"] != payment.training_enrollment_id:
+        await _validate_training_link(update_data["training_enrollment_id"], payment.person_id, club_id, db)
     before = {k: str(getattr(payment, k, "")) for k in update_data}
     for field, value in update_data.items():
         setattr(payment, field, value)

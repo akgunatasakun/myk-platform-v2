@@ -6,6 +6,7 @@ import type {
   PaymentListResponse,
   PaymentUpdate,
   RevenueReport,
+  TrainingPaymentOption,
 } from '@/types/payment'
 
 export interface PaymentListParams {
@@ -13,6 +14,7 @@ export interface PaymentListParams {
   limit?: number
   status?: string
   person_id?: string
+  training_enrollment_id?: string
 }
 
 export const paymentsApi = {
@@ -25,6 +27,9 @@ export const paymentsApi = {
 
   revenueReport: (months = 12) =>
     apiClient.get<RevenueReport>('/payments/revenue-report', { params: { months } }),
+
+  trainingEnrollments: (personId: string) =>
+    apiClient.get<TrainingPaymentOption[]>('/payments/training-enrollments', { params: { person_id: personId } }),
 
   // ── Tekil ─────────────────────────────────────────────────────────────────
   get: (id: string) =>

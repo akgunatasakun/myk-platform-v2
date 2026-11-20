@@ -2,14 +2,14 @@
  * Ödeme oluşturma (tüm alanlar) ve güncelleme (kısıtlı alanlar) modal.
  *
  * Backend PaymentUpdate yalnızca şu alanları kabul eder:
- *   status, paid_at, payment_method, receipt_no, notes
+ *   status, paid_at, payment_method, receipt_no, notes, training_enrollment_id
  * Dolayısıyla düzenleme modunda diğer alanlar disabled gösterilir.
  */
 import { useEffect, useState } from 'react'
 import { paymentsApi } from '@/api/payments'
 import { personsApi } from '@/api/persons'
 import { PERSON_LIST_LIMIT } from '@/api/constants'
-import type { Payment, PaymentCreate, PaymentUpdate, PaymentStatus } from '@/types/payment'
+import type { Payment, PaymentCreate, PaymentUpdate, PaymentStatus, TrainingPaymentOption } from '@/types/payment'
 import type { Person } from '@/types/person'
 
 interface Props {
@@ -17,6 +17,7 @@ interface Props {
   onClose: () => void
   payment?: Payment      // undefined → create, defined → edit
   onSaved: (payment: Payment) => void
+  trainingContext?: { enrollmentId: string; personId: string; personName: string; courseName: string; balance: string }
 }
 
 const EMPTY_CREATE: PaymentCreate = {
@@ -31,7 +32,7 @@ const EMPTY_CREATE: PaymentCreate = {
   notes: null,
 }
 
-export default function PaymentFormModal({ isOpen, onClose, payment, onSaved }: Props) {
+export default function PaymentFormModal({ isOpen, onClose, payment, onSaved, trainingContext }: Props) {
   const isEdit = !!payment
 
   // Create form state
@@ -40,6 +41,9 @@ export default function PaymentFormModal({ isOpen, onClose, payment, onSaved }: 
   const [editForm, setEditForm] = useState<PaymentUpdate>({})
 
   const [persons, setPersons] = useState<Person[]>([])
+  const [trainingOptions, setTrainingOptions] = useState<TrainingPaymentOption[]>([])
+  const [optionsLoading, setOptionsLoading] = useState(false)
+  const [optionsError, setOptionsError] = useState(false)
   const [saving, setSaving] = useState(false)
   const [error, setError] = useState<string | null>(null)
 
@@ -48,6 +52,7 @@ export default function PaymentFormModal({ isOpen, onClose, payment, onSaved }: 
     setError(null)
     if (payment) {
       setEditForm({
+        training_enrollment_id: payment.training_enrollment_id,
         status: payment.status,
         paid_at: payment.paid_at ?? undefined,
         payment_method: payment.payment_method ?? undefined,
@@ -55,16 +60,30 @@ export default function PaymentFormModal({ isOpen, onClose, payment, onSaved }: 
         notes: payment.notes ?? undefined,
       })
     } else {
-      setCreateForm(EMPTY_CREATE)
+      setCreateForm(trainingContext ? { ...EMPTY_CREATE, person_id: trainingContext.personId, training_enrollment_id: trainingContext.enrollmentId, amount: trainingContext.balance, payment_type: `Eğitim: ${trainingContext.courseName}` } : EMPTY_CREATE)
     }
-  }, [isOpen, payment])
+  }, [isOpen, payment, trainingContext])
 
   useEffect(() => {
-    if (!isOpen || isEdit) return
+    if (!isOpen || isEdit || trainingContext) return
     personsApi.list({ limit: PERSON_LIST_LIMIT, is_active: true })
       .then((r) => setPersons(r.data.items))
       .catch((err) => console.error('[PaymentFormModal] kişi listesi alınamadı:', err))
-  }, [isOpen, isEdit])
+  }, [isOpen, isEdit, trainingContext])
+
+  const optionPersonId = payment?.person_id ?? createForm.person_id
+  useEffect(() => {
+    let cancelled = false
+    setTrainingOptions([])
+    setOptionsError(false)
+    if (!isOpen || trainingContext || !optionPersonId) { setOptionsLoading(false); return }
+    setOptionsLoading(true)
+    paymentsApi.trainingEnrollments(optionPersonId)
+      .then((r) => { if (!cancelled) setTrainingOptions(r.data) })
+      .catch(() => { if (!cancelled) setOptionsError(true) })
+      .finally(() => { if (!cancelled) setOptionsLoading(false) })
+    return () => { cancelled = true }
+  }, [isOpen, trainingContext, optionPersonId])
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
@@ -111,6 +130,22 @@ export default function PaymentFormModal({ isOpen, onClose, payment, onSaved }: 
                 <span>⚠️</span><span>{error}</span>
               </div>
             )}
+
+            {trainingContext ? <p><strong>{trainingContext.courseName}</strong> eğitiminin katılımcı kaydına bağlanacak. Bu işlem tahsilat kaydı oluşturur.</p> : <div className="form-group">
+              <label className="form-label" htmlFor="payment-training-link">Bağlı Eğitim Kaydı</label>
+              <select id="payment-training-link" className="form-select" disabled={!optionPersonId || optionsLoading || optionsError} value={(isEdit ? editForm.training_enrollment_id : createForm.training_enrollment_id) ?? ''} onChange={(e) => {
+                const value = e.target.value || null
+                if (isEdit) setEditForm((f) => ({ ...f, training_enrollment_id: value }))
+                else setCreateForm((f) => ({ ...f, training_enrollment_id: value }))
+              }}>
+                <option value="">Eğitime bağlı değil</option>
+                {payment?.training_enrollment_id && !trainingOptions.some((o) => o.id === payment.training_enrollment_id) && <option value={payment.training_enrollment_id}>Mevcut eğitim bağlantısı</option>}
+                {trainingOptions.map((o) => <option key={o.id} value={o.id}>{o.course_name}</option>)}
+              </select>
+              <p style={{ fontSize: 12 }}>Önce kişiyi seçin. Geçmiş tahsilatı düzenleyerek eğitime bağlayabilirsiniz; aynı tahsilatı yeniden oluşturmayın.</p>
+              {optionsLoading && <p role="status">Eğitim kayıtları yükleniyor…</p>}
+              {optionsError && <p role="alert">Eğitim kayıtları yüklenemedi. Formu kapatıp tekrar açın.</p>}
+            </div>}
 
             {/* ── EDIT MODE ────────────────────────────────────────────────── */}
             {isEdit && payment ? (
@@ -196,10 +231,12 @@ export default function PaymentFormModal({ isOpen, onClose, payment, onSaved }: 
                   <label className="form-label">Kişi</label>
                   <select
                     className="form-select"
+                    disabled={!!trainingContext}
                     value={createForm.person_id ?? ''}
-                    onChange={(e) => setCreateForm((f) => ({ ...f, person_id: e.target.value || null }))}
+                    onChange={(e) => setCreateForm((f) => ({ ...f, person_id: e.target.value || null, training_enrollment_id: null }))}
                   >
                     <option value="">— Seçiniz (opsiyonel) —</option>
+                    {trainingContext && <option value={trainingContext.personId}>{trainingContext.personName}</option>}
                     {persons.map((p) => (
                       <option key={p.id} value={p.id}>{p.first_name} {p.last_name}</option>
                     ))}

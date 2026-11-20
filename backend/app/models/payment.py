@@ -26,7 +26,7 @@ class Payment(Base):
       - person_id nullable: kulüp genel tahsilatları için sporcu/üye gerekmeyebilir.
       - payment_type serbest TEXT: enum migration gerektirmeden genişletilebilir.
       - status: 'pending' | 'paid' — uygulama katmanında doğrulanır, DB TEXT.
-      - training_enrollments.payment_status bu tabloyla otomatik senkronize değil.
+      - Eğitim ödeme özeti training_enrollment_id üzerinden bu tablodan hesaplanır.
     """
 
     __tablename__ = "payments"
@@ -44,6 +44,9 @@ class Payment(Base):
     )
     person_id: Mapped[Optional[uuid.UUID]] = mapped_column(
         ForeignKey("persons.id", ondelete="SET NULL"), nullable=True
+    )
+    training_enrollment_id: Mapped[Optional[uuid.UUID]] = mapped_column(
+        ForeignKey("training_enrollments.id", ondelete="SET NULL"), nullable=True, index=True
     )
     amount: Mapped[Decimal] = mapped_column(Numeric(12, 2), nullable=False)
     payment_type: Mapped[Optional[str]] = mapped_column(Text(), nullable=True)

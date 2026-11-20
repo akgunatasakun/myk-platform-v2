@@ -7,7 +7,7 @@ export type CourseStatus = 'planlandi' | 'aktif' | 'tamamlandi' | 'iptal'
 export type AttendanceMode = 'coach_daily' | 'adult_self_checkin'
 export type SessionStatus = 'planli' | 'tamamlandi' | 'iptal'
 export type EnrollmentStatus = 'active' | 'cancelled' | 'completed'
-export type PaymentStatus = 'pending' | 'paid' | 'overdue'
+export type PaymentStatus = 'pending' | 'paid' | 'overdue' | 'partial' | 'unlinked' | 'not_required' | 'restricted'
 export type AttendanceStatus = 'var' | 'yok' | 'izinli' | 'gecikti'
 
 // ── Antrenör referansı ────────────────────────────────────────────────────────
@@ -148,6 +148,9 @@ export interface TrainingEnrollment {
   person_birth_date?: string | null
   status: EnrollmentStatus
   payment_status: PaymentStatus
+  paid_amount?: string | null
+  balance?: string | null
+  payment_count?: number | null
   notes: string | null
   enrolled_at: string
   cancelled_at: string | null

@@ -19,6 +19,7 @@ class PaymentCreate(BaseModel):
     model_config = ConfigDict(extra="forbid")
 
     person_id: Optional[uuid.UUID] = None
+    training_enrollment_id: Optional[uuid.UUID] = None
     amount: Decimal = Field(..., gt=0, description="Tutar, 0'dan büyük olmalı")
     payment_type: Optional[str] = None
     payment_method: Optional[str] = None
@@ -42,6 +43,7 @@ class PaymentUpdate(BaseModel):
     """Yalnızca güncellenebilen alanlar — Flask PUT davranışı."""
     model_config = ConfigDict(extra="forbid")
 
+    training_enrollment_id: Optional[uuid.UUID] = None
     status: Optional[Literal["pending", "paid"]] = None
     paid_at: Optional[date] = None
     payment_method: Optional[str] = None
@@ -58,6 +60,7 @@ class PaymentOut(BaseModel):
     club_id: uuid.UUID
     recorded_by_user_id: Optional[uuid.UUID] = None
     person_id: Optional[uuid.UUID] = None
+    training_enrollment_id: Optional[uuid.UUID] = None
     person_name: Optional[str] = None           # computed — router'da doldurulur
     amount: Decimal
     payment_type: Optional[str] = None
@@ -99,3 +102,11 @@ class RevenueByMonth(BaseModel):
 class RevenueReport(BaseModel):
     items: List[RevenueByMonth]
     toplam_gelir: Decimal               # tüm dönem toplamı
+
+
+class TrainingPaymentOption(BaseModel):
+    id: uuid.UUID
+    course_id: uuid.UUID
+    course_name: str
+    person_id: uuid.UUID
+    fee: Decimal
