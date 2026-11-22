@@ -7,3 +7,6 @@ export const canManageAccounts = (role?: string) => ACCOUNT_MANAGERS.has(role ??
 export const canManagePersons = (role?: string) => PERSON_MANAGERS.has(role ?? '')
 
 export const canManagePayments = (role?: string) => ['super_admin', 'kulup_yonetici', 'muhasebe'].includes(role ?? '')
+
+export const canManageAthleteProfiles = (role?: string) => ['super_admin', 'kulup_yonetici', 'sportif_direktor'].includes(role ?? '')
+export const canReadPersonCards = (role?: string) => ['super_admin', 'kulup_yonetici', 'muhasebe', 'antrenor'].includes(role ?? '')

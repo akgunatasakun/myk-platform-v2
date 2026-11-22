@@ -8,6 +8,8 @@ import { useEffect, useState } from 'react'
 import { useNavigate, useParams } from 'react-router-dom'
 import AppShell from '@/components/layout/AppShell'
 import AthleteProfileModal from './AthleteProfileModal'
+import AthleteDetailActions from './AthleteDetailActions'
+import { canManageAthleteProfiles } from '@/config/operationAccess'
 import PersonDocumentsTab from '@/components/persons/PersonDocumentsTab'
 import type { PersonDocumentsRole } from '@/components/persons/PersonDocumentsTab'
 import { athletesApi } from '@/api/athletes'
@@ -140,21 +142,12 @@ export default function AthleteDetailPage() {
                     </div>
                   </div>
                 </div>
-                <div style={{ display: 'flex', gap: 10 }}>
-                  <button
-                    className="btn btn-secondary"
-                    onClick={() => setProfileModalOpen(true)}
-                  >
-                    {ap ? 'Profil Düzenle' : 'Profil Oluştur'}
-                  </button>
-                  <button
-                    className="btn btn-ghost btn-sm"
-                    onClick={() => navigate(`/persons/${id}`)}
-                    title="Kişi profiline git"
-                  >
-                    Kişi Kartı →
-                  </button>
-                </div>
+                <AthleteDetailActions
+                  role={authUser?.role}
+                  hasProfile={!!ap}
+                  onEdit={() => setProfileModalOpen(true)}
+                  onPerson={() => navigate(`/persons/${id}`)}
+                />
               </div>
             </div>
           </div>
@@ -186,13 +179,13 @@ export default function AthleteDetailPage() {
                   <div className="empty-state-icon">⛵</div>
                   <div className="empty-state-title">Profil Girilmemiş</div>
                   <div className="empty-state-desc">Lisans, sınıf, sağlık ve KVKK bilgileri henüz eklenmemiş.</div>
-                  <button
+                  {canManageAthleteProfiles(authUser?.role) && <button
                     className="btn btn-primary"
                     style={{ marginTop: 12 }}
                     onClick={() => setProfileModalOpen(true)}
                   >
                     Profil Oluştur
-                  </button>
+                  </button>}
                 </div>
               </div>
             </div>
@@ -297,7 +290,7 @@ export default function AthleteDetailPage() {
 
       {athlete && (
         <AthleteProfileModal
-          isOpen={profileModalOpen}
+          isOpen={canManageAthleteProfiles(authUser?.role) && profileModalOpen}
           onClose={() => setProfileModalOpen(false)}
           personId={athlete.person_id}
           profile={athlete}
