@@ -208,3 +208,34 @@ async def test_own_permission_matches_action():
             assert not has_permission(role, f"belge:{action}")
     assert has_permission("veli", "person_document:create")
     assert not has_permission("veli", "person_document:delete")
+
+
+@pytest.mark.parametrize("role", ["antrenor", "basantrenor"])
+@pytest.mark.parametrize("kind", ["prosedur", "talimat", "form"])
+async def test_coaches_read_general_documents_without_write_access(
+    client, db_session, test_club, test_user, role, kind
+):
+    test_user.role = role
+    doc, rev, file = await seed(db_session, test_club, test_user, code="MYK-GENERAL")
+    doc.owner_type = "club"
+    doc.owner_id = None
+    doc.document_type = kind
+    await db_session.flush()
+    download = AsyncMock(return_value=b"%PDF-test")
+    app.dependency_overrides[get_dms_storage] = lambda: SimpleNamespace(download=download)
+    h = headers(test_user, test_club)
+    path = f"/api/v1/documents/{doc.id}"
+    listing = await client.get("/api/v1/documents", headers=h)
+    assert listing.status_code == 200
+    assert any(item["id"] == str(doc.id) for item in listing.json())
+    for suffix in ("", "/revisions"):
+        assert (await client.get(path + suffix, headers=h)).status_code == 200
+    assert (await client.get(path + f"/revisions/{rev.id}/files/{file.id}/download", headers=h)).status_code == 200
+    download.assert_awaited_once()
+    assert (await client.patch(path, headers=h, json={"title": "Changed"})).status_code == 403
+    assert (await client.delete(path, headers=h)).status_code == 403
+    assert (await client.post("/api/v1/documents", headers=h, json={"code": "NEW", "title": "New", "document_type": "form"})).status_code == 403
+    assert (await client.post(path + "/revisions", headers=h, json={"revision_code": "R01"})).status_code == 403
+    assert (await client.post(path + f"/revisions/{rev.id}/files", headers=h, files={"file": ("new.pdf", b"%PDF-test", "application/pdf")})).status_code == 403
+    for action in ("create", "update", "delete", "publish"):
+        assert not has_permission(role, f"belge:{action}")

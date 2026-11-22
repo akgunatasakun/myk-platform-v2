@@ -746,14 +746,14 @@ async def test_download_missing_storage_object(
     assert dl.status_code == 404
 
 
-# ── DMS-25: RBAC — antrenor download yapamaz ─────────────────────────────────
+# ── DMS-25: RBAC — antrenor genel belgeyi okuyabilir ─────────────────────────────────
 
-async def test_download_rbac_antrenor_forbidden(
+async def test_download_rbac_antrenor_readonly(
     client_with_storage: AsyncClient,
     yonetici_token: str,
     antrenor_token: str,
 ) -> None:
-    """DMS-25: antrenor belge:read yetkisi yok → download 403."""
+    """DMS-25: antrenor genel belge dosyasını okuyabilir."""
     doc = await _create_doc(client_with_storage, yonetici_token, code=f"DOC-{uuid.uuid4().hex[:4]}")
     rev = await _create_revision(client_with_storage, yonetici_token, doc["id"], "R00")
 
@@ -769,7 +769,8 @@ async def test_download_rbac_antrenor_forbidden(
         f"{DOCS_URL}/{doc['id']}/revisions/{rev['id']}/files/{file_id}/download",
         headers=_auth(antrenor_token),
     )
-    assert dl.status_code == 403
+    assert dl.status_code == 200
+    assert dl.content == b"%PDF-1.4 rbac"
 
 
 # ── DMS-26: InMemoryStorage ensure_bucket idempotent ─────────────────────────
