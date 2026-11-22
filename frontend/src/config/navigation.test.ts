@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest'
 import { visibleNavigation, itemActive, peopleTarget } from './navigation'
 import { isRouteAllowed } from './access'
+import { DOCUMENT_MANAGERS } from '@/api/documentAccess'
 const paths = (role: string, query = '') => visibleNavigation(role, query).flatMap((g) => g.items.map((i) => i.path))
 
 describe('Role-aware grouped navigation', () => {
@@ -75,5 +76,16 @@ describe('Guardian self-service navigation', () => {
     expect(isRouteAllowed('/veliler', 'veli')).toBe(false)
     expect(isRouteAllowed('/veliler/other-id', 'veli')).toBe(false)
     expect(isRouteAllowed('/persons', 'veli')).toBe(false)
+  })
+})
+
+
+describe('Coach general-document access', () => {
+  it.each(['antrenor', 'basantrenor'])('allows read navigation but not management documents for %s', role => {
+    expect(DOCUMENT_MANAGERS).not.toContain(role)
+    expect(paths(role)).toContain('/belgeler')
+    expect(isRouteAllowed('/belgeler', role)).toBe(true)
+    expect(isRouteAllowed('/belgeler/document-id', role)).toBe(true)
+    expect(paths(role)).not.toContain('/yenilemeler')
   })
 })
