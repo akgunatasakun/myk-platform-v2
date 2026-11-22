@@ -9,6 +9,7 @@ import { personsApi } from '@/api/persons'
 import type { Person, PersonRoleCode } from '@/types/person'
 import { formatPersonAge } from '@/utils/personAge'
 import { useAuth } from '@/hooks/useAuth'
+import { canManageAccounts, canManagePersons } from '@/config/operationAccess'
 
 const ROLE_LABELS: Record<PersonRoleCode, string> = {
   sporcu: 'Sporcu',
@@ -45,6 +46,8 @@ export default function PersonDetailPage() {
   const { id } = useParams<{ id: string }>()
   const navigate = useNavigate()
   const { user: authUser } = useAuth()
+  const editPerson = canManagePersons(authUser?.role)
+  const manageAccount = canManageAccounts(authUser?.role)
   const [person, setPerson] = useState<Person | null>(null)
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
@@ -60,7 +63,7 @@ export default function PersonDetailPage() {
       ? person.role_codes[0]
       : selectedRoleCode
     if (!roleCode) {
-      alert('Lütfen bir rol seçin.')
+      alert('Yeni hesap için bir başlangıç yetkisi seçin.')
       return
     }
     setCreatingAccount(true)
@@ -188,7 +191,7 @@ export default function PersonDetailPage() {
                     </div>
                   </div>
                 </div>
-                <div style={{ display: 'flex', gap: 10 }}>
+                {editPerson && <div style={{ display: 'flex', gap: 10 }}>
                   <button
                     className="btn btn-secondary"
                     onClick={() => setEditOpen(true)}
@@ -202,7 +205,7 @@ export default function PersonDetailPage() {
                   >
                     {deleting ? 'Siliniyor...' : 'Sil'}
                   </button>
-                </div>
+                </div>}
               </div>
             </div>
           </div>
@@ -271,10 +274,10 @@ export default function PersonDetailPage() {
 
           {/* Hesap Durumu */}
           <div className="card" style={{ marginBottom: 20 }}>
-            <div className="card-header">Hesap Durumu</div>
+            <div className="card-header">Sistem Hesabı</div>
             <div className="card-body">
               {person.linked_user_id ? (
-                <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
+                <div style={{ display: 'flex', alignItems: 'center', gap: 12, flexWrap: 'wrap' }}>
                   <span
                     style={{
                       display: 'inline-flex',
@@ -290,6 +293,7 @@ export default function PersonDetailPage() {
                   >
                     ✓ Hesap Mevcut
                   </span>
+                  {manageAccount && <button className="btn btn-secondary" onClick={() => navigate(`/users?user_id=${person.linked_user_id}`)}>Sistem Yetkisini Yönet</button>}
                   {person.linked_user_email && (
                     <span style={{ fontSize: 14, color: 'var(--color-text-secondary)' }}>
                       {person.linked_user_email}
@@ -321,7 +325,7 @@ export default function PersonDetailPage() {
                     )}
                   </div>
 
-                  {person.email && (
+                  {person.email && manageAccount && (
                     <div style={{ display: 'flex', alignItems: 'center', gap: 10, flexWrap: 'wrap' }}>
                       {person.role_codes.length > 1 && (
                         <select
@@ -330,7 +334,7 @@ export default function PersonDetailPage() {
                           value={selectedRoleCode}
                           onChange={(e) => setSelectedRoleCode(e.target.value)}
                         >
-                          <option value="">Rol seçin…</option>
+                          <option value="">Hesap başlangıç yetkisi…</option>
                           {person.role_codes.map((code) => (
                             <option key={code} value={code}>
                               {ROLE_LABELS[code] ?? code}
@@ -351,7 +355,7 @@ export default function PersonDetailPage() {
               )}
 
               {/* Geçici parola — tek seferlik gösterim (G5) */}
-              {accountTempPassword && (
+              {manageAccount && accountTempPassword && (
                 <div
                   style={{
                     marginTop: 16,
@@ -407,7 +411,7 @@ export default function PersonDetailPage() {
 
       {person && (
         <PersonFormModal
-          isOpen={editOpen}
+          isOpen={editPerson && editOpen}
           onClose={() => setEditOpen(false)}
           person={person}
           onSaved={handleSaved}

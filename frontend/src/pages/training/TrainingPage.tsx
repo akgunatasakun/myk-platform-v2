@@ -6,7 +6,7 @@ import { trainingApi } from '@/api/training'
 import type { TrainingCourse, TrainingCourseListResponse, CourseStatus } from '@/types/training'
 import { useAuth } from '@/hooks/useAuth'
 
-const READ_ONLY_ROLES = new Set(['sporcu', 'veli', 'uye', 'misafir'])
+import { canManageTraining } from '@/config/operationAccess'
 
 const STATUS_LABEL: Record<string, string> = {
   planlandi: 'Planlandı',
@@ -46,7 +46,7 @@ const PAGE_SIZE = 20
 export default function TrainingPage() {
   const navigate = useNavigate()
   const { user } = useAuth()
-  const canWrite = !READ_ONLY_ROLES.has(user?.role ?? '')
+  const canWrite = canManageTraining(user?.role)
 
   const [data, setData] = useState<TrainingCourseListResponse | null>(null)
   const [loading, setLoading] = useState(true)
