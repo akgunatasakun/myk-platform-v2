@@ -1,5 +1,8 @@
 import { useCallback, useEffect, useRef, useState } from 'react'
 import AppShell from '@/components/layout/AppShell'
+import { useSearchParams } from 'react-router-dom'
+import { useAuth } from '@/hooks/useAuth'
+import { canManageAccounts } from '@/config/operationAccess'
 import UserFormModal from './UserFormModal'
 import { usersApi } from '@/api/users'
 import type { UserListItem, UserListOut, UserOut } from '@/types/user'
@@ -27,9 +30,15 @@ const ROLE_LABELS: Partial<Record<Role, string>> = {
 const PAGE_SIZE = 20
 
 export default function UsersPage() {
+  const { user: actor } = useAuth()
+  const manage = canManageAccounts(actor?.role)
+  const [url, setUrl] = useSearchParams()
+  const targetUserId = url.get('user_id')
+
   const [data, setData] = useState<UserListOut | null>(null)
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
+  const [accountError, setAccountError] = useState('')
 
   const [search, setSearch] = useState('')
   const [roleFilter, setRoleFilter] = useState('')
@@ -39,6 +48,22 @@ export default function UsersPage() {
 
   const [modalOpen, setModalOpen] = useState(false)
   const [editUser, setEditUser] = useState<UserOut | undefined>(undefined)
+
+  useEffect(() => {
+    if (!manage || !targetUserId) return
+    let cancelled = false
+    setAccountError('')
+    usersApi.get(targetUserId).then((r) => {
+      if (!cancelled) { setEditUser(r.data); setModalOpen(true) }
+    }).catch(() => { if (!cancelled) setAccountError('Bağlı hesap bilgileri yüklenemedi.') })
+    return () => { cancelled = true }
+  }, [manage, targetUserId])
+
+  const closeAccount = () => {
+    setModalOpen(false)
+    setAccountError('')
+    setUrl((old) => { const next = new URLSearchParams(old); next.delete('user_id'); return next }, { replace: true })
+  }
 
   // G5: Geçici parola bir kez gösterilir
   const [tempPassword, setTempPassword] = useState<string | null>(null)
@@ -173,12 +198,13 @@ export default function UsersPage() {
       )}
 
       <div className="page-header">
-        <h1 className="page-title">Hesaplar ve Yetkiler</h1>
-        <button className="btn btn-primary" onClick={openCreate}>
-          + Yeni Kullanıcı
-        </button>
+        <div><h1 className="page-title">Hesaplar ve Yetkiler</h1><p>Giriş hesapları ve sistem yetkileri. Kişinin kulüpteki türleri Kişi Rehberi’nden yönetilir.</p></div>
+        {manage && <button className="btn btn-primary" onClick={openCreate}>
+          + Yeni Sistem Hesabı
+        </button>}
       </div>
 
+      {accountError && <div className="alert alert-error" role="alert">{accountError}</div>}
       {/* Filter bar */}
       <div className="filter-bar">
         <div className="filter-search">
@@ -198,7 +224,7 @@ export default function UsersPage() {
           value={roleFilter}
           onChange={(e) => setRoleFilter(e.target.value)}
         >
-          <option value="">Tüm Roller</option>
+          <option value="">Tüm Sistem Yetkileri</option>
           {Object.entries(ROLE_LABELS).map(([val, label]) => (
             <option key={val} value={val}>{label}</option>
           ))}
@@ -250,10 +276,10 @@ export default function UsersPage() {
                 <tr>
                   <th>Ad Soyad</th>
                   <th>E-posta</th>
-                  <th>Rol</th>
+                  <th>Sistem Yetkisi</th>
                   <th>Durum</th>
                   <th>Son Giriş</th>
-                  <th>İşlemler</th>
+                  {manage && <th>İşlemler</th>}
                 </tr>
               </thead>
               <tbody>
@@ -282,7 +308,7 @@ export default function UsersPage() {
                         ? new Date(user.last_login_at).toLocaleDateString('tr-TR')
                         : '—'}
                     </td>
-                    <td>
+                    {manage && <td>
                       <div className="action-buttons">
                         {user.is_deleted ? (
                           <button
@@ -318,7 +344,7 @@ export default function UsersPage() {
                           </>
                         )}
                       </div>
-                    </td>
+                    </td>}
                   </tr>
                 ))}
               </tbody>
@@ -351,8 +377,8 @@ export default function UsersPage() {
       </div>
 
       <UserFormModal
-        isOpen={modalOpen}
-        onClose={() => setModalOpen(false)}
+        isOpen={manage && modalOpen}
+        onClose={closeAccount}
         user={editUser}
         onSaved={handleSaved}
         onCreated={(pw) => setTempPassword(pw)}

@@ -501,7 +501,8 @@ export default function PersonFormModal({ isOpen, onClose, person, onSaved, titl
             )}
 
             <div className="form-group">
-              <label className="form-label">Roller</label>
+              <label className="form-label">Kişi Türleri</label>
+              <p style={{ fontSize: 12, color: 'var(--color-text-muted)' }}>Kişinin kulüpteki ilişkilerini seçin; birden fazla tür olabilir. Bu seçimler mevcut hesabın sistem yetkisini değiştirmez. Yetki değişiklikleri Hesaplar ve Yetkiler bölümünden yapılır.</p>
               <div className="form-checkboxes">
                 {ROLE_OPTIONS.map((r) => {
                   const locked = r.code === forcedRole
@@ -510,7 +511,7 @@ export default function PersonFormModal({ isOpen, onClose, person, onSaved, titl
                       key={r.code}
                       className="form-checkbox-item"
                       style={locked ? { opacity: 0.6, cursor: 'not-allowed' } : undefined}
-                      title={locked ? 'Bu rol bu ekrandan kaldırılamaz' : undefined}
+                      title={locked ? 'Bu kişi türü bu ekrandan kaldırılamaz' : undefined}
                     >
                       <input
                         type="checkbox"

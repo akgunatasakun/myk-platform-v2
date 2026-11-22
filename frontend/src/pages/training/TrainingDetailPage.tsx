@@ -17,9 +17,8 @@ import type {
 import type { Person } from '@/types/person'
 import { useAuth } from '@/hooks/useAuth'
 import { CERTIFICATE_READERS } from '@/api/certificates'
+import { canManageTraining } from '@/config/operationAccess'
 
-// Kurs/oturum oluşturma-düzenleme-silme yetkisi olan roller
-const CAN_WRITE_COURSE = new Set(['super_admin', 'kulup_yonetici', 'sportif_direktor', 'basantrenor'])
 // Yoklama alma yetkisi olan roller
 const CAN_TAKE_ATTENDANCE = new Set(['super_admin', 'kulup_yonetici', 'sportif_direktor', 'basantrenor', 'antrenor', 'personel'])
 
@@ -99,7 +98,7 @@ export default function TrainingDetailPage() {
   const { id } = useParams<{ id: string }>()
   const navigate = useNavigate()
   const { user } = useAuth()
-  const canWriteCourse = CAN_WRITE_COURSE.has(user?.role ?? '')
+  const canWriteCourse = canManageTraining(user?.role)
   const canTakeAttendance = CAN_TAKE_ATTENDANCE.has(user?.role ?? '')
 
   const canRecordPayment = ['super_admin', 'kulup_yonetici', 'muhasebe'].includes(user?.role ?? '')

@@ -106,7 +106,7 @@ export default function UserFormModal({ isOpen, onClose, user, onSaved, onCreate
     if (!form.full_name.trim()) return setError('Ad Soyad zorunludur.')
     if (!isEdit && !form.email.trim()) return setError('E-posta zorunludur.')
     if (roleRequiresPerson && !form.person_id.trim())
-      return setError(`'${form.role}' rolü için Person ID zorunludur.`)
+      return setError(`'${form.role}' sistem yetkisi için bir kişi kartı seçilmelidir.`)
 
     setSaving(true)
     try {
@@ -148,7 +148,7 @@ export default function UserFormModal({ isOpen, onClose, user, onSaved, onCreate
     <div className="modal-overlay" onClick={onClose}>
       <div className="modal" onClick={(e) => e.stopPropagation()}>
         <div className="modal-header">
-          <h2>{isEdit ? 'Kullanıcı Düzenle' : 'Yeni Kullanıcı'}</h2>
+          <h2 className="modal-title">{isEdit ? 'Hesap Yetkisini Düzenle' : 'Yeni Sistem Hesabı'}</h2>
           <button className="modal-close" onClick={onClose} aria-label="Kapat">×</button>
         </div>
 
@@ -157,11 +157,12 @@ export default function UserFormModal({ isOpen, onClose, user, onSaved, onCreate
 
           {!isEdit && (
             <div className="form-group">
-              <label>E-posta *</label>
+              <label className="form-label" htmlFor="account-email">Giriş E-postası *</label>
               <input
                 ref={firstRef}
                 type="email"
-                className="form-control"
+                id="account-email"
+                className="form-input"
                 value={form.email}
                 onChange={(e) => set('email', e.target.value)}
                 required
@@ -171,21 +172,24 @@ export default function UserFormModal({ isOpen, onClose, user, onSaved, onCreate
           )}
 
           <div className="form-group">
-            <label>Ad Soyad *</label>
+            <label className="form-label" htmlFor="account-name">Hesap Görünen Adı *</label>
             <input
               ref={isEdit ? firstRef : undefined}
               type="text"
-              className="form-control"
+              id="account-name"
+              className="form-input"
               value={form.full_name}
               onChange={(e) => set('full_name', e.target.value)}
               required
             />
           </div>
 
+          <p style={{ fontSize: 13 }}>Kişisel bilgiler ve kişi türleri Kişi Rehberi’nde tutulur. Buradaki sistem yetkisi, hesabın görebileceği ekranları ve yapabileceği işlemleri belirler.</p>
           <div className="form-group">
-            <label>Rol *</label>
+            <label className="form-label" htmlFor="account-role">Sistem Yetkisi *</label>
             <select
-              className="form-control"
+              id="account-role"
+              className="form-select"
               value={form.role}
               onChange={(e) => set('role', e.target.value as Role)}
             >
@@ -196,9 +200,10 @@ export default function UserFormModal({ isOpen, onClose, user, onSaved, onCreate
           </div>
 
           <div className="form-group">
-            <label>Bağlı Kişi Kartı {roleRequiresPerson ? '*' : '(isteğe bağlı)'}</label>
+            <label className="form-label" htmlFor="account-person">Bağlı Kişi Kartı {roleRequiresPerson ? '*' : '(isteğe bağlı)'}</label>
             <select
-              className="form-control"
+              id="account-person"
+              className="form-select"
               value={form.person_id}
               onChange={(e) => set('person_id', e.target.value)}
             >
@@ -209,7 +214,7 @@ export default function UserFormModal({ isOpen, onClose, user, onSaved, onCreate
             </select>
             <small className="form-text text-muted">
               {roleRequiresPerson
-                ? `'${form.role}' rolü için kişi kaydı bağlantısı zorunludur.`
+                ? `'${form.role}' sistem yetkisi için kişi kartı bağlantısı zorunludur.`
                 : 'Seçilmezse mevcut bağlantı kaldırılır.'}
             </small>
           </div>
