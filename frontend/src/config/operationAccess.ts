@@ -5,3 +5,5 @@ const PERSON_MANAGERS = new Set(['super_admin', 'kulup_yonetici'])
 export const canManageTraining = (role?: string) => TRAINING_MANAGERS.has(role ?? '')
 export const canManageAccounts = (role?: string) => ACCOUNT_MANAGERS.has(role ?? '')
 export const canManagePersons = (role?: string) => PERSON_MANAGERS.has(role ?? '')
+
+export const canManagePayments = (role?: string) => ['super_admin', 'kulup_yonetici', 'muhasebe'].includes(role ?? '')

@@ -54,3 +54,14 @@ describe('Role-aware grouped navigation', () => {
     expect(peopleTarget('baskan', 'antrenor')).toBe('/antrenorler')
   })
 })
+
+describe('Payment navigation matches server read permissions', () => {
+  it.each(['super_admin', 'kulup_yonetici', 'baskan', 'muhasebe', 'veli'])('keeps scoped payment access for %s', role => {
+    expect(paths(role)).toContain('/odemeler')
+    expect(isRouteAllowed('/odemeler', role)).toBe(true)
+  })
+  it.each(['sporcu', 'uye', 'misafir', 'genel_sekreter', 'yk_uyesi', 'antrenor', 'basantrenor', 'sportif_direktor', 'personel', 'saglik_sorumlusu', 'guvenlik_operasyon', 'unknown'])('blocks payment navigation for %s', role => {
+    expect(paths(role)).not.toContain('/odemeler')
+    expect(isRouteAllowed('/odemeler', role)).toBe(false)
+  })
+})

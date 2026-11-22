@@ -4,6 +4,7 @@ import { TASK_ROLES } from '@/api/tasks'
 import { CERTIFICATE_READERS } from '@/api/certificates'
 
 // Mevcut rota izinleri. Menü düzeni bu yetkileri genişletmez.
+export const PAYMENT_READERS = ['super_admin', 'kulup_yonetici', 'baskan', 'muhasebe', 'veli']
 export const ADMIN       = ['super_admin', 'kulup_yonetici']
 export const MANAGEMENT  = [...ADMIN, 'baskan', 'yk_uyesi']
 export const SECRETARIAT = [...MANAGEMENT, 'genel_sekreter', 'muhasebe']
@@ -39,7 +40,7 @@ const ROUTE_ROLES: Record<string, string[]> = {
   '/katilim':             ['sporcu'],
   '/tekneler':            STAFF,
   '/tekneler/':           STAFF,
-  '/odemeler':            [...SECRETARIAT, 'sporcu', 'veli', 'uye'],
+  '/odemeler':            PAYMENT_READERS,
   '/raporlar':            SECRETARIAT,
   '/takvim':              [...STAFF, 'sporcu', 'veli', 'uye'],
   '/kutuphane':           [...MANAGEMENT, 'sportif_direktor', 'basantrenor', 'antrenor', 'genel_sekreter'],

@@ -6,7 +6,7 @@ import { paymentsApi } from '@/api/payments'
 import type { OverduePayment, Payment, PaymentListResponse, PaymentStatus } from '@/types/payment'
 import { useAuth } from '@/hooks/useAuth'
 
-const READ_ONLY_ROLES = new Set(['sporcu', 'veli', 'uye', 'misafir'])
+import { canManagePayments } from '@/config/operationAccess'
 
 // ── Sabitler ──────────────────────────────────────────────────────────────────
 
@@ -42,7 +42,7 @@ const PAGE_SIZE = 50
 
 export default function PaymentsPage() {
   const { user } = useAuth()
-  const canWrite = !READ_ONLY_ROLES.has(user?.role ?? '')
+  const canWrite = canManagePayments(user?.role)
 
   const [searchParams, setSearchParams] = useSearchParams()
   const tab: Tab = searchParams.get('tab') === 'overdue' ? 'overdue' : 'all'
@@ -213,7 +213,7 @@ export default function PaymentsPage() {
       <div className="table-container">
         {loading ? (
           <div className="loading-center"><span className="loading-spinner lg" /></div>
-        ) : isEmpty ? (
+        ) : error ? null : isEmpty ? (
           <div className="empty-state">
             <div className="empty-state-icon">💳</div>
             <div className="empty-state-title">
@@ -222,7 +222,7 @@ export default function PaymentsPage() {
             <div className="empty-state-desc">
               {tab === 'overdue'
                 ? 'Tüm ödemeler zamanında — gecikmiş kayıt yok.'
-                : 'Henüz ödeme kaydı yok. Yeni ödeme ekleyin.'}
+                : 'Bu kapsamda görüntülenecek ödeme kaydı yok.'}
             </div>
           </div>
         ) : (
