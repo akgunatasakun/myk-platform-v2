@@ -16,7 +16,8 @@ describe('Role-aware grouped navigation', () => {
     for (const path of ['/persons', '/users', '/audit', '/ayarlar', '/yenilemeler', '/gorevler']) expect(result).not.toContain(path)
   })
   it('retains self-profile entries without giving directory access', () => {
-    expect(paths('veli')).toContain('/veliler')
+    expect(paths('veli')).toContain('/sporcular')
+    expect(paths('veli')).not.toContain('/veliler')
     expect(paths('sporcu')).toContain('/sporcular')
     expect(paths('uye')).toContain('/uyeler')
   })
@@ -63,5 +64,16 @@ describe('Payment navigation matches server read permissions', () => {
   it.each(['sporcu', 'uye', 'misafir', 'genel_sekreter', 'yk_uyesi', 'antrenor', 'basantrenor', 'sportif_direktor', 'personel', 'saglik_sorumlusu', 'guvenlik_operasyon', 'unknown'])('blocks payment navigation for %s', role => {
     expect(paths(role)).not.toContain('/odemeler')
     expect(isRouteAllowed('/odemeler', role)).toBe(false)
+  })
+})
+
+describe('Guardian self-service navigation', () => {
+  it('opens linked athletes without granting person-directory or guardian-roster access', () => {
+    expect(paths('veli', 'bagli sporcular')).toEqual(['/sporcular'])
+    expect(isRouteAllowed('/sporcular', 'veli')).toBe(true)
+    expect(isRouteAllowed('/sporcular/linked-id', 'veli')).toBe(true)
+    expect(isRouteAllowed('/veliler', 'veli')).toBe(false)
+    expect(isRouteAllowed('/veliler/other-id', 'veli')).toBe(false)
+    expect(isRouteAllowed('/persons', 'veli')).toBe(false)
   })
 })

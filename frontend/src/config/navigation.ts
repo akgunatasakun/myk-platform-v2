@@ -18,8 +18,8 @@ export const NAV_GROUPS: NavGroup[] = [
     { path: '/persons', label: 'Kişi Rehberi', icon: '👥', roles: DIRECTORY_ROLES, activePaths: ['/persons', '/sporcular', '/veliler', '/uyeler', '/antrenorler'] },
     { path: '/admin/applications', label: 'Başvurular', icon: '📋', roles: SECRETARIAT },
     // Rehbere yetkisi olmayan rollerin mevcut profil girişleri korunur.
-    { path: '/sporcular', label: 'Sporcu Kayıtları', icon: '⛵', roles: [...STAFF, 'sporcu'], hideFor: FULL_DIRECTORY },
-    { path: '/veliler', label: 'Veli Kayıtları', icon: '👨‍👩‍👧', roles: [...SECRETARIAT, 'veli'], hideFor: FULL_DIRECTORY },
+    { path: '/sporcular', label: 'Sporcu Kayıtları', icon: '⛵', roles: [...STAFF, 'sporcu', 'veli'], hideFor: FULL_DIRECTORY },
+    { path: '/veliler', label: 'Veli Kayıtları', icon: '👨‍👩‍👧', roles: SECRETARIAT, hideFor: FULL_DIRECTORY },
     { path: '/uyeler', label: 'Üyelik Kayıtları', icon: '🏅', roles: [...SECRETARIAT, 'uye'], hideFor: FULL_DIRECTORY },
     { path: '/antrenorler', label: 'Antrenör Kayıtları', icon: '🎯', roles: [...SECRETARIAT, 'basantrenor', 'antrenor'], hideFor: DIRECTORY_ROLES },
   ] },
@@ -54,7 +54,7 @@ export function itemActive(item: NavItem, pathname: string) { return (item.activ
 export function normalizeMenuText(text: string) { return text.toLocaleLowerCase('tr-TR').replace(/ı/g, 'i').normalize('NFD').replace(/[\u0300-\u036f]/g, '') }
 export function visibleNavigation(role: string, search = ''): NavGroup[] {
   const query = normalizeMenuText(search.trim())
-  return NAV_GROUPS.map((group) => ({ ...group, items: group.items.filter((item) =>
+  return NAV_GROUPS.map((group) => ({ ...group, items: group.items.map((item) => role === 'veli' && item.path === '/sporcular' ? { ...item, label: 'Bağlı Sporcular' } : item).filter((item) =>
     (!item.roles || item.roles.includes(role)) && !item.hideFor?.includes(role) && isRouteAllowed(item.path, role)
     && (!query || normalizeMenuText(group.label + ' ' + item.label).includes(query))
   ).map((item) => item.path === '/persons' && !FULL_DIRECTORY.includes(role) ? { ...item, activePaths: ['/persons'] } : item) })).filter((group) => group.items.length > 0)
