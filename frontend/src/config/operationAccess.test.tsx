@@ -1,7 +1,7 @@
 import { describe, expect, it, vi } from 'vitest'
 import { renderToStaticMarkup } from 'react-dom/server'
 import type { ReactNode } from 'react'
-import { canManageAccounts, canManagePersons, canManageTraining } from './operationAccess'
+import { canManageAccounts, canManagePersons, canManageTraining, canManagePayments } from './operationAccess'
 import TrainingPage from '@/pages/training/TrainingPage'
 
 let currentRole = 'antrenor'
@@ -14,6 +14,7 @@ describe('Operation controls follow backend write permissions', () => {
   it.each(roles)('checks actions for %s', (role) => {
     expect(canManageTraining(role)).toBe(['super_admin', 'kulup_yonetici', 'sportif_direktor', 'basantrenor'].includes(role))
     expect(canManageAccounts(role)).toBe(['super_admin', 'kulup_yonetici', 'genel_sekreter'].includes(role))
+    expect(canManagePayments(role)).toBe(['super_admin', 'kulup_yonetici', 'muhasebe'].includes(role))
     expect(canManagePersons(role)).toBe(['super_admin', 'kulup_yonetici'].includes(role))
   })
   it.each(['antrenor', 'baskan', 'yk_uyesi', 'muhasebe', 'sporcu', 'veli', 'unknown', ''])('does not render create-course control for %s', (role) => {
@@ -25,6 +26,7 @@ describe('Operation controls follow backend write permissions', () => {
     expect(renderToStaticMarkup(<TrainingPage />)).toContain('+ Yeni Eğitim')
   })
   it('fails closed while the account has not loaded', () => {
+    expect(canManagePayments()).toBe(false)
     expect(canManageTraining()).toBe(false)
     expect(canManageAccounts()).toBe(false)
     expect(canManagePersons()).toBe(false)

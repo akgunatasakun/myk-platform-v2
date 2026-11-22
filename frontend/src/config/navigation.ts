@@ -1,4 +1,4 @@
-import { ADMIN, MANAGEMENT, SECRETARIAT, STAFF, COACHES, isRouteAllowed } from './access'
+import { ADMIN, MANAGEMENT, SECRETARIAT, STAFF, COACHES, PAYMENT_READERS, isRouteAllowed } from './access'
 import { DOCUMENT_READERS } from '@/api/documentAccess'
 import { RENEWAL_READERS } from '@/api/renewals'
 import { TASK_ROLES } from '@/api/tasks'
@@ -38,7 +38,7 @@ export const NAV_GROUPS: NavGroup[] = [
     { path: '/gorevler', label: 'Görevler', icon: '✓', roles: TASK_ROLES },
   ] },
   { id: 'administration', label: 'Mali ve İdari', icon: '📂', items: [
-    { path: '/odemeler', label: 'Ödemeler', icon: '💳', roles: [...SECRETARIAT, 'sporcu', 'veli', 'uye'] },
+    { path: '/odemeler', label: 'Ödemeler', icon: '💳', roles: PAYMENT_READERS },
     { path: '/belgeler', label: 'Belgeler', icon: '📂', roles: DOCUMENT_READERS },
     { path: '/yenilemeler', label: 'Yenilemeler', icon: '📑', roles: RENEWAL_READERS },
     { path: '/raporlar', label: 'Raporlar', icon: '📈', roles: SECRETARIAT },
