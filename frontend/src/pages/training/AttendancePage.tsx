@@ -17,7 +17,7 @@ import { trainingApi } from '@/api/training'
 import { useAuth } from '@/hooks/useAuth'
 import { formatPersonAge } from '@/utils/personAge'
 
-const CAN_TAKE_ATTENDANCE = new Set(['super_admin', 'kulup_yonetici', 'sportif_direktor', 'basantrenor', 'antrenor', 'personel'])
+import { canWriteAttendance } from '@/config/operationAccess'
 import type {
   TrainingCourse,
   TrainingSession,
@@ -50,7 +50,7 @@ function fmt(date: string) {
 export default function AttendancePage() {
   const [searchParams, setSearchParams] = useSearchParams()
   const { user } = useAuth()
-  const canTakeAttendance = CAN_TAKE_ATTENDANCE.has(user?.role ?? '')
+  const canTakeAttendance = canWriteAttendance(user?.role)
 
   // Seçimler
   const [courses, setCourses] = useState<TrainingCourse[]>([])
@@ -163,7 +163,7 @@ export default function AttendancePage() {
   }
 
   const handleSave = async () => {
-    if (!selectedCourseId || !selectedSessionId) return
+    if (!canTakeAttendance || saving || loading || !selectedCourseId || !selectedSessionId) return
     const filled = rows.filter((r) => r.status !== null)
     if (filled.length === 0) { setSaveResult('Hiçbir yoklama durumu seçilmedi.'); return }
 
@@ -214,6 +214,7 @@ export default function AttendancePage() {
           <label className="form-label">Eğitim</label>
           <select
             className="form-select"
+            disabled={saving}
             value={selectedCourseId}
             onChange={(e) => { setSelectedCourseId(e.target.value); setSelectedSessionId('') }}
           >
@@ -230,7 +231,7 @@ export default function AttendancePage() {
             className="form-select"
             value={selectedSessionId}
             onChange={(e) => setSelectedSessionId(e.target.value)}
-            disabled={!selectedCourseId}
+            disabled={saving || !selectedCourseId}
           >
             <option value="">— Oturum seçiniz —</option>
             {sessions.map((s) => (
@@ -300,19 +301,20 @@ export default function AttendancePage() {
               {selectedSession?.start_time && ` ${selectedSession.start_time.slice(0, 5)}`}
               {' '}· {rows.length} katılımcı
             </div>
-            <div style={{ display: 'flex', gap: 6 }}>
+            {canTakeAttendance && <div style={{ display: 'flex', gap: 6 }}>
               <span style={{ fontSize: 12, alignSelf: 'center', color: 'var(--color-text-muted)' }}>Tümünü:</span>
               {STATUS_BUTTONS.map((b) => (
                 <button
                   key={b.value}
                   className="btn btn-sm btn-ghost"
                   style={{ border: `1px solid ${b.color}`, color: b.color, minWidth: 52 }}
+                  disabled={saving}
                   onClick={() => setAll(b.value)}
                 >
                   {b.label}
                 </button>
               ))}
-            </div>
+            </div>}
           </div>
 
           {/* Yoklama tablosu */}
@@ -351,6 +353,7 @@ export default function AttendancePage() {
                               border: `1.5px solid ${b.color}`,
                               fontWeight: row.status === b.value ? 700 : 400,
                             }}
+                            disabled={!canTakeAttendance || saving}
                             onClick={() => setRowStatus(row.person_id, b.value)}
                           >
                             {b.label}
@@ -363,6 +366,7 @@ export default function AttendancePage() {
                         type="time"
                         className="form-input"
                         style={{ width: 100, padding: '4px 6px', fontSize: 13 }}
+                        disabled={!canTakeAttendance || saving}
                         value={row.check_in_time}
                         onChange={(e) => setRowField(row.person_id, 'check_in_time', e.target.value)}
                       />
@@ -372,6 +376,7 @@ export default function AttendancePage() {
                         type="time"
                         className="form-input"
                         style={{ width: 100, padding: '4px 6px', fontSize: 13 }}
+                        disabled={!canTakeAttendance || saving}
                         value={row.check_out_time}
                         onChange={(e) => setRowField(row.person_id, 'check_out_time', e.target.value)}
                       />
@@ -380,6 +385,7 @@ export default function AttendancePage() {
                       <input
                         className="form-input"
                         style={{ width: 140, padding: '4px 6px', fontSize: 13 }}
+                        disabled={!canTakeAttendance || saving}
                         value={row.notes}
                         onChange={(e) => setRowField(row.person_id, 'notes', e.target.value)}
                         placeholder="opsiyonel"

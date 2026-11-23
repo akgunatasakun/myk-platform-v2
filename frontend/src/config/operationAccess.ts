@@ -14,3 +14,5 @@ export const canReadPersonCards = (role?: string) => ['super_admin', 'kulup_yone
 export const canCreateAthletes = (role?: string) => ['super_admin', 'kulup_yonetici', 'antrenor', 'basantrenor'].includes(role ?? '')
 
 export const canAssignGuardians = (role?: string) => ['super_admin', 'kulup_yonetici', 'antrenor', 'basantrenor'].includes(role ?? '')
+
+export const canWriteAttendance = (role?: string) => ['super_admin', 'kulup_yonetici', 'sportif_direktor', 'basantrenor', 'antrenor'].includes(role ?? '')

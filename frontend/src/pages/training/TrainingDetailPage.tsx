@@ -20,7 +20,7 @@ import { CERTIFICATE_READERS } from '@/api/certificates'
 import { canManageTraining } from '@/config/operationAccess'
 
 // Yoklama alma yetkisi olan roller
-const CAN_TAKE_ATTENDANCE = new Set(['super_admin', 'kulup_yonetici', 'sportif_direktor', 'basantrenor', 'antrenor', 'personel'])
+import { canWriteAttendance } from '@/config/operationAccess'
 
 // ── Sabitler ──────────────────────────────────────────────────────────────────
 
@@ -99,7 +99,7 @@ export default function TrainingDetailPage() {
   const navigate = useNavigate()
   const { user } = useAuth()
   const canWriteCourse = canManageTraining(user?.role)
-  const canTakeAttendance = CAN_TAKE_ATTENDANCE.has(user?.role ?? '')
+  const canTakeAttendance = canWriteAttendance(user?.role)
 
   const canRecordPayment = ['super_admin', 'kulup_yonetici', 'muhasebe'].includes(user?.role ?? '')
   const [paymentContext, setPaymentContext] = useState<{ enrollmentId: string; personId: string; personName: string; courseName: string; balance: string } | undefined>()
