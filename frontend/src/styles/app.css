@@ -1420,3 +1420,9 @@ html, body {
 .person-role-filter:focus-visible, .topbar-notifications:focus-visible { outline: 2px solid var(--color-ocean); outline-offset: 3px; }
 .directory-context { display: flex; align-items: center; justify-content: space-between; flex-wrap: wrap; gap: 10px; margin-bottom: 14px; }
 @media (max-width: 768px) { .person-role-filter { min-height: 44px; padding: 8px 14px; } .sidebar-overlay { border: 0; padding: 0; } }
+
+/* Yeni sürüm bildirimi */
+.pwa-update { position: fixed; right: 16px; bottom: max(16px, env(safe-area-inset-bottom)); z-index: 2000; max-width: min(420px, calc(100vw - 32px)); }
+.pwa-update-card { padding: 18px; background: var(--color-bg, #fff); color: var(--color-text); border: 1px solid var(--color-border); border-radius: 12px; box-shadow: 0 8px 30px #0003; }
+.pwa-update-card p { margin: 10px 0; font-size: 14px; }
+.pwa-update-actions { display: flex; justify-content: flex-end; gap: 10px; flex-wrap: wrap; }
