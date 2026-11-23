@@ -111,6 +111,8 @@ function AddGuardianModal({ athleteId, onClose, onAdded }: AddGuardianModalProps
   const handleSearchChange = (val: string) => {
     searchVersion.current++
     setSearchLoading(false)
+    setShowResults(false)
+    setSearchResults([])
     setError(null)
     setSearch(val)
     if (selectedPerson) { setSelectedPerson(null) }
@@ -173,8 +175,9 @@ function AddGuardianModal({ athleteId, onClose, onAdded }: AddGuardianModalProps
 
           {/* Kişi arama */}
           <div style={{ position: 'relative' }}>
-            <label className="form-label required">Kişi Ara</label>
+            <label className="form-label required" htmlFor="existing-guardian-search">Mevcut Veli Ara</label>
             <input
+              id="existing-guardian-search"
               type="text"
               className="form-input"
               placeholder="En az 3 karakter: ad, soyad, e-posta veya telefon…"
@@ -190,7 +193,7 @@ function AddGuardianModal({ athleteId, onClose, onAdded }: AddGuardianModalProps
               />
             )}
             {showResults && searchResults.length > 0 && (
-              <div className="guardian-search-dropdown">
+              <div className="guardian-search-dropdown guardian-search-inline">
                 {searchResults.map((p) => (
                   <button
                     key={p.id}
@@ -202,14 +205,14 @@ function AddGuardianModal({ athleteId, onClose, onAdded }: AddGuardianModalProps
                       {p.first_name} {p.last_name}
                     </span>
                     <span className="guardian-search-meta">
-                      {p.member_number ?? p.email ?? '—'}
+                      {p.phone || p.member_number || p.email || 'İletişim bilgisi yok'}
                     </span>
                   </button>
                 ))}
               </div>
             )}
             {showResults && searchResults.length === 0 && !searchLoading && (
-              <div className="guardian-search-dropdown">
+              <div className="guardian-search-dropdown guardian-search-inline">
                 <div style={{ padding: '10px 12px', color: 'var(--color-muted)', fontSize: 13 }}>
                   Sonuç bulunamadı.
                 </div>
@@ -230,7 +233,13 @@ function AddGuardianModal({ athleteId, onClose, onAdded }: AddGuardianModalProps
             )}
           </div>
 
-          <button type="button" className="btn btn-secondary" onClick={() => setNewOpen(true)}>Veli kayıtlı değil — Yeni Veli Oluştur</button>
+          <button type="button" className="btn btn-secondary" onClick={() => {
+            searchVersion.current++
+            if (searchTimer.current) clearTimeout(searchTimer.current)
+            setSearchLoading(false)
+            setShowResults(false)
+            setNewOpen(true)
+          }}>Veli kayıtlı değil — Yeni Veli Oluştur</button>
           {newOpen && <PersonFormModal isOpen={true} title="Yeni Veli ve Sporcu Bağlantısı" forcedRole="veli" guardianOnly
             onClose={() => setNewOpen(false)} onSaved={() => { setNewOpen(false); onAdded() }}
             onCreate={async person => (await personsApi.createGuardianForAthlete(athleteId, person, {
