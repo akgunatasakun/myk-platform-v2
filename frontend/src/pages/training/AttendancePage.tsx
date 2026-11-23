@@ -10,7 +10,7 @@
  *  - Frontend JS filtresi korundu (savunma amaçlı ikinci kat)
  *  - Kurs/oturum yükleme hataları kullanıcıya gösteriliyor
  */
-import { useCallback, useEffect, useState } from 'react'
+import { useEffect, useState } from 'react'
 import { useSearchParams } from 'react-router-dom'
 import AppShell from '@/components/layout/AppShell'
 import { trainingApi } from '@/api/training'
@@ -18,6 +18,7 @@ import { useAuth } from '@/hooks/useAuth'
 import { formatPersonAge } from '@/utils/personAge'
 
 import { canWriteAttendance } from '@/config/operationAccess'
+import { loadCurrent, mayLeaveAttendance } from './attendanceState'
 import type {
   TrainingCourse,
   TrainingSession,
@@ -60,7 +61,11 @@ export default function AttendancePage() {
 
   // Yoklama verileri
   const [rows, setRows] = useState<AttendanceRow[]>([])
+  const [baseline, setBaseline] = useState('[]')
+  const dirty = JSON.stringify(rows) !== baseline
   const [loading, setLoading] = useState(false)
+  const [sessionsLoading, setSessionsLoading] = useState(false)
+  const [loadError, setLoadError] = useState<string | null>(null)
   const [saving, setSaving] = useState(false)
   const [saveResult, setSaveResult] = useState<string | null>(null)
   const [error, setError] = useState<string | null>(null)
@@ -68,40 +73,37 @@ export default function AttendancePage() {
   const [courseLoadError, setCourseLoadError] = useState<string | null>(null)
   const [sessionLoadError, setSessionLoadError] = useState<string | null>(null)
 
-  // Kurs listesi yükle (aktif)
   useEffect(() => {
     setCourseLoadError(null)
-    trainingApi.listCourses({ active_only: false, limit: 100 })
-      .then((r) => setCourses(r.data.items))
-      .catch(() => {
-        // P0-1 fix: hata sessizce yutulmuyordu; kullanıcıya göster
-        setCourseLoadError('Eğitim listesi yüklenemedi. Sayfayı yenileyin.')
-      })
+    return loadCurrent(() => trainingApi.listCourses({ active_only: false, limit: 100 }),
+      r => setCourses(r.data.items),
+      () => setCourseLoadError('Eğitim listesi yüklenemedi. Sayfayı yenileyin.'))
   }, [])
 
-  // Kurs değişince oturum listesi yükle
   useEffect(() => {
-    if (!selectedCourseId) { setSessions([]); setSelectedSessionId(''); return }
+    setSessions([])
     setSessionLoadError(null)
-    trainingApi.listSessions(selectedCourseId)
-      .then((r) => setSessions(r.data))
-      .catch(() => {
-        setSessions([])
-        setSessionLoadError('Oturum listesi yüklenemedi.')
-      })
+    setSessionsLoading(!!selectedCourseId)
+    if (!selectedCourseId) return
+    return loadCurrent(() => trainingApi.listSessions(selectedCourseId),
+      r => setSessions(r.data),
+      () => setSessionLoadError('Oturum listesi yüklenemedi.'),
+      () => setSessionsLoading(false))
   }, [selectedCourseId])
 
   // Oturum seçince katılımcı + mevcut yoklama yükle
-  const loadAttendance = useCallback(async () => {
-    if (!selectedCourseId || !selectedSessionId) return
-    setLoading(true)
+  useEffect(() => {
+    setRows([])
+    setBaseline('[]')
+    setLoadError(null)
     setError(null)
     setSaveResult(null)
-    try {
-      const [enrollResp, attResp] = await Promise.all([
+    if (!selectedCourseId || !selectedSessionId) { setLoading(false); return }
+    setLoading(true)
+    return loadCurrent(() => Promise.all([
         trainingApi.listParticipants(selectedCourseId),
         trainingApi.getAttendance(selectedCourseId, selectedSessionId),
-      ])
+      ]), ([enrollResp, attResp]) => {
 
       // P0-1: Backend artık sadece aktif kayıtları döndürüyor.
       // Frontend filtresi savunma amaçlı korunuyor.
@@ -112,8 +114,7 @@ export default function AttendancePage() {
         attResp.data.map((a) => [a.person_id, a])
       )
 
-      setRows(
-        activeEnrollments.map((e) => {
+      const loadedRows = activeEnrollments.map((e) => {
           const existing = attMap.get(e.person_id)
           return {
             person_id: e.person_id,
@@ -125,18 +126,22 @@ export default function AttendancePage() {
             notes: existing?.notes ?? '',
           }
         })
-      )
-    } catch (err: unknown) {
+      setRows(loadedRows)
+      setBaseline(JSON.stringify(loadedRows))
+    }, (err: unknown) => {
       const detail = (err as { response?: { data?: { detail?: string } } })?.response?.data?.detail
-      setError(detail ?? 'Yoklama verileri yüklenemedi.')
-    } finally {
-      setLoading(false)
-    }
+      setLoadError(detail ?? 'Yoklama verileri yüklenemedi.')
+    }, () => setLoading(false))
   }, [selectedCourseId, selectedSessionId])
 
+  const confirmLeave = () => mayLeaveAttendance(dirty, () => window.confirm('Kaydedilmemiş yoklama değişiklikleri var. Değişikliklerden vazgeçilsin mi?'))
+
   useEffect(() => {
-    loadAttendance()
-  }, [loadAttendance])
+    if (!dirty && !saving) return
+    const warn = (event: BeforeUnloadEvent) => { event.preventDefault(); event.returnValue = '' }
+    window.addEventListener('beforeunload', warn)
+    return () => window.removeEventListener('beforeunload', warn)
+  }, [dirty, saving])
 
   // URL'yi sync et
   useEffect(() => {
@@ -165,8 +170,11 @@ export default function AttendancePage() {
   const handleSave = async () => {
     if (!canTakeAttendance || saving || loading || !selectedCourseId || !selectedSessionId) return
     const filled = rows.filter((r) => r.status !== null)
-    if (filled.length === 0) { setSaveResult('Hiçbir yoklama durumu seçilmedi.'); return }
+    if (filled.length === 0) { setError('Hiçbir yoklama durumu seçilmedi.'); return }
 
+    if (rows.some(r => r.status === null && (r.notes || r.check_in_time || r.check_out_time))) {
+      setError('Saat veya not girilen katılımcılar için yoklama durumu da seçin.'); return
+    }
     setSaving(true)
     setSaveResult(null)
     setError(null)
@@ -180,6 +188,7 @@ export default function AttendancePage() {
           notes: r.notes || null,
         })),
       })
+      setBaseline(JSON.stringify(rows))
       const { created, updated } = resp.data
       setSaveResult(
         `Kaydedildi — ${created > 0 ? `${created} yeni` : ''}${created > 0 && updated > 0 ? ', ' : ''}${updated > 0 ? `${updated} güncellendi` : ''}`
@@ -216,7 +225,7 @@ export default function AttendancePage() {
             className="form-select"
             disabled={saving}
             value={selectedCourseId}
-            onChange={(e) => { setSelectedCourseId(e.target.value); setSelectedSessionId('') }}
+            onChange={(e) => { if (confirmLeave()) { setSelectedCourseId(e.target.value); setSelectedSessionId('') } }}
           >
             <option value="">— Eğitim seçiniz —</option>
             {courses.map((c) => (
@@ -230,8 +239,8 @@ export default function AttendancePage() {
           <select
             className="form-select"
             value={selectedSessionId}
-            onChange={(e) => setSelectedSessionId(e.target.value)}
-            disabled={saving || !selectedCourseId}
+            onChange={(e) => { if (confirmLeave()) setSelectedSessionId(e.target.value) }}
+            disabled={saving || sessionsLoading || !selectedCourseId}
           >
             <option value="">— Oturum seçiniz —</option>
             {sessions.map((s) => (
@@ -249,7 +258,7 @@ export default function AttendancePage() {
             </div>
           )}
           {/* Seçili kurs varsa ama oturum yoksa yönlendirici mesaj */}
-          {selectedCourseId && !sessionLoadError && sessions.length === 0 && (
+          {selectedCourseId && !sessionsLoading && !sessionLoadError && sessions.length === 0 && (
             <div style={{ fontSize: 12, marginTop: 6, color: 'var(--color-text-muted)' }}>
               Bu eğitimde henüz oturum yok.{' '}
               <a href={`/egitimler/${selectedCourseId}`} style={{ color: 'var(--color-primary)' }}>
@@ -274,6 +283,7 @@ export default function AttendancePage() {
         </div>
       )}
 
+      {dirty && <div className="alert alert-warning" style={{ marginBottom: 12 }}>Kaydedilmemiş yoklama değişiklikleri var.</div>}
       {/* İçerik */}
       {!selectedCourseId || !selectedSessionId ? (
         <div className="empty-state">
@@ -283,8 +293,8 @@ export default function AttendancePage() {
         </div>
       ) : loading ? (
         <div className="loading-center"><span className="loading-spinner lg" /></div>
-      ) : error ? (
-        <div className="alert alert-error"><span>⚠️</span><span>{error}</span></div>
+      ) : loadError ? (
+        <div className="alert alert-error"><span>⚠️</span><span>{loadError}</span></div>
       ) : rows.length === 0 ? (
         <div className="empty-state">
           <div className="empty-state-icon">👥</div>
