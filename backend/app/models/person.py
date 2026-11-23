@@ -25,6 +25,9 @@ class Person(Base):
     club_id: Mapped[uuid.UUID] = mapped_column(
         ForeignKey("clubs.id", ondelete="CASCADE"), nullable=False, index=True
     )
+    created_by_user_id: Mapped[Optional[uuid.UUID]] = mapped_column(
+        ForeignKey("users.id", ondelete="SET NULL", name="fk_persons_created_by_user"), nullable=True, index=True
+    )
     first_name: Mapped[str] = mapped_column(String(100), nullable=False)
     last_name: Mapped[str] = mapped_column(String(100), nullable=False)
     national_id: Mapped[Optional[str]] = mapped_column(String(20), nullable=True)

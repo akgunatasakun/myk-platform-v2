@@ -86,7 +86,7 @@ async def test_current_revision_is_head(engine):
     async with engine.connect() as conn:
         r = await conn.execute(text("SELECT version_num FROM alembic_version"))
         rev = r.scalar_one()
-    assert rev == "0032", f"Beklenen '0032', alınan '{rev!r}'"
+    assert rev == "0033", f"Beklenen '0033', alınan '{rev!r}'"
 
 
 # ── 2. Şema doğrulama ─────────────────────────────────────────────────────────
@@ -1412,6 +1412,31 @@ def test_0032_roundtrip():
             try:
                 async with e.connect() as conn:
                     assert (await conn.execute(text("SELECT to_regclass('public.training_certificates')"))).scalar_one() is None
+            finally:
+                await e.dispose()
+        asyncio.get_event_loop().run_until_complete(check())
+    finally:
+        run_alembic('upgrade', 'head')
+
+
+@pytest.mark.asyncio
+async def test_0033_creator_scope_schema(engine):
+    async with engine.connect() as conn:
+        assert (await conn.execute(text("SELECT is_nullable FROM information_schema.columns WHERE table_schema='public' AND table_name='persons' AND column_name='created_by_user_id'"))).scalar_one() == 'YES'
+        assert (await conn.execute(text("SELECT confdeltype::text FROM pg_constraint WHERE conname='fk_persons_created_by_user'"))).scalar_one() == 'n'
+        assert (await conn.execute(text("SELECT to_regclass('public.ix_persons_created_by_user_id')"))).scalar_one() is not None
+        assert (await conn.execute(text("SELECT has_column_privilege('myk_app', 'persons', 'created_by_user_id', 'SELECT')"))).scalar_one() is True
+        assert (await conn.execute(text("SELECT has_column_privilege('myk_app', 'persons', 'created_by_user_id', 'INSERT')"))).scalar_one() is True
+
+
+def test_0033_roundtrip():
+    try:
+        run_alembic('downgrade', '0032')
+        async def check():
+            e = create_async_engine(DATABASE_URL)
+            try:
+                async with e.connect() as conn:
+                    assert (await conn.execute(text("SELECT count(*) FROM information_schema.columns WHERE table_schema='public' AND table_name='persons' AND column_name='created_by_user_id'"))).scalar_one() == 0
             finally:
                 await e.dispose()
         asyncio.get_event_loop().run_until_complete(check())

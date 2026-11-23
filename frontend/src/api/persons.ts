@@ -56,6 +56,11 @@ export const personsApi = {
   getAthletes: (guardianPersonId: string) =>
     apiClient.get<GuardianAthlete[]>(`/persons/${guardianPersonId}/athletes`),
 
+  guardianOptions: (athleteId: string, search: string) =>
+    apiClient.get<Pick<Person, 'id' | 'first_name' | 'last_name' | 'phone'>[]>(`/persons/${athleteId}/guardian-options`, { params: { search } }),
+  createGuardianForAthlete: (athleteId: string, person: PersonCreate, link: Omit<PersonGuardianCreate, 'guardian_person_id'>) =>
+    apiClient.post<PersonCreateOut>(`/persons/${athleteId}/guardians/new`, { person, ...link }),
+
   // ── Guardian CRUD ─────────────────────────────────────────────────────────
   getGuardians: (personId: string) =>
     apiClient.get<PersonGuardian[]>(`/persons/${personId}/guardians`),

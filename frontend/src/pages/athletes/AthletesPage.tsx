@@ -10,6 +10,9 @@
  */
 import { useCallback, useEffect, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
+import { useAuth } from '@/hooks/useAuth'
+import { canCreateAthletes } from '@/config/operationAccess'
+import PersonFormModal from '@/pages/persons/PersonFormModal'
 import AppShell from '@/components/layout/AppShell'
 import { athletesApi } from '@/api/athletes'
 import type { AthleteAlertItem, AthleteListItem, DocumentStatus } from '@/types/athlete'
@@ -33,6 +36,8 @@ type Tab = 'list' | 'alerts'
 
 export default function AthletesPage() {
   const navigate = useNavigate()
+  const { user } = useAuth()
+  const [createOpen, setCreateOpen] = useState(false)
   const [tab, setTab] = useState<Tab>('list')
 
   // List tab
@@ -89,6 +94,7 @@ export default function AthletesPage() {
     <AppShell title="Sporcular">
       <div className="page-header">
         <h1 className="page-title">Sporcular</h1>
+        {canCreateAthletes(user?.role) && <button className="btn btn-primary" onClick={() => setCreateOpen(true)}>+ Yeni Sporcu</button>}
       </div>
 
       {/* Tabs */}
@@ -310,6 +316,14 @@ export default function AthletesPage() {
           )}
         </>
       )}
+      <PersonFormModal
+        isOpen={canCreateAthletes(user?.role) && createOpen}
+        onClose={() => setCreateOpen(false)}
+        title="Yeni Sporcu"
+        forcedRole="sporcu"
+        athleteOnly={user?.role === 'antrenor' || user?.role === 'basantrenor'}
+        onSaved={(person) => { setCreateOpen(false); navigate(`/sporcular/${person.id}`) }}
+      />
     </AppShell>
   )
 }

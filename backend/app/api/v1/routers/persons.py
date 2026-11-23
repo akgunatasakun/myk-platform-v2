@@ -9,7 +9,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import selectinload
 
 from app.core.audit import log_action
-from app.core.rbac import SENSITIVE_FIELD_MASK_ROLES, require_permission
+from app.core.rbac import SENSITIVE_FIELD_MASK_ROLES, has_permission, require_permission
 from app.services.training_scope_service import get_antrenor_enrolled_person_ids
 from app.core.security import get_current_user
 from app.core.tenant import get_club_id
@@ -31,6 +31,8 @@ from app.schemas.person import (
 from app.services.user_account_service import create_user_for_person
 from app.schemas.person_guardian import (
     GuardianAthleteOut,
+    GuardianPersonCreate,
+    PersonMiniOut,
     PersonGuardianCreate,
     PersonGuardianOut,
     PersonGuardianUpdate,
@@ -166,9 +168,14 @@ async def create_person(
     request: Request,
     club_id: uuid.UUID = Depends(get_club_id),
     current_user: TokenPayload = Depends(get_current_user),
-    _: None = Depends(require_permission("kisi:write")),
     db: AsyncSession = Depends(get_db),
 ) -> PersonCreateOut:
+    if not has_permission(current_user.role, "kisi:write"):
+        if current_user.role not in {"antrenor", "basantrenor"} or not has_permission(current_user.role, "sporcu:create"):
+            raise HTTPException(status_code=403, detail="Sporcu ekleme yetkiniz yok.")
+        if body.role_codes != ["sporcu"] or body.create_account:
+            raise HTTPException(status_code=403, detail="Yalnızca sporcu kaydı oluşturabilirsiniz; hesap ve diğer kişi türleri yönetici yetkisindedir.")
+        await get_antrenor_enrolled_person_ids(uuid.UUID(current_user.sub), club_id, db)
     # Aynı kulüpte e-posta tekrarını kontrol et
     if body.email:
         dup = await db.execute(
@@ -186,6 +193,7 @@ async def create_person(
 
     person = Person(
         club_id=club_id,
+        created_by_user_id=uuid.UUID(current_user.sub),
         first_name=body.first_name,
         last_name=body.last_name,
         national_id=body.national_id,
@@ -537,6 +545,75 @@ async def _clear_primary_for_athlete(
     await db.execute(stmt)
 
 
+async def _authorize_guardian_assignment(person_id, club_id, user, db):
+    person = await _get_person_for_club(person_id, club_id, db)
+    if has_permission(user.role, "kisi:write"):
+        return person
+    if user.role not in {"antrenor", "basantrenor"} or not has_permission(user.role, "sporcu:guardian"):
+        raise HTTPException(status_code=403, detail="Veli atama yetkiniz yok.")
+    allowed = await get_antrenor_enrolled_person_ids(uuid.UUID(user.sub), club_id, db)
+    if person_id not in allowed or not any(r.role_code == "sporcu" for r in person.roles):
+        raise HTTPException(status_code=403, detail="Yalnızca erişebildiğiniz sporcuya veli atayabilirsiniz.")
+    return person
+
+
+@router.get("/{person_id}/guardian-options", response_model=List[PersonMiniOut])
+async def guardian_options(
+    person_id: uuid.UUID,
+    search: str = Query(min_length=3, max_length=100),
+    club_id: uuid.UUID = Depends(get_club_id),
+    current_user: TokenPayload = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db),
+):
+    await _authorize_guardian_assignment(person_id, club_id, current_user, db)
+    term = search.strip()
+    if len(term) < 3:
+        raise HTTPException(status_code=422, detail="Arama için en az üç karakter girin.")
+    # Dar seçim listesi; kişi rehberi veya başka sporculara erişim sağlamaz.
+    pattern = "%" + term.replace("\\", "\\\\").replace("%", "\\%").replace("_", "\\_") + "%"
+    rows = await db.execute(select(Person).where(
+        Person.club_id == club_id, Person.is_deleted.is_(False), Person.is_active.is_(True),
+        Person.id != person_id, Person.roles.any(PersonRole.role_code == "veli"),
+        ((Person.first_name + " " + Person.last_name).ilike(pattern, escape="\\")
+         | Person.email.ilike(pattern, escape="\\") | Person.phone.ilike(pattern, escape="\\")),
+    ).order_by(Person.last_name, Person.first_name).limit(10))
+    return [PersonMiniOut(id=p.id, first_name=p.first_name, last_name=p.last_name,
+                          phone=("…" + p.phone[-4:]) if p.phone else None) for p in rows.scalars()]
+
+
+@router.post("/{person_id}/guardians/new", response_model=PersonCreateOut, status_code=201)
+async def create_and_link_guardian(
+    person_id: uuid.UUID, body: GuardianPersonCreate, request: Request,
+    club_id: uuid.UUID = Depends(get_club_id),
+    current_user: TokenPayload = Depends(get_current_user), db: AsyncSession = Depends(get_db),
+):
+    await _authorize_guardian_assignment(person_id, club_id, current_user, db)
+    if body.person.role_codes != ["veli"] or body.person.create_account:
+        raise HTTPException(status_code=403, detail="Yalnızca veli kişi kartı oluşturulabilir; sistem hesabı açılmaz.")
+    if body.person.email:
+        duplicate = await db.execute(select(Person.id).where(Person.club_id == club_id,
+            Person.email == body.person.email, Person.is_deleted.is_(False)))
+        if duplicate.scalar_one_or_none():
+            raise HTTPException(status_code=409, detail="Bu e-posta kayıtlı. Mevcut veliyi arayıp seçin.")
+    person = Person(club_id=club_id, created_by_user_id=uuid.UUID(current_user.sub),
+                    **body.person.model_dump(exclude={"role_codes", "create_account"}))
+    db.add(person)
+    await db.flush()
+    db.add(PersonRole(person_id=person.id, role_code="veli"))
+    await db.flush()
+    await add_guardian(person_id, PersonGuardianCreate(guardian_person_id=person.id,
+        relationship_type=body.relationship_type, is_primary=body.is_primary,
+        can_pickup=body.can_pickup, can_receive_notifications=body.can_receive_notifications),
+        request, club_id, current_user, db)
+    await log_action(db, action="person_created", resource_type="person", club_id=club_id,
+        user_id=uuid.UUID(current_user.sub), resource_id=str(person.id),
+        after={"role_codes": ["veli"], "athlete_person_id": str(person_id)}, request=request)
+    await db.flush()
+    person = (await db.execute(select(Person).options(selectinload(Person.roles))
+                              .where(Person.id == person.id))).scalar_one()
+    return PersonCreateOut.from_orm_masked(person, mask=_should_mask(current_user.role))
+
+
 @router.get(
     "/{person_id}/guardians",
     response_model=List[PersonGuardianOut],
@@ -546,9 +623,12 @@ async def list_guardians(
     person_id: uuid.UUID,
     club_id: uuid.UUID = Depends(get_club_id),
     current_user: TokenPayload = Depends(get_current_user),
-    _perm: None = Depends(require_permission("kisi:read")),
     db: AsyncSession = Depends(get_db),
 ) -> List[PersonGuardianOut]:
+    if has_permission(current_user.role, "sporcu:guardian"):
+        await _authorize_guardian_assignment(person_id, club_id, current_user, db)
+    elif not has_permission(current_user.role, "kisi:read"):
+        raise HTTPException(status_code=403, detail="Veli listesi okuma yetkiniz yok.")
     # Sporcu bu kulübe ait mi?
     await _get_person_for_club(person_id, club_id, db)
     if current_user.role == "antrenor":
@@ -621,11 +701,10 @@ async def add_guardian(
     request: Request,
     club_id: uuid.UUID = Depends(get_club_id),
     current_user: TokenPayload = Depends(get_current_user),
-    _perm: None = Depends(require_permission("kisi:write")),
     db: AsyncSession = Depends(get_db),
 ) -> PersonGuardianOut:
     # 1. Sporcu bu kulübe ait mi?
-    await _get_person_for_club(person_id, club_id, db)
+    await _authorize_guardian_assignment(person_id, club_id, current_user, db)
 
     # 2. Kendi kendini veli yapamaz
     if body.guardian_person_id == person_id:
@@ -647,6 +726,13 @@ async def add_guardian(
             status_code=status.HTTP_404_NOT_FOUND,
             detail="Veli olarak atanacak kişi bu kulüpte bulunamadı.",
         )
+
+    if not has_permission(current_user.role, "kisi:write"):
+        eligible = await db.execute(select(Person.id).where(Person.id == body.guardian_person_id,
+            Person.club_id == club_id, Person.is_active.is_(True),
+            Person.roles.any(PersonRole.role_code == "veli")))
+        if eligible.scalar_one_or_none() is None:
+            raise HTTPException(status_code=403, detail="Aktif bir veli kartı seçin.")
 
     # 4. Veli ilişkisi kurulan kişi veli listesinde de görünmeli.
     role_result = await db.execute(

@@ -11,9 +11,14 @@
  * - loading / empty / error durumları
  */
 import { useCallback, useEffect, useRef, useState } from 'react'
+import PersonFormModal from './PersonFormModal'
+import { useAuth } from '@/hooks/useAuth'
+import { canAssignGuardians, canManagePersons } from '@/config/operationAccess'
 import { personsApi } from '@/api/persons'
 import type { Person } from '@/types/person'
 import type { PersonGuardian, PersonGuardianCreate, PersonGuardianUpdate } from '@/types/guardian'
+
+type GuardianOption = Pick<Person, 'id' | 'first_name' | 'last_name'> & Partial<Pick<Person, 'member_number' | 'email' | 'phone'>>
 
 // ─── Sabitler ────────────────────────────────────────────────────────────────
 
@@ -62,10 +67,13 @@ interface AddGuardianModalProps {
 }
 
 function AddGuardianModal({ athleteId, onClose, onAdded }: AddGuardianModalProps) {
+  const { user } = useAuth()
+  const isCoach = user?.role === 'antrenor' || user?.role === 'basantrenor'
+  const [newOpen, setNewOpen] = useState(false)
   const [search, setSearch] = useState('')
-  const [searchResults, setSearchResults] = useState<Person[]>([])
+  const [searchResults, setSearchResults] = useState<GuardianOption[]>([])
   const [searchLoading, setSearchLoading] = useState(false)
-  const [selectedPerson, setSelectedPerson] = useState<Person | null>(null)
+  const [selectedPerson, setSelectedPerson] = useState<GuardianOption | null>(null)
   const [showResults, setShowResults] = useState(false)
 
   const [relationshipType, setRelationshipType] = useState('')
@@ -76,31 +84,43 @@ function AddGuardianModal({ athleteId, onClose, onAdded }: AddGuardianModalProps
   const [submitting, setSubmitting] = useState(false)
   const [error, setError] = useState<string | null>(null)
 
+  const searchVersion = useRef(0)
   const searchTimer = useRef<ReturnType<typeof setTimeout> | null>(null)
   const overlayRef = useRef<HTMLDivElement>(null)
 
+  useEffect(() => () => { searchVersion.current++; if (searchTimer.current) clearTimeout(searchTimer.current) }, [])
+
   const runSearch = useCallback(async (q: string) => {
-    if (!q.trim()) { setSearchResults([]); setShowResults(false); return }
+    const version = ++searchVersion.current
+    if (q.trim().length < 3) { setSearchResults([]); setShowResults(false); return }
     setSearchLoading(true)
     try {
-      const resp = await personsApi.list({ search: q.trim(), limit: 10 })
-      setSearchResults(resp.data.items)
+      const options = isCoach
+        ? (await personsApi.guardianOptions(athleteId, q.trim())).data
+        : (await personsApi.list({ search: q.trim(), limit: 10 })).data.items
+      if (version !== searchVersion.current) return
+      setSearchResults(options)
       setShowResults(true)
     } catch {
-      setSearchResults([])
+      if (version === searchVersion.current) { setSearchResults([]); setShowResults(false); setError('Veli araması tamamlanamadı. Lütfen tekrar deneyin.') }
     } finally {
-      setSearchLoading(false)
+      if (version === searchVersion.current) setSearchLoading(false)
     }
-  }, [])
+  }, [athleteId, isCoach])
 
   const handleSearchChange = (val: string) => {
+    searchVersion.current++
+    setSearchLoading(false)
+    setError(null)
     setSearch(val)
     if (selectedPerson) { setSelectedPerson(null) }
     if (searchTimer.current) clearTimeout(searchTimer.current)
     searchTimer.current = setTimeout(() => runSearch(val), 350)
   }
 
-  const handleSelectPerson = (p: Person) => {
+  const handleSelectPerson = (p: GuardianOption) => {
+    searchVersion.current++
+    setSearchLoading(false)
     setSelectedPerson(p)
     setSearch(`${p.first_name} ${p.last_name}`)
     setShowResults(false)
@@ -157,7 +177,7 @@ function AddGuardianModal({ athleteId, onClose, onAdded }: AddGuardianModalProps
             <input
               type="text"
               className="form-input"
-              placeholder="Ad veya soyad ile ara…"
+              placeholder="En az 3 karakter: ad, soyad, e-posta veya telefon…"
               value={search}
               onChange={(e) => handleSearchChange(e.target.value)}
               autoFocus
@@ -209,6 +229,15 @@ function AddGuardianModal({ athleteId, onClose, onAdded }: AddGuardianModalProps
               </div>
             )}
           </div>
+
+          <button type="button" className="btn btn-secondary" onClick={() => setNewOpen(true)}>Veli kayıtlı değil — Yeni Veli Oluştur</button>
+          {newOpen && <PersonFormModal isOpen={true} title="Yeni Veli ve Sporcu Bağlantısı" forcedRole="veli" guardianOnly
+            onClose={() => setNewOpen(false)} onSaved={() => { setNewOpen(false); onAdded() }}
+            onCreate={async person => (await personsApi.createGuardianForAthlete(athleteId, person, {
+              relationship_type: relationshipType || null, is_primary: isPrimary,
+              can_pickup: canPickup, can_receive_notifications: canReceiveNotifications,
+            })).data}
+          />}
 
           {/* İlişki tipi */}
           <div>
@@ -391,6 +420,9 @@ interface PersonGuardiansSectionProps {
 }
 
 export default function PersonGuardiansSection({ personId }: PersonGuardiansSectionProps) {
+  const { user } = useAuth()
+  const canAdd = canAssignGuardians(user?.role)
+  const canEdit = canManagePersons(user?.role)
   const [guardians, setGuardians] = useState<PersonGuardian[]>([])
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
@@ -432,12 +464,12 @@ export default function PersonGuardiansSection({ personId }: PersonGuardiansSect
       <div className="card" style={{ marginBottom: 20 }}>
         <div className="card-header" style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
           <span>Veliler / Vasiler</span>
-          <button
+          {canAdd && <button
             className="btn btn-primary btn-sm"
             onClick={() => setAddOpen(true)}
           >
             + Veli Ekle
-          </button>
+          </button>}
         </div>
 
         <div className="card-body" style={{ padding: 0 }}>
@@ -486,7 +518,7 @@ export default function PersonGuardiansSection({ personId }: PersonGuardiansSect
                   <th style={{ textAlign: 'center' }}>Durum</th>
                   <th style={{ textAlign: 'center' }}>Teslim</th>
                   <th style={{ textAlign: 'center' }}>Bildirim</th>
-                  <th style={{ textAlign: 'right' }}>İşlem</th>
+                  {canEdit && <th style={{ textAlign: 'right' }}>İşlem</th>}
                 </tr>
               </thead>
               <tbody>
@@ -527,7 +559,7 @@ export default function PersonGuardiansSection({ personId }: PersonGuardiansSect
                         {g.can_receive_notifications ? '🔔' : '—'}
                       </span>
                     </td>
-                    <td style={{ textAlign: 'right', whiteSpace: 'nowrap' }}>
+                    {canEdit && <td style={{ textAlign: 'right', whiteSpace: 'nowrap' }}>
                       <button
                         className="btn btn-ghost btn-sm"
                         style={{ marginRight: 6 }}
@@ -543,7 +575,7 @@ export default function PersonGuardiansSection({ personId }: PersonGuardiansSect
                       >
                         {deletingId === g.id ? '…' : 'Sil'}
                       </button>
-                    </td>
+                    </td>}
                   </tr>
                 ))}
               </tbody>
@@ -553,7 +585,7 @@ export default function PersonGuardiansSection({ personId }: PersonGuardiansSect
       </div>
 
       {/* Veli Ekle Modal */}
-      {addOpen && (
+      {canAdd && addOpen && (
         <AddGuardianModal
           athleteId={personId}
           onClose={() => setAddOpen(false)}
@@ -565,7 +597,7 @@ export default function PersonGuardiansSection({ personId }: PersonGuardiansSect
       )}
 
       {/* Düzenle Modal */}
-      {editTarget && (
+      {canEdit && editTarget && (
         <EditGuardianModal
           athleteId={personId}
           link={editTarget}

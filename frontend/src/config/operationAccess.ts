@@ -10,3 +10,7 @@ export const canManagePayments = (role?: string) => ['super_admin', 'kulup_yonet
 
 export const canManageAthleteProfiles = (role?: string) => ['super_admin', 'kulup_yonetici', 'sportif_direktor'].includes(role ?? '')
 export const canReadPersonCards = (role?: string) => ['super_admin', 'kulup_yonetici', 'muhasebe', 'antrenor'].includes(role ?? '')
+
+export const canCreateAthletes = (role?: string) => ['super_admin', 'kulup_yonetici', 'antrenor', 'basantrenor'].includes(role ?? '')
+
+export const canAssignGuardians = (role?: string) => ['super_admin', 'kulup_yonetici', 'antrenor', 'basantrenor'].includes(role ?? '')
