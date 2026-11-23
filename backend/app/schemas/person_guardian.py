@@ -5,6 +5,8 @@ from typing import Optional
 
 from pydantic import BaseModel, Field
 
+from app.schemas.person import PersonCreate
+
 
 class PersonMiniOut(BaseModel):
     """Veli kimlik özeti — PersonGuardianOut içinde kullanılır."""
@@ -76,3 +78,13 @@ class GuardianAthleteOut(BaseModel):
     athlete: PersonMiniOut
 
     model_config = {"from_attributes": True}
+
+
+class GuardianPersonCreate(BaseModel):
+    """Yeni veli kartı ve sporcu bağlantısı tek işlemde oluşturulur."""
+    person: PersonCreate
+    relationship_type: Optional[str] = Field(None, max_length=30)
+    is_primary: bool = False
+    can_pickup: bool = True
+    can_receive_notifications: bool = True
+    model_config = {"extra": "forbid"}

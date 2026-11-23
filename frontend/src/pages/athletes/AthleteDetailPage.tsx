@@ -9,7 +9,8 @@ import { useNavigate, useParams } from 'react-router-dom'
 import AppShell from '@/components/layout/AppShell'
 import AthleteProfileModal from './AthleteProfileModal'
 import AthleteDetailActions from './AthleteDetailActions'
-import { canManageAthleteProfiles } from '@/config/operationAccess'
+import PersonGuardiansSection from '@/pages/persons/PersonGuardiansSection'
+import { canManageAthleteProfiles, canAssignGuardians } from '@/config/operationAccess'
 import PersonDocumentsTab from '@/components/persons/PersonDocumentsTab'
 import type { PersonDocumentsRole } from '@/components/persons/PersonDocumentsTab'
 import { athletesApi } from '@/api/athletes'
@@ -274,6 +275,8 @@ export default function AthleteDetailPage() {
               </div>
             </>
           )}
+
+          {canAssignGuardians(authUser?.role) && <PersonGuardiansSection personId={athlete.person_id} />}
 
           {/* Evraklar bölümü */}
           <div className="card" style={{ marginBottom: 20 }}>

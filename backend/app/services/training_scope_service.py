@@ -9,7 +9,7 @@ Kullanım:
 Kurallar:
   - User.person_id bağlantısı olmayan antrenör → HTTP 403
   - Kurs listesi: training_course_instructors UNION session_instructors→course_id UNION legacy
-  - Kişi listesi: atandığı kurslara active kayıtlı kişiler + kendi person_id
+  - Kişi listesi: atandığı kurslara active kayıtlı kişiler + kendi eklediği sporcular + kendi person_id
 """
 import uuid
 
@@ -25,6 +25,7 @@ from app.models.training import (
     TrainingSessionInstructor,
 )
 from app.models.user import User
+from app.models.person import Person, PersonRole
 
 
 async def _get_antrenor_person_id(
@@ -123,4 +124,13 @@ async def get_antrenor_enrolled_person_ids(
         )
         ids.update(r.scalars().all())
 
+    created = await db.execute(
+        select(Person.id).where(
+            Person.club_id == club_id,
+            Person.created_by_user_id == user_id,
+            Person.is_deleted.is_(False),
+            Person.roles.any(PersonRole.role_code == "sporcu"),
+        )
+    )
+    ids.update(created.scalars().all())
     return list(ids)

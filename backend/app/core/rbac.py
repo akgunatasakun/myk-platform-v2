@@ -50,13 +50,13 @@ PERMISSIONS: dict[str, set[str]] = {
     "basantrenor": {
         "sporcu:read", "egitim:*", "yoklama:*", "ekipman:read",
         "deniz_log:*", "rapor:read", "kutuphane:read",
-        "person_document:read", "health_file:view", "belge:read",
+        "person_document:read", "health_file:view", "belge:read", "sporcu:create", "sporcu:guardian",
     },
 
     "antrenor": {
         "yoklama:*", "sporcu:read", "egitim:read",
         "ekipman:read", "deniz_log:*", "kisi:read", "kutuphane:read",
-        "person_document:read", "health_file:view", "belge:read",
+        "person_document:read", "health_file:view", "belge:read", "sporcu:create", "sporcu:guardian",
     },
 
     "personel": {

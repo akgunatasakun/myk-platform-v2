@@ -35,6 +35,9 @@ interface Props {
   title?: string
   /** Bu rol her zaman role_codes listesine eklenir (kullanıcı kaldıramaz) */
   forcedRole?: PersonRoleCode
+  athleteOnly?: boolean
+  guardianOnly?: boolean
+  onCreate?: (data: PersonCreate) => Promise<Person>
 }
 
 interface FormData {
@@ -87,7 +90,7 @@ function personToForm(p: Person): FormData {
   }
 }
 
-export default function PersonFormModal({ isOpen, onClose, person, onSaved, title, forcedRole }: Props) {
+export default function PersonFormModal({ isOpen, onClose, person, onSaved, title, forcedRole, athleteOnly = false, guardianOnly = false, onCreate }: Props) {
   const [form, setForm] = useState<FormData>(EMPTY_FORM)
   const [errors, setErrors] = useState<Partial<Record<keyof FormData, string>>>({})
   const [apiError, setApiError] = useState<string | null>(null)
@@ -99,8 +102,10 @@ export default function PersonFormModal({ isOpen, onClose, person, onSaved, titl
 
   useEffect(() => {
     if (isOpen) {
-      const initial = person ? personToForm(person) : EMPTY_FORM
+      const initial = person ? personToForm(person) : { ...EMPTY_FORM, role_codes: [] as PersonRoleCode[] }
       // forcedRole varsa ve listede yoksa ekle
+      if (athleteOnly) initial.role_codes = ['sporcu']
+      if (guardianOnly) initial.role_codes = ['veli']
       if (forcedRole && !initial.role_codes.includes(forcedRole)) {
         initial.role_codes = [...initial.role_codes, forcedRole]
       }
@@ -110,10 +115,10 @@ export default function PersonFormModal({ isOpen, onClose, person, onSaved, titl
       isDirty.current = false
       // Yeni kişi: akıllı default; düzenleme: hesap zaten var, checkbox gösterme
       if (!person) {
-        setCreateAccount(shouldDefaultCreateAccount(initial.role_codes, initial.email))
+        setCreateAccount(!athleteOnly && !guardianOnly && shouldDefaultCreateAccount(initial.role_codes, initial.email))
       }
     }
-  }, [isOpen, person, forcedRole])
+  }, [isOpen, person, forcedRole, athleteOnly, guardianOnly])
 
   const handleChange = (
     e: React.ChangeEvent<HTMLInputElement | HTMLSelectElement | HTMLTextAreaElement>
@@ -192,9 +197,9 @@ export default function PersonFormModal({ isOpen, onClose, person, onSaved, titl
         : {}),
       ...(form.blood_type ? { blood_type: form.blood_type as BloodType } : {}),
       ...(form.notes ? { notes: form.notes } : {}),
-      role_codes: form.role_codes,
+      role_codes: athleteOnly ? ['sporcu'] : guardianOnly ? ['veli'] : form.role_codes,
       // Sprint 2.3: yalnız yeni kişi oluşturmada geçerli
-      ...(!person && createAccount ? { create_account: true } : {}),
+      ...(!athleteOnly && !guardianOnly && !person && createAccount ? { create_account: true } : {}),
     }
 
     try {
@@ -203,12 +208,13 @@ export default function PersonFormModal({ isOpen, onClose, person, onSaved, titl
         const resp = await personsApi.update(person.id, payload)
         saved = resp.data
       } else {
-        const resp = await personsApi.create(payload)
+        const resp = onCreate ? { data: await onCreate(payload) } : await personsApi.create(payload)
         saved = resp.data
         // Sprint 2.3: temp_password gelirse tek seferlik modal
         let hasTempPassword = false
-        if (resp.data.temp_password && resp.data.email) {
-          setTempPasswordModal({ email: resp.data.email, password: resp.data.temp_password })
+        const tempPassword = 'temp_password' in resp.data ? resp.data.temp_password as string | null : null
+        if (tempPassword && resp.data.email) {
+          setTempPasswordModal({ email: resp.data.email, password: tempPassword })
           hasTempPassword = true
         }
         isDirty.current = false
@@ -476,7 +482,7 @@ export default function PersonFormModal({ isOpen, onClose, person, onSaved, titl
             </div>
 
             {/* Sprint 2.3: opsiyonel hesap oluşturma — yalnız yeni kişi oluşturmada */}
-            {!person && (
+            {!person && !athleteOnly && !guardianOnly && (
               <div className="form-group" style={{ borderTop: '1px solid var(--color-border)', paddingTop: 12, marginTop: 4 }}>
                 <label style={{ display: 'flex', alignItems: 'flex-start', gap: 10, cursor: 'pointer' }}>
                   <input
@@ -502,10 +508,10 @@ export default function PersonFormModal({ isOpen, onClose, person, onSaved, titl
 
             <div className="form-group">
               <label className="form-label">Kişi Türleri</label>
-              <p style={{ fontSize: 12, color: 'var(--color-text-muted)' }}>Kişinin kulüpteki ilişkilerini seçin; birden fazla tür olabilir. Bu seçimler mevcut hesabın sistem yetkisini değiştirmez. Yetki değişiklikleri Hesaplar ve Yetkiler bölümünden yapılır.</p>
+              <p style={{ fontSize: 12, color: 'var(--color-text-muted)' }}>{athleteOnly || guardianOnly ? 'Bu ekranda yalnızca ilgili kişi türü oluşturulur; sistem hesabı açılmaz.' : 'Kişinin kulüpteki ilişkilerini seçin; birden fazla tür olabilir. Bu seçimler mevcut hesabın sistem yetkisini değiştirmez. Yetki değişiklikleri Hesaplar ve Yetkiler bölümünden yapılır.'}</p>
               <div className="form-checkboxes">
-                {ROLE_OPTIONS.map((r) => {
-                  const locked = r.code === forcedRole
+                {ROLE_OPTIONS.filter((r) => (!athleteOnly || r.code === 'sporcu') && (!guardianOnly || r.code === 'veli')).map((r) => {
+                  const locked = athleteOnly || guardianOnly || r.code === forcedRole
                   return (
                     <label
                       key={r.code}
