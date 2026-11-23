@@ -7,7 +7,7 @@ export default defineConfig({
   plugins: [
     react(),
     VitePWA({
-      registerType: 'autoUpdate',
+      registerType: 'prompt',
       manifest: {
         name: 'Mersin Yelken Yat ve Su Sporları Kulübü',
         short_name: 'Mersin Yelken',
