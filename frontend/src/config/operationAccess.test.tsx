@@ -1,7 +1,7 @@
 import { describe, expect, it, vi } from 'vitest'
 import { renderToStaticMarkup } from 'react-dom/server'
 import type { ReactNode } from 'react'
-import { canManageAccounts, canManagePersons, canManageTraining, canManagePayments, canCreateAthletes, canAssignGuardians } from './operationAccess'
+import { canManageAccounts, canManagePersons, canManageTraining, canManagePayments, canCreateAthletes, canAssignGuardians, canWriteAttendance } from './operationAccess'
 import PersonGuardiansSection from '@/pages/persons/PersonGuardiansSection'
 import AthleteRegistrationModal from '@/pages/athletes/AthleteRegistrationModal'
 import AthletesPage from '@/pages/athletes/AthletesPage'
@@ -17,6 +17,7 @@ const roles = ['super_admin', 'kulup_yonetici', 'genel_sekreter', 'baskan', 'yk_
 describe('Operation controls follow backend write permissions', () => {
   it.each(roles)('checks actions for %s', (role) => {
     currentRole = role
+    expect(canWriteAttendance(role)).toBe(['super_admin', 'kulup_yonetici', 'sportif_direktor', 'basantrenor', 'antrenor'].includes(role))
     expect(renderToStaticMarkup(<PersonGuardiansSection personId="athlete-test" />).includes('+ Veli Ekle')).toBe(['super_admin', 'kulup_yonetici', 'antrenor', 'basantrenor'].includes(role))
     expect(canAssignGuardians(role)).toBe(['super_admin', 'kulup_yonetici', 'antrenor', 'basantrenor'].includes(role))
     expect(canCreateAthletes(role)).toBe(['super_admin', 'kulup_yonetici', 'antrenor', 'basantrenor'].includes(role))
@@ -35,6 +36,7 @@ describe('Operation controls follow backend write permissions', () => {
     expect(renderToStaticMarkup(<TrainingPage />)).toContain('+ Yeni Eğitim')
   })
   it('fails closed while the account has not loaded', () => {
+    expect(canWriteAttendance()).toBe(false)
     expect(canManagePayments()).toBe(false)
     expect(canManageTraining()).toBe(false)
     expect(canManageAccounts()).toBe(false)
