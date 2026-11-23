@@ -3,7 +3,7 @@ import uuid
 from datetime import date, datetime
 from typing import Optional
 
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, Field, model_validator
 
 from app.schemas.person import PersonCreate
 
@@ -88,3 +88,20 @@ class GuardianPersonCreate(BaseModel):
     can_pickup: bool = True
     can_receive_notifications: bool = True
     model_config = {"extra": "forbid"}
+
+
+class AthleteRegistrationCreate(BaseModel):
+    athlete: PersonCreate
+    guardian_person_id: uuid.UUID | None = None
+    new_guardian: PersonCreate | None = None
+    relationship_type: str | None = Field(None, max_length=30)
+    is_primary: bool = True
+    can_pickup: bool = True
+    can_receive_notifications: bool = True
+    model_config = {"extra": "forbid"}
+
+    @model_validator(mode="after")
+    def one_guardian_source(self):
+        if self.guardian_person_id is not None and self.new_guardian is not None:
+            raise ValueError("Mevcut veya yeni veliden yalnızca biri seçilebilir.")
+        return self

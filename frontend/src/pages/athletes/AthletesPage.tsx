@@ -12,7 +12,7 @@ import { useCallback, useEffect, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { useAuth } from '@/hooks/useAuth'
 import { canCreateAthletes } from '@/config/operationAccess'
-import PersonFormModal from '@/pages/persons/PersonFormModal'
+import AthleteRegistrationModal from './AthleteRegistrationModal'
 import AppShell from '@/components/layout/AppShell'
 import { athletesApi } from '@/api/athletes'
 import type { AthleteAlertItem, AthleteListItem, DocumentStatus } from '@/types/athlete'
@@ -316,12 +316,9 @@ export default function AthletesPage() {
           )}
         </>
       )}
-      <PersonFormModal
+      <AthleteRegistrationModal
         isOpen={canCreateAthletes(user?.role) && createOpen}
         onClose={() => setCreateOpen(false)}
-        title="Yeni Sporcu"
-        forcedRole="sporcu"
-        athleteOnly={user?.role === 'antrenor' || user?.role === 'basantrenor'}
         onSaved={(person) => { setCreateOpen(false); navigate(`/sporcular/${person.id}`) }}
       />
     </AppShell>

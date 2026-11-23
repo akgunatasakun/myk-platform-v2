@@ -15,7 +15,19 @@ export interface PersonListParams {
   is_active?: boolean;
 }
 
+export interface AthleteRegistration {
+  athlete: PersonCreate
+  guardian_person_id?: string
+  new_guardian?: PersonCreate
+  relationship_type?: string | null
+  is_primary?: boolean
+  can_pickup?: boolean
+  can_receive_notifications?: boolean
+}
+
 export const personsApi = {
+  registerAthlete: (body: AthleteRegistration) => apiClient.post<PersonCreateOut>('/persons/athlete-registration', body),
+  registrationGuardianOptions: (search: string) => apiClient.get<Pick<Person, 'id' | 'first_name' | 'last_name' | 'phone'>[]>('/persons/guardian-options', { params: { search } }),
   list: (params?: PersonListParams) =>
     apiClient.get<PersonListResponse>('/persons', { params }),
   listActiveCoaches: async (): Promise<Person[]> => {
