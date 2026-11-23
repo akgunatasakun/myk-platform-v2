@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from 'react'
+import { useEffect, useRef, useState, type ReactNode } from 'react'
 import { personsApi } from '@/api/persons'
 import type { Person, PersonCreate, PersonRoleCode, Gender, BloodType } from '@/types/person'
 
@@ -37,6 +37,9 @@ interface Props {
   forcedRole?: PersonRoleCode
   athleteOnly?: boolean
   guardianOnly?: boolean
+  extraFields?: ReactNode
+  validateExtra?: () => string | null
+  extraDirty?: boolean
   onCreate?: (data: PersonCreate) => Promise<Person>
 }
 
@@ -90,7 +93,7 @@ function personToForm(p: Person): FormData {
   }
 }
 
-export default function PersonFormModal({ isOpen, onClose, person, onSaved, title, forcedRole, athleteOnly = false, guardianOnly = false, onCreate }: Props) {
+export default function PersonFormModal({ isOpen, onClose, person, onSaved, title, forcedRole, athleteOnly = false, guardianOnly = false, onCreate, extraFields, validateExtra, extraDirty = false }: Props) {
   const [form, setForm] = useState<FormData>(EMPTY_FORM)
   const [errors, setErrors] = useState<Partial<Record<keyof FormData, string>>>({})
   const [apiError, setApiError] = useState<string | null>(null)
@@ -167,7 +170,7 @@ export default function PersonFormModal({ isOpen, onClose, person, onSaved, titl
   }
 
   const handleClose = () => {
-    if (isDirty.current) {
+    if (isDirty.current || extraDirty) {
       if (!window.confirm('Kaydedilmemiş değişiklikler var. Çıkmak istiyor musunuz?')) return
     }
     onClose()
@@ -176,6 +179,8 @@ export default function PersonFormModal({ isOpen, onClose, person, onSaved, titl
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
     if (!validate()) return
+    const extraError = validateExtra?.()
+    if (extraError) { setApiError(extraError); return }
 
     setSaving(true)
     setApiError(null)
@@ -229,7 +234,7 @@ export default function PersonFormModal({ isOpen, onClose, person, onSaved, titl
     } catch (err: unknown) {
       const axiosErr = err as { response?: { data?: { detail?: string } } }
       setApiError(
-        axiosErr.response?.data?.detail ?? 'Kayıt sırasında bir hata oluştu.'
+        typeof axiosErr.response?.data?.detail === 'string' ? axiosErr.response.data.detail : 'Bilgileri kontrol edin; kayıt tamamlanamadı.'
       )
     } finally {
       setSaving(false)
@@ -480,6 +485,8 @@ export default function PersonFormModal({ isOpen, onClose, person, onSaved, titl
                 rows={2}
               />
             </div>
+
+            {extraFields}
 
             {/* Sprint 2.3: opsiyonel hesap oluşturma — yalnız yeni kişi oluşturmada */}
             {!person && !athleteOnly && !guardianOnly && (

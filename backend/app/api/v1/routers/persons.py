@@ -30,6 +30,7 @@ from app.schemas.person import (
 )
 from app.services.user_account_service import create_user_for_person
 from app.schemas.person_guardian import (
+    AthleteRegistrationCreate,
     GuardianAthleteOut,
     GuardianPersonCreate,
     PersonMiniOut,
@@ -170,6 +171,10 @@ async def create_person(
     current_user: TokenPayload = Depends(get_current_user),
     db: AsyncSession = Depends(get_db),
 ) -> PersonCreateOut:
+    return await _create_person_record(body, request, club_id, current_user, db)
+
+
+async def _create_person_record(body, request, club_id, current_user, db, *, commit=True):
     if not has_permission(current_user.role, "kisi:write"):
         if current_user.role not in {"antrenor", "basantrenor"} or not has_permission(current_user.role, "sporcu:create"):
             raise HTTPException(status_code=403, detail="Sporcu ekleme yetkiniz yok.")
@@ -260,7 +265,10 @@ async def create_person(
             except HTTPException as exc:
                 warnings.append(f"Hesap oluşturulamadı: {exc.detail}")
 
-    await db.commit()
+    if commit:
+        await db.commit()
+    else:
+        await db.flush()
     await db.refresh(person)
     # roles ilişkisini yeniden yükle
     result2 = await db.execute(
@@ -273,6 +281,41 @@ async def create_person(
     out.temp_password = temp_password
     out.warnings = warnings
     return out
+
+
+@router.post("/athlete-registration", response_model=PersonCreateOut, status_code=201)
+async def register_athlete_with_guardian(
+    body: AthleteRegistrationCreate, request: Request,
+    club_id: uuid.UUID = Depends(get_club_id),
+    current_user: TokenPayload = Depends(get_current_user), db: AsyncSession = Depends(get_db),
+):
+    if body.athlete.role_codes != ["sporcu"] or body.athlete.create_account:
+        raise HTTPException(status_code=403, detail="Bu işlem yalnızca sporcu kişi kartı oluşturur; hesap açmaz.")
+    # Sporcu, yeni veli ve bağlantı birlikte başarılı olmalı; kısmi kayıt bırakılmaz.
+    async with db.begin_nested():
+        athlete = await _create_person_record(body.athlete, request, club_id, current_user, db, commit=False)
+        link = dict(relationship_type=body.relationship_type, is_primary=body.is_primary,
+                    can_pickup=body.can_pickup, can_receive_notifications=body.can_receive_notifications)
+        if body.guardian_person_id:
+            await add_guardian(athlete.id, PersonGuardianCreate(guardian_person_id=body.guardian_person_id, **link),
+                               request, club_id, current_user, db)
+        elif body.new_guardian:
+            await create_and_link_guardian(athlete.id, GuardianPersonCreate(person=body.new_guardian, **link),
+                                           request, club_id, current_user, db)
+    return athlete
+
+
+@router.get("/guardian-options", response_model=List[PersonMiniOut])
+async def registration_guardian_options(
+    search: str = Query(min_length=3, max_length=100),
+    club_id: uuid.UUID = Depends(get_club_id),
+    current_user: TokenPayload = Depends(get_current_user), db: AsyncSession = Depends(get_db),
+):
+    if not has_permission(current_user.role, "kisi:write"):
+        if current_user.role not in {"antrenor", "basantrenor"} or not has_permission(current_user.role, "sporcu:create"):
+            raise HTTPException(status_code=403, detail="Sporcu ekleme yetkiniz yok.")
+        await get_antrenor_enrolled_person_ids(uuid.UUID(current_user.sub), club_id, db)
+    return await _search_guardian_options(search, club_id, db)
 
 
 @router.get("/{person_id}", response_model=PersonOut)
@@ -566,6 +609,10 @@ async def guardian_options(
     db: AsyncSession = Depends(get_db),
 ):
     await _authorize_guardian_assignment(person_id, club_id, current_user, db)
+    return await _search_guardian_options(search, club_id, db, exclude_id=person_id)
+
+
+async def _search_guardian_options(search, club_id, db, exclude_id=None):
     term = search.strip()
     if len(term) < 3:
         raise HTTPException(status_code=422, detail="Arama için en az üç karakter girin.")
@@ -573,7 +620,8 @@ async def guardian_options(
     pattern = "%" + term.replace("\\", "\\\\").replace("%", "\\%").replace("_", "\\_") + "%"
     rows = await db.execute(select(Person).where(
         Person.club_id == club_id, Person.is_deleted.is_(False), Person.is_active.is_(True),
-        Person.id != person_id, Person.roles.any(PersonRole.role_code == "veli"),
+        Person.id != exclude_id if exclude_id else Person.id.is_not(None),
+        Person.roles.any(PersonRole.role_code == "veli"),
         ((Person.first_name + " " + Person.last_name).ilike(pattern, escape="\\")
          | Person.email.ilike(pattern, escape="\\") | Person.phone.ilike(pattern, escape="\\")),
     ).order_by(Person.last_name, Person.first_name).limit(10))

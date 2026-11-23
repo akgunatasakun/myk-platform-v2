@@ -3,6 +3,7 @@ import { renderToStaticMarkup } from 'react-dom/server'
 import type { ReactNode } from 'react'
 import { canManageAccounts, canManagePersons, canManageTraining, canManagePayments, canCreateAthletes, canAssignGuardians } from './operationAccess'
 import PersonGuardiansSection from '@/pages/persons/PersonGuardiansSection'
+import AthleteRegistrationModal from '@/pages/athletes/AthleteRegistrationModal'
 import AthletesPage from '@/pages/athletes/AthletesPage'
 import PersonFormModal from '@/pages/persons/PersonFormModal'
 import TrainingPage from '@/pages/training/TrainingPage'
@@ -55,4 +56,13 @@ it('limits new guardian form to guardian kind without creating an account', () =
   expect(html).not.toContain('>Sporcu<')
   expect(html).not.toContain('>Antrenör<')
   expect(html).toContain('disabled=""')
+})
+
+it('offers optional guardian choices inside the new athlete form without account creation', () => {
+  const html = renderToStaticMarkup(<AthleteRegistrationModal isOpen={true} onClose={() => {}} onSaved={() => {}} />)
+  expect(html).toContain('Veli Bilgileri (isteğe bağlı)')
+  expect(html).toContain('Şimdilik veli ekleme')
+  expect(html).toContain('Mevcut veliyi seç')
+  expect(html).toContain('Yeni veli oluştur')
+  expect(html).not.toContain('Panel hesabı oluştur')
 })
